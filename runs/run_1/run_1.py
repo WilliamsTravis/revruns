@@ -12,11 +12,13 @@ from functions import check_config, project_points
 
 # Fixed
 fpoints = project_points("i_pwatts_fixed", sample=1000)
-fpoints.to_csv("runs/run_1/project_points/project_points_fixed.csv")
+fpoints.to_csv("runs/run_1/project_points/project_points_fixed.csv",
+               index=False)
 
 # tracking
 tpoints = project_points("i_pwatts_tracking", sample=1000)
-fpoints.to_csv("runs/run_1/project_points/project_points_tracking.csv")
+fpoints.to_csv("runs/run_1/project_points/project_points_tracking.csv",
+               index=False)
 
 # Check config files
 check_config("runs/run_1/config_gen.json")
