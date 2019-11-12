@@ -5,11 +5,11 @@
   },
   "execution_control": {
     "allocation": "pxs",
-    "feature": "qos=normal",
+    "feature": "--qos=normal",
     "nodes": 1,
     "option": "eagle",
     "sites_per_core": 100,
-    "walltime": .5
+    "walltime": 0.5
   },
   "project_control": {
     "analysis_years": [
@@ -47,7 +47,7 @@
   ],
   "resource_file": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
   "sam_files": {
-    "i_pvwatts_fixed" : "./sam_configs/i_pvwatts_fixed.json"
+    "i_pvwatts_fixed" : "./sam_configs/i_pvwatts_fixed.json",
     "i_pvwatts_tracking" : "./sam_configs/i_pvwatts_tracking.json",
   }
 }
