@@ -1,0 +1,54 @@
+{
+  "directories": {
+    "logging_directory": "./logs/",
+    "output_directory": "./output"
+  },
+  "execution_control": {
+    "allocation": "pxs",
+    "feature": "qos=normal",
+    "nodes": 1,
+    "option": "eagle",
+    "sites_per_core": 100,
+    "walltime": .5
+  },
+  "project_control": {
+    "analysis_years": [
+            1998,
+            1999,
+            2000,
+            2001,
+            2002,
+            2003,
+            2004,
+            2005,
+            2006,
+            2007,
+            2008,
+            2009,
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015
+    ],
+    "logging_level": "INFO",
+    "name": "gen",
+    "output_request": [
+      "cf_mean",
+      "cf_profile",
+      "poa"
+    ],
+    "technology": "pv"
+  },
+  "project_points": [
+	"./project_points/project_points_fixed.csv",
+	"./project_points/project_points_tracking.csv"
+  ],
+  "resource_file": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
+  "sam_files": {
+    "i_pvwatts_fixed" : "./sam_configs/i_pvwatts_fixed.json"
+    "i_pvwatts_tracking" : "./sam_configs/i_pvwatts_tracking.json",
+  }
+}
+
