@@ -11,12 +11,12 @@ os.chdir(os.path.join(_root, "../.."))
 from functions import check_config, project_points
 
 # Fixed
-fpoints = project_points("i_pwatts_fixed", sample=1000)
+fpoints = project_points("i_pvwatts_fixed", sample=1000)
 fpoints.to_csv("runs/run_1/project_points/project_points_fixed.csv",
                index=False)
 
 # tracking
-tpoints = project_points("i_pwatts_tracking", sample=1000)
+tpoints = project_points("i_pvwatts_tracking", sample=1000)
 fpoints.to_csv("runs/run_1/project_points/project_points_tracking.csv",
                index=False)
 
