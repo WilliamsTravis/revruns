@@ -10,8 +10,6 @@ _root = os.path.abspath(os.path.dirname("__file__"))
 os.chdir(os.path.join(_root, "../.."))
 from functions import project_points
 
-
-# Maybe this could be a cli to quickly build these things
 # Fixed
 fpoints = project_points("i_pwatts_fixed", sample=1000)
 fpoints.to_csv("runs/run_1/project_points/project_points_fixed.csv")
