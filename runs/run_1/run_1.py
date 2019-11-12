@@ -6,7 +6,7 @@ file key.
 
 # Set path to repo root a get functions
 import os
-_root = os.path.abspath(os.path.dirname("__file__"))
+_root = os.path.abspath(os.path.dirname(__file__))
 os.chdir(os.path.join(_root, "../.."))
 from functions import check_config, project_points
 
