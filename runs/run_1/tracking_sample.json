@@ -1,0 +1,22 @@
+{
+	"solar_resource_file" : "/Applications/SAM.app/Contents/solar_resource/phoenix_az_33.450495_-111.983688_psmv3_60_tmy.csv",
+	"system_capacity" : 5,
+	"module_type" : 0,
+	"dc_ac_ratio" : 1.1000000238418579,
+	"inv_eff" : 96,
+	"losses" : 14.075660705566406,
+	"array_type" : 2,
+	"tilt" : 20,
+	"azimuth" : 180,
+	"gcr" : 0.40000000596046448,
+	"adjust:constant" : 14.075699806213379,
+	"compute_module_0" : "pvwattsv5",
+	"metric_0" : "annual_energy",
+	"metric_0_label" : "Annual energy (year 1)",
+	"metric_1" : "capacity_factor",
+	"metric_1_label" : "Capacity factor (year 1)",
+	"metric_2" : "kwh_per_kw",
+	"metric_2_label" : "Energy yield (year 1)",
+	"number_compute_modules" : 1,
+	"number_metrics" : 3
+}
