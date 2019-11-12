@@ -8,7 +8,7 @@ Created on Tue Nov 12 13:15:55 2019
 @author: twillia2
 """
 
-#import json
+import json
 import numpy as np
 #import os
 import pandas as pd
@@ -27,6 +27,17 @@ RESOURCE_LABELS = {
         "wind_conus_v2": ("Wind Integration National Dataset (WIND) " +
                           "Toolkit - CONUS, v2.0.0")
         }
+
+
+def check_config(config_file):
+    try:
+        with open(config_file, "r") as f:
+            json.load(f)
+        print(config_file + " opens.")
+    except json.decoder.JSONDecodeError as e:
+        emsg = ('JSON Error:\n{}\nCannot read json file: '
+                '"{}"'.format(e, config_file))
+        raise JSONError(emsg)
 
 
 def project_points(configid, resource="nsrdb_v3", sample=None):
@@ -53,3 +64,9 @@ def project_points(configid, resource="nsrdb_v3", sample=None):
     # Save or return data frame?
     return points
 
+
+# How does this work?
+class JSONError(Exception):
+    """
+	Error reading json file.
+    """

@@ -48,7 +48,6 @@
   "resource_file": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
   "sam_files": {
     "i_pvwatts_fixed" : "./sam_configs/i_pvwatts_fixed.json",
-    "i_pvwatts_tracking" : "./sam_configs/i_pvwatts_tracking.json",
+    "i_pvwatts_tracking" : "./sam_configs/i_pvwatts_tracking.json"
   }
 }
-
