@@ -16,10 +16,6 @@ import pandas as pd
 #import PySAM as sam
 #from PySAM import Pvwattsv5 as pv
 
-
-
-# Variables
-
 # More to add: e.g. the 2018 CONUS solar is 2,091,566, and full is 9,026,712 
 RESOURCE_DIMS = {
         "nsrdb_v3": 2018392,
@@ -33,7 +29,6 @@ RESOURCE_LABELS = {
         }
 
 
-# Functions
 def project_points(configid, resource="nsrdb_v3", sample=None):
     '''
     A way to generate either sample points or everypoint.
