@@ -15,6 +15,7 @@ import pandas as pd
 #import pkgutil
 #import PySAM as sam
 #from PySAM import Pvwattsv5 as pv
+from reV.utilities.exceptions import JSONError
 
 # More to add: e.g. the 2018 CONUS solar is 2,091,566, and full is 9,026,712 
 RESOURCE_DIMS = {
@@ -64,9 +65,8 @@ def project_points(configid, resource="nsrdb_v3", sample=None):
     # Save or return data frame?
     return points
 
-
-# How does this work?
-class JSONError(Exception):
-    """
-	Error reading json file.
-    """
+def test_function():
+    '''
+    Checking functionality
+    '''
+    print("Test functions works!")
