@@ -72,6 +72,7 @@ def project_points(configid, resource="nsrdb_v3", sample=None):
     points = pd.DataFrame({"gid": gridids, "config": configid})
 
     # Save or return data frame?
+    print("Project points for config ID " + configid + " generated")
     return points
 
 

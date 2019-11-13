@@ -7,6 +7,9 @@ file key.
 # Set path to repo root a get functions
 from revruns import check_config, project_points
 
+# Signal Setup
+print("Setting up reV run #1...")
+
 # Fixed
 fpoints = project_points("i_pvwatts_fixed", sample=1000)
 fpoints.to_csv("project_points/project_points_fixed.csv",
