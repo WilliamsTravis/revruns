@@ -21,4 +21,3 @@ fpoints.to_csv("project_points/project_points_tracking.csv",
 check_config("config_gen.json")
 check_config("sam_configs/i_pvwatts_fixed.json")
 check_config("sam_configs/i_pvwatts_tracking.json")
-    
