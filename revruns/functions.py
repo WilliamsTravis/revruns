@@ -46,6 +46,9 @@ def project_points(configid, resource="nsrdb_v3", sample=None):
     A way to generate either sample points or everypoint.
     It would also be useful to convert a list of coordinates into gridids.
     '''
+    # create a project_points folder if it doesn't exist
+    # ...
+
     # Print out options
     if not resource:
         print("Resource required...")

@@ -1,6 +1,6 @@
 {
   "directories": {
-    "logging_directory": "./logs/",
+    "logging_directory": "./output/logs",
     "output_directory": "./output"
   },
   "execution_control": {
@@ -25,13 +25,9 @@
     ],
     "technology": "pv"
   },
-  "project_points": [
-	"./project_points/project_points_fixed.csv",
-	"./project_points/project_points_tracking.csv"
-  ],
+  "project_points": "./project_points/project_points_fixed.csv",
   "resource_file": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
   "sam_files": {
-    "i_pvwatts_fixed" : "./sam_configs/i_pvwatts_fixed.json",
-    "i_pvwatts_tracking" : "./sam_configs/i_pvwatts_tracking.json"
+    "i_pvwatts_fixed" : "./sam_configs/i_pvwatts_fixed.json"
   }
 }
