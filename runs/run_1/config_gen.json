@@ -4,12 +4,12 @@
     "output_directory": "./output"
   },
   "execution_control": {
-    "allocation": "pxs",
+    "allocation": "rev",
     "feature": "--qos=normal",
     "nodes": 1,
     "option": "eagle",
     "sites_per_core": 100,
-    "walltime": 0.5
+    "walltime": 0.1
   },
   "project_control": {
     "analysis_years": [

@@ -1,0 +1,22 @@
+INFO - 2019-11-12 16:57:45,174 [cli_gen.py:77] : Running reV 2.0 generation from config file: "config_gen.json"
+INFO - 2019-11-12 16:57:45,174 [cli_gen.py:78] : Target output directory: "/home/twillia2/github/revruns/runs/run_1/output"
+INFO - 2019-11-12 16:57:45,174 [cli_gen.py:79] : Target logging directory: "/home/twillia2/github/revruns/runs/run_1/logs/"
+INFO - 2019-11-12 16:57:45,174 [cli_gen.py:81] : The following project points were specified: "['/home/twillia2/github/revruns/runs/run_1/project_points/project_points_fixed.csv', '/home/twillia2/github/revruns/runs/run_1/project_points/project_points_tracking.csv']"
+INFO - 2019-11-12 16:57:45,175 [cli_gen.py:84] : The following SAM configs are available to this run:
+{   'i_pvwatts_fixed': '/home/twillia2/github/revruns/runs/run_1/sam_configs/i_pvwatts_fixed.json',
+    'i_pvwatts_tracking': '/home/twillia2/github/revruns/runs/run_1/sam_configs/i_pvwatts_tracking.json'}
+INFO - 2019-11-12 16:57:45,185 [cli_gen.py:712] : Running reV generation on Eagle with node name "gen_2014" for PointsControl for sites /home/twillia2/github/revruns/runs/run_1/project_points/project_points_fixed.csv through /home/twillia2/github/revruns/runs/run_1/project_points/project_points_tracking.csv (points range: [0, 2]).
+INFO - 2019-11-12 16:57:45,266 [cli_gen.py:731] : Kicked off reV generation job "gen_2014" (SLURM jobid #1717909) on Eagle.
+INFO - 2019-11-12 16:57:45,276 [cli_gen.py:712] : Running reV generation on Eagle with node name "gen_2015" for PointsControl for sites /home/twillia2/github/revruns/runs/run_1/project_points/project_points_fixed.csv through /home/twillia2/github/revruns/runs/run_1/project_points/project_points_tracking.csv (points range: [0, 2]).
+INFO - 2019-11-12 16:57:45,332 [cli_gen.py:731] : Kicked off reV generation job "gen_2015" (SLURM jobid #1717910) on Eagle.
+INFO - 2019-11-13 08:36:07,782 [cli_gen.py:77] : Running reV 2.0 generation from config file: "config_gen.json"
+INFO - 2019-11-13 08:36:07,782 [cli_gen.py:78] : Target output directory: "/home/twillia2/github/revruns/runs/run_1/output"
+INFO - 2019-11-13 08:36:07,782 [cli_gen.py:79] : Target logging directory: "/home/twillia2/github/revruns/runs/run_1/logs/"
+INFO - 2019-11-13 08:36:07,782 [cli_gen.py:81] : The following project points were specified: "['/home/twillia2/github/revruns/runs/run_1/project_points/project_points_fixed.csv', '/home/twillia2/github/revruns/runs/run_1/project_points/project_points_tracking.csv']"
+INFO - 2019-11-13 08:36:07,783 [cli_gen.py:84] : The following SAM configs are available to this run:
+{   'i_pvwatts_fixed': '/home/twillia2/github/revruns/runs/run_1/sam_configs/i_pvwatts_fixed.json',
+    'i_pvwatts_tracking': '/home/twillia2/github/revruns/runs/run_1/sam_configs/i_pvwatts_tracking.json'}
+INFO - 2019-11-13 08:36:07,826 [cli_gen.py:712] : Running reV generation on Eagle with node name "gen_2014" for PointsControl for sites /home/twillia2/github/revruns/runs/run_1/project_points/project_points_fixed.csv through /home/twillia2/github/revruns/runs/run_1/project_points/project_points_tracking.csv (points range: [0, 2]).
+INFO - 2019-11-13 08:36:07,914 [cli_gen.py:731] : Kicked off reV generation job "gen_2014" (SLURM jobid #1721159) on Eagle.
+INFO - 2019-11-13 08:36:07,943 [cli_gen.py:712] : Running reV generation on Eagle with node name "gen_2015" for PointsControl for sites /home/twillia2/github/revruns/runs/run_1/project_points/project_points_fixed.csv through /home/twillia2/github/revruns/runs/run_1/project_points/project_points_tracking.csv (points range: [0, 2]).
+INFO - 2019-11-13 08:36:07,995 [cli_gen.py:731] : Kicked off reV generation job "gen_2015" (SLURM jobid #1721160) on Eagle.
