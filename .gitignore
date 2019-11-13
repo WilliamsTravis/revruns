@@ -1,0 +1,7 @@
+build/
+dist/
+.DS_Store
+*.egg-info
+*.egg-info/*
+PKG-INFO
+__pycache__/

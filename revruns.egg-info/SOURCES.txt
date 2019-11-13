@@ -1,9 +1,0 @@
-README.md
-setup.py
-revruns/__init__.py
-revruns/functions.py
-revruns.egg-info/PKG-INFO
-revruns.egg-info/SOURCES.txt
-revruns.egg-info/dependency_links.txt
-revruns.egg-info/requires.txt
-revruns.egg-info/top_level.txt
