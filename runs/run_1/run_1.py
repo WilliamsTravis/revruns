@@ -5,22 +5,33 @@ file key.
 """
 
 # Set path to repo root a get functions
-from revruns import check_config, project_points
+from revruns import Config
 
 # Signal Setup
-print("Setting up reV run #1...")
+print("Setting up reV run #1...\n")
 
-# Fixed
-fpoints = project_points("i_pvwatts_fixed", sample=1000)
-fpoints.to_csv("project_points/project_points_fixed.csv",
-               index=False)
+# Create general config object
+cnfg = Config()
 
-# tracking
-tpoints = project_points("i_pvwatts_tracking", sample=1000)
-fpoints.to_csv("project_points/project_points_tracking.csv",
-               index=False)
+# Set common parameters
+cnfg.top_params["years"] = [2016, 2017]
+cnfg.top_params["outdir"] = "./output"
+cnfg.top_params["logdir"] = "./output/logs"
+cnfg.top_params["outputs"] = ["cf_profile", "cf_mean", "poa"]
+cnfg.top_params["allocation"] = "rev"
+cnfg.top_params["walltime"] = 0.1
+cnfg.top_params["nodes"] = 1
+cnfg.sam_params["system_capacity"] = 5
+cnfg.sam_params["dc_ac_ratio"] = 1.1
 
-# Check config files
-check_config("config_gen.json")
-check_config("sam_configs/i_pvwatts_fixed.json")
-check_config("sam_configs/i_pvwatts_tracking.json")
+# Job #1
+cnfg.sam_params["array_type"] = 0
+cnfg.sam_params["tilt"] = "latitude"
+sam_config = cnfg.config_sam(jobname="pvwattsv5_fixed", point_sample=1000)
+gen_config = cnfg.config_gen(jobname="pvwattsv5_fixed", tech="pv")
+
+# Job #2
+cnfg.sam_params["array_type"] = 2
+cnfg.sam_params["tilt"] = 0
+sam_config = cnfg.config_sam(jobname="pvwattsv5_tracking", point_sample=1000)
+gen_config = cnfg.config_gen(jobname="pvwattsv5_tracking", tech="pv")

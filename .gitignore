@@ -1,7 +1,8 @@
 build/
 dist/
-.DS_Store
+*.DS_Store
 *.egg-info
 *.egg-info/*
 PKG-INFO
 __pycache__/
+*.pyc
