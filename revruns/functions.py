@@ -8,8 +8,8 @@ Created on Tue Nov 12 13:15:55 2019
 
 @author: twillia2
 """
-import copy
 import datetime as dt
+import h5py as hp
 import json
 import os
 import numpy as np
@@ -17,6 +17,12 @@ import pandas as pd
 #import PySAM as sam
 #from PySAM import Pvwattsv5 as pv
 from reV.utilities.exceptions import JSONError
+
+
+# Data path
+_root = os.path.abspath(os.path.dirname(__file__))
+def dp(path):
+    return os.path.join(_root, 'data', path)
 
 # Time check
 NOW = dt.datetime.today().strftime("%Y-%m-%d %I:%M %p")
@@ -37,6 +43,7 @@ RESOURCE_DSETS = {
         "nsrdb_v3": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
         "wind_conus_v2": "/datasets/WIND/conus/v2.0.0/wtk_conus_2014.h5"
         }
+
 
 # Default parameters
 TOP_PARAMS = dict(logdir="./logs",
@@ -63,6 +70,23 @@ SAM_PARAMS = dict(system_capacity=5,
                   array_type=0,
                   module_type=0,
                   compute_module="pvwattsv5")
+ 
+
+def box_points(bbox, crd_path=dp("nsrdb_v3_coords.csv")):
+    """Filter grid ids by geographical bounding box"""
+    # Resource coordinate data frame from get_coordinates
+    grid = pd.read_csv(crd_path)
+
+    # Filter the data frame for points within the bounding box
+    sample = grid[(grid["lat"] > bbox[1]) &
+                  (grid["lat"] < bbox[3]) &
+                  (grid["lon"] > bbox[0]) &
+                  (grid["lon"] < bbox[2])]
+
+    # And get just the grid ids
+    gids = sample.index.to_list()
+
+    return gids
 
 
 def check_config(config_file):
@@ -77,14 +101,33 @@ def check_config(config_file):
         raise JSONError(emsg)
 
 
-def project_points(jobname, resource="nsrdb_v3", sample=None, coords=None):
+def get_coordinates(file, savepath):
+    """Get all of the coordintes and their grid ids from an hdf5 file"""
+    # Get numpy array of coordinates
+    with hp.File(file, mode="r") as f:
+        crds = f["coordinates"][:]
+
+    # Create a data frame and save it
+    lats = crds[:, 0]
+    lons = crds[:, 1]
+    df = pd.DataFrame({"lat": lats, "lon": lons})
+    df.to_csv(savepath, index=False)
+
+
+
+
+def project_points(jobname, resource="nsrdb_v3", points=1000):
     """Generates a required point file for spatial querying in reV.
 
     Parameters:
         jobname (str): Job name assigned to SAM configuration.
         resource (str): Energy resource data set key. Set to None for options.
-        sample (int): Number of sample points to generate. Set to None for
-                      all points.
+        points (int | str | list): Sample points to generate. Set to an
+                                   integer, n, to use the first n grid IDs,
+                                   set to a list of points to use those points,
+                                   or set to the string "all" to use all
+                                   available points in the chosen resource
+                                   data set.
         coords (list): A list of geographic coordinates to be converted to grid
                        IDs. (not yet implemented)
 
@@ -104,10 +147,12 @@ def project_points(jobname, resource="nsrdb_v3", sample=None, coords=None):
             print("   '" + key + "': " + str(var))
 
     # Sample or full grid?
-    if sample:
-        gridids = np.arange(0, sample)
-    else:
+    if type(points) is int:
+        gridids = np.arange(0, points)
+    elif points == "all":
         gridids = np.arange(0, RESOURCE_DIMS[resource])
+    else:
+        gridids = points
 
     # Create data frame
     points = pd.DataFrame({"gid": gridids, "config": jobname})
@@ -125,23 +170,23 @@ class Config:
         self.sam_params = sam_params
         self._set_years()
 
-    def config_sam(self, jobname="gen", resource="nsrdb_v3", point_sample=None,
-                   coords=None):
+    def config_sam(self, jobname="gen", resource="nsrdb_v3", points=1000):
         """Configure the System Advisor Model (SAM) portion of a reV model.
 
         Parameters:
             jobname (str): Job name assigned to SAM configuration.
             resource (str): Energy resource data set key. Set to None for
                             options.
-            sample (int): Number of sample points to generate. Set to None for
-                          all points.
-            coords (list): A list of geographic coordinates to be converted to
-                           grid IDs. (not yet implemented)
+            points (int | str | list): Sample points to generate. Set to an
+                                       integer, n, to use the first n grid IDs,
+                                       set to a list of points to use those
+                                       points, or set to the string "all" to
+                                       use all available points in the chosen
+                                       resource data set.
 
         Returns:
             dict: A dictionary of default and user specified SAM parameters.
             file: A local json file
-
         """
         # Make sure there is a sam config folder
         if not os.path.exists("./sam_configs"):
@@ -166,9 +211,9 @@ class Config:
         }
 
         # Create project points
-        points = project_points(jobname, resource, point_sample, coords)
+        proj_points = project_points(jobname, resource, points)
         point_path = os.path.join("project_points", jobname + ".csv")
-        points.to_csv(point_path)
+        proj_points.to_csv(point_path)
         print(jobname + " project points" + " saved to '" + point_path + "'.")
 
         # Save to json using jobname for file name
