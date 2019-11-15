@@ -3,72 +3,68 @@
 This script will create some standard output graphs and figures from reV output
 hdf5 files.
 
+Careful with this on normal machines (memory)
+
 Move to functions at some point.
+
+If we standardized the file name formats we could further automate this:
+    i.e. "module_groupingfeature_year.h5"
 
 Created on Thu Nov 14 10:28:59 2019
 
 @author: twillia2
 """
-import datetime as dt
-import h5py as hp
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import numpy as np
+from glob import glob
 import os
-import pandas as pd
+from revruns import compare_profiles, extract_arrays, show_colorbars
 
 # set wd temporarily
 os.chdir("/Users/twillia2/github/data/revruns/run_1")
 
-# From run_1
-files = ["pvwattsv5_fixed_2016.h5", "pvwattsv5_tracking_2016.h5",
-         "pvwattsv5_fixed_2017.h5", "pvwattsv5_tracking_2017.h5"]
+# Profiles
+savefolder = "graphs"
+dpi = 800
 
-# 2016 fixed pv
-sample = files[1]
+# POA For 2016
+files = glob("*h5")
+datasets = {f.replace(".h5", ""): extract_arrays(f) for
+            f in files if "2016" in f}
+compare_profiles(datasets, dataset="poa",
+                 units="W $\mathregular{m^{-2}}$",
+                 title="Point of Array Irradiance - Denver Area (2016)",
+                 cmap="viridis",
+                 savefolder=savefolder,
+                 dpi=dpi)
 
-# Get year
-year = int(sample[sample.index(".") - 4: sample.index(".")])
+# POA for 2017
+datasets = {f.replace(".h5", ""): extract_arrays(f) for
+            f in files if "2017" in f}
+compare_profiles(datasets, dataset="poa",
+                 units="W $\mathregular{m^{-2}}$",
+                 title="Point of Array Irradiance - Denver Area (2017)",
+                 cmap="viridis",
+                 savefolder=savefolder,
+                 dpi=dpi)
 
-# Open file
-file = hp.File(sample, mode="r")
+# Capacity Factor Profile For 2016
+files = glob("*h5")
+datasets = {f.replace(".h5", ""): extract_arrays(f) for
+            f in files if "2016" in f}
+for key in datasets.keys():
+    datasets[key]['cf_profile'] = datasets[key]['cf_profile'] / 1000
+compare_profiles(datasets, dataset="cf_profile", units="Ratio",
+                 title="Capacity Factor - Denver Area (2016)",
+                 cmap="plasma",
+                 savefolder=savefolder,
+                 dpi=dpi)
 
-# Get keys?
-keys = file.keys()
-
-# Get the three data sets
-cf_profile = file["cf_profile"][:]
-cf_mean = file["cf_mean"][:]
-poa = file["poa"][:]
-time = file["time_index"]
-
-# Get the date-times
-t1 = dt.datetime(year, 1, 1, 0, 0).strftime("%Y-%m-%d %H:%M")
-t2 = dt.datetime(year, 12, 31, 23, 59).strftime("%Y-%m-%d %H:%M")
-dates = pd.date_range(t1, t2, freq="30 min")
-dates = [dt.datetime.strftime(d, "%Y-%m-%d %H:%M") for d in dates]
-
-# Capacity Factor Means
-plt.hist(cf_mean, bins=50)
-
-# Capacity Factor Profile
-cf = cf_profile.T
-poa = poa.T
-extent = 0, cf.shape[1], 0, cf.shape[0]
-
-fig, axes = plt.subplots(2, 1, figsize=(15, 4),  )
-ax1 = axes[0]
-ax1.imshow(cf)
-ax1.set_aspect('auto')
-ax1.set_xticks([])
-ax1.set_title("Capacity Factor")
-
-ax2 = axes[1]
-ax2.imshow(poa)
-ax2.set_aspect('auto')
-#ax2.set_xticklabels(dates)
-ax2.set_title("POA")
-fig.suptitle('Denver Area Solar Profiles - PV E-W Tracking (2016)', y=1.08,
-             fontsize=20)
-fig.tight_layout()
-fig.autofmt_xdate()
+# Capacity Factor for 2017
+datasets = {f.replace(".h5", ""): extract_arrays(f) for
+            f in files if "2017" in f}
+for key in datasets.keys():
+    datasets[key]['cf_profile'] = datasets[key]['cf_profile'] / 1000
+compare_profiles(datasets, dataset="cf_profile", units="Ratio",
+                 title="Capacity Factor - Denver Area (2017)",
+                 cmap="plasma",
+                 savefolder=savefolder,
+                 dpi=dpi)

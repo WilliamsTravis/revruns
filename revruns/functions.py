@@ -12,12 +12,13 @@ import datetime as dt
 import h5py as hp
 import json
 import os
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 #import PySAM as sam
 #from PySAM import Pvwattsv5 as pv
 from reV.utilities.exceptions import JSONError
-
+plt.rcParams['font.family'] = 'Times New Roman'
 
 # Data path
 _root = os.path.abspath(os.path.dirname(__file__))
@@ -35,7 +36,7 @@ RESOURCE_DIMS = {
 
 RESOURCE_LABELS = {
         "nsrdb_v3": "National Solar Radiation Database - v3.0.1",
-        "wind_conus_v2": ("Wind Integration National Dataset (WIND) " +
+        "wind_conus_v2": ("Wind Integration National Dataset (WIND) " + # <---- Use v1 ( we aren't sure about the differences with v2 yet)
                           "Toolkit - CONUS, v2.0.0")
         }
 
@@ -43,7 +44,6 @@ RESOURCE_DSETS = {
         "nsrdb_v3": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
         "wind_conus_v2": "/datasets/WIND/conus/v2.0.0/wtk_conus_2014.h5"
         }
-
 
 # Default parameters
 TOP_PARAMS = dict(logdir="./logs",
@@ -100,6 +100,118 @@ def check_config(config_file):
                 '"{}"'.format(error, config_file))
         raise JSONError(emsg)
 
+def compare_profiles(datasets,
+                     dataset="cf_profile",
+                     units="$\mathregular{m^{-2}}$",
+                     title="Output Profiles",
+                     cmap="viridis",
+                     savefolder=None,
+                     dpi=300):
+    """Compare profiles from different reV generation models
+    
+    Parameters:
+        outputs (list): A list of reV output profile numpy arrays.
+
+    Returns:
+        (png): An image comparing output profiles over time.
+    """
+    # Get the profiles from the datasets
+    profiles = {key: datasets[key][dataset] for key in datasets}
+
+    # Get the time values from one of the data sets
+    keys = list(datasets.keys())
+    time = datasets[keys[0]]["time_index"]
+    nstep = int(len(time) / 15)
+    time_ticks = np.arange(0, len(time), nstep)
+    time_labels = pd.to_datetime(time[1::nstep]).strftime("%b %d %H:%M")
+    
+    # Get grouping features
+    groups = list(profiles.keys())
+    for i in range(len(groups)):
+        elements = groups[i].split("_")
+        module = elements[0].upper()
+        group_feature = elements[1].capitalize()
+        year = elements[2]
+        elements = [module, group_feature, year]
+        group = " ".join(elements)
+        groups[i] = group
+
+    # Get the datasets
+    outputs = [profiles[key] for key in profiles.keys()]
+    
+    # Get some information about the outputs
+    noutputs = len(outputs)
+
+    # Transpose outputs so they're horizontal
+    outputs = [out.T for out in outputs]
+
+    # Figure level graph elements    
+    fig, axes = plt.subplots(noutputs, 1, figsize=(20, 4))
+    fig.suptitle(title, y=1.15, x=.425, fontsize=20)
+    fig.tight_layout()
+    fig.text(0.425, 0.001, 'Date', ha='center', va='center', fontsize=15)
+    fig.text(0.00, .6, 'Site #', ha='center', va='center', fontsize=15,
+             rotation='vertical')
+
+    # We need a common color map
+    maxes = [np.max(out) for out in outputs]
+    if np.diff(maxes) == 0:
+        maxes[0] = maxes[0] - 1
+    color_template = outputs[int(np.where(maxes == max(maxes))[0])]
+    ctim = axes[0].imshow(color_template, cmap=cmap)
+    clim = ctim.properties()['clim']
+
+    # For each axis plot and format
+    for i in range(len(axes)):
+        axes[i].imshow(outputs[i], cmap=cmap, clim=clim)
+        axes[i].set_aspect('auto')
+        axes[i].set_title(groups[i], fontsize=15)
+        axes[i].set_xticks([])
+
+    # Set date axis on the last one?
+    axes[i].set_xticks(time_ticks)
+    axes[i].set_xticklabels(time_labels)
+    fig.autofmt_xdate(rotation=-35, ha="left")
+
+    # Set the colorbar
+    cbr = fig.colorbar(ctim, ax=axes.ravel().tolist(), shrink=.9,
+                       pad=0.02)
+    cbr.ax.set_ylabel(units, fontsize=15, rotation=270, labelpad=15)
+
+    # Also save to file
+    if savefolder:
+        if not os.path.exists(savefolder):
+            os.makedirs(savefolder)
+        file = "_".join([module.lower(), dataset, year]) + ".png"
+        path = os.path.join(savefolder, file)
+        fig.savefig(path, bbox_inches = "tight", dpi=dpi)
+        plt.close(fig)
+
+
+def extract_arrays(file):
+    """Get all output data sets from an HDF5 file.
+    
+    Parameters:
+        files (list): An HDF file path
+    
+    Output :
+        (list): A dictionary of data sets as numpy arrays.
+    """
+    # Open file
+    pointer = hp.File(file, mode="r")
+
+    # Get keys?
+    keys = pointer.keys()
+
+    # Get the three data sets
+    data_sets = {key: pointer[key][:] for key in keys}
+
+    # Decode the time index
+    time = [t.decode("UTF-8") for t in data_sets["time_index"]]
+    data_sets["time_index"] = time
+
+    return data_sets 
+
 
 def get_coordinates(file, savepath):
     """Get all of the coordintes and their grid ids from an hdf5 file"""
@@ -112,8 +224,6 @@ def get_coordinates(file, savepath):
     lons = crds[:, 1]
     df = pd.DataFrame({"lat": lats, "lon": lons})
     df.to_csv(savepath, index=False)
-
-
 
 
 def project_points(jobname, resource="nsrdb_v3", points=1000):
@@ -159,6 +269,62 @@ def project_points(jobname, resource="nsrdb_v3", points=1000):
 
     # Return data frame
     return points
+
+   
+def show_colorbars():
+    """Shows all available color bar keys"""
+    cmaps = [('Perceptually Uniform Sequential', [
+                'viridis', 'plasma', 'inferno', 'magma', 'cividis']),
+             ('Sequential', [
+                'Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+                'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+                'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn']),
+             ('Sequential (2)', [
+                'binary', 'gist_yarg', 'gist_gray', 'gray', 'bone', 'pink',
+                'spring', 'summer', 'autumn', 'winter', 'cool', 'Wistia',
+                'hot', 'afmhot', 'gist_heat', 'copper']),
+             ('Diverging', [
+                'PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu',
+                'RdYlBu', 'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic']),
+             ('Cyclic', ['twilight', 'twilight_shifted', 'hsv']),
+             ('Qualitative', [
+                'Pastel1', 'Pastel2', 'Paired', 'Accent',
+                'Dark2', 'Set1', 'Set2', 'Set3',
+                'tab10', 'tab20', 'tab20b', 'tab20c']),
+             ('Miscellaneous', [
+                'flag', 'prism', 'ocean', 'gist_earth', 'terrain', 'gist_stern',
+                'gnuplot', 'gnuplot2', 'CMRmap', 'cubehelix', 'brg',
+                'gist_rainbow', 'rainbow', 'jet', 'nipy_spectral', 'gist_ncar'])]
+    
+    
+    gradient = np.linspace(0, 1, 256)
+    gradient = np.vstack((gradient, gradient))
+    
+    
+    def plot_color_gradients(cmap_category, cmap_list):
+        # Create figure and adjust figure height to number of colormaps
+        nrows = len(cmap_list)
+        figh = 0.35 + 0.15 + (nrows + (nrows-1)*0.1)*0.22
+        fig, axes = plt.subplots(nrows=nrows, figsize=(6.4, figh))
+        fig.subplots_adjust(top=1-.35/figh, bottom=.15/figh, left=0.2,
+                            right=0.99)
+    
+        axes[0].set_title(cmap_category + ' colormaps', fontsize=14)
+    
+        for ax, name in zip(axes, cmap_list):
+            ax.imshow(gradient, aspect='auto', cmap=plt.get_cmap(name))
+            ax.text(-.01, .5, name, va='center', ha='right', fontsize=10,
+                    transform=ax.transAxes)
+    
+        # Turn off *all* ticks & spines, not just the ones with colormaps.
+        for ax in axes:
+            ax.set_axis_off()
+    
+    
+    for cmap_category, cmap_list in cmaps:
+        plot_color_gradients(cmap_category, cmap_list)
+    
+    plt.show()
 
 
 class Config:
