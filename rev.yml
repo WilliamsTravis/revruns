@@ -27,6 +27,7 @@ dependencies:  # This is missing the libcxx packages since they are only availab
   - dask=2.3.0
   - dask-core=2.3.0
   - decorator=4.4.0
+  - descartes=1.1.0
   - distributed=2.3.2
   - docutils=0.15.2
   - expat=2.2.6
@@ -35,6 +36,7 @@ dependencies:  # This is missing the libcxx packages since they are only availab
   - freexl=1.0.5
   - fsspec=0.4.0
   - geos=3.7.1
+  - geopandas
   - gettext=0.19.8.1
   - giflib=5.1.4
   - glib=2.56.2

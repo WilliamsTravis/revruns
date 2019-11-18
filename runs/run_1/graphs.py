@@ -17,13 +17,13 @@ Created on Thu Nov 14 10:28:59 2019
 from glob import glob
 import os
 from revruns import compare_profiles, extract_arrays, show_colorbars
-
+0000
 # set wd temporarily
 os.chdir("/Users/twillia2/github/data/revruns/run_1")
 
 # Profiles
 savefolder = "graphs"
-dpi = 800
+dpi = 1000
 
 # POA For 2016
 files = glob("*h5")

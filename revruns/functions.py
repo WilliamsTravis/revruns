@@ -1,5 +1,3 @@
-
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Functions for revruns/brainstorming intuitive and easy config building
@@ -9,18 +7,26 @@ Created on Tue Nov 12 13:15:55 2019
 @author: twillia2
 """
 import datetime as dt
+import geopandas as gpd
 import h5py as hp
 import json
 import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-#import PySAM as sam
+#import PySAM as sam  # Will need these eventually
 #from PySAM import Pvwattsv5 as pv
 from reV.utilities.exceptions import JSONError
+from shapely.geometry import Point
+import ssl
+
+# Fix remote file transfer issues with ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
+# Times New Roman for plots?
 plt.rcParams['font.family'] = 'Times New Roman'
 
-# Data path
+# Package data path
 _root = os.path.abspath(os.path.dirname(__file__))
 def dp(path):
     return os.path.join(_root, 'data', path)
@@ -28,7 +34,7 @@ def dp(path):
 # Time check
 NOW = dt.datetime.today().strftime("%Y-%m-%d %I:%M %p")
 
-# More to add: e.g. the 2018 CONUS solar is 2,091,566, and full is 9,026,712
+# Resource dataset info <------------------------------------------------------ More to add: e.g. the 2018 CONUS solar is 2,091,566, and full is 9,026,712
 RESOURCE_DIMS = {
         "nsrdb_v3": 2018392,
         "wind_conus_v2": 2488136
@@ -45,7 +51,19 @@ RESOURCE_DSETS = {
         "wind_conus_v2": "/datasets/WIND/conus/v2.0.0/wtk_conus_2014.h5"
         }
 
-# Default parameters
+# Default model parameters
+SAM_PARAMS = dict(system_capacity=5,
+                  dc_ac_ratio=1.1,
+                  inv_eff=96,
+                  losses=14.0757,
+                  adjust_constant=14.0757,
+                  gcr=0.4,
+                  tilt=20,
+                  azimuth=180,
+                  array_type=0,
+                  module_type=0,
+                  compute_module="pvwattsv5")
+
 TOP_PARAMS = dict(logdir="./logs",
                   loglevel="INFO",
                   outdir="./",
@@ -59,34 +77,79 @@ TOP_PARAMS = dict(logdir="./logs",
                   sites_per_core=100,
                   walltime=0.5)
 
-SAM_PARAMS = dict(system_capacity=5,
-                  dc_ac_ratio=1.1,
-                  inv_eff=96,
-                  losses=14.0757,
-                  adjust_constant=14.0757,
-                  gcr=0.4,
-                  tilt=20,
-                  azimuth=180,
-                  array_type=0,
-                  module_type=0,
-                  compute_module="pvwattsv5")
- 
+# Target geographic information
+TARGET_CRS = ["+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ",
+              {'init': 'epsg:4326'},
+              {'type': 'EPSG', 'properties': {'code': 4326}}]
 
-def box_points(bbox, crd_path=dp("nsrdb_v3_coords.csv")):
-    """Filter grid ids by geographical bounding box"""
+def box_points(bbox, crd_path=dp("nsrdb_v3_coords.csv"), gridids=True):
+    """Filter grid ids by geographical bounding box
+
+    Parameters:
+        bbox (list): A list containing the geographic coordinates of the
+                     desired bounding box in this order:
+                         [min lon, min lat, max lon, max lat]
+        crd_path (str): The local path to the desired resource coordinate
+                        list.
+
+    Returns:
+        gids (list): A list of grid IDs.
+    """
     # Resource coordinate data frame from get_coordinates
     grid = pd.read_csv(crd_path)
 
     # Filter the data frame for points within the bounding box
-    sample = grid[(grid["lat"] > bbox[1]) &
-                  (grid["lat"] < bbox[3]) &
-                  (grid["lon"] > bbox[0]) &
-                  (grid["lon"] < bbox[2])]
+    crds = grid[(grid["lon"] > bbox[0]) &
+                (grid["lat"] > bbox[1]) &
+                (grid["lon"] < bbox[2]) &
+                (grid["lat"] < bbox[3])]
 
-    # And get just the grid ids
-    gids = sample.index.to_list()
+    # Just gridids or coordinates? 
+    if gridids:
+        points = crds.index.to_list()
+    else:
+        points = crds
+
+    return points
+
+
+def shape_points(shp_path, crd_path=dp("nsrdb_v3_coords.csv")):
+    """Find the grid ids for a specified resource grid within a shapefile
+
+    Parameters:
+        shp_path (str): A local path to a shape file or remote url to a zipped
+                        folder containing a shapefile.
+        crd_path (str): The local path to the desired resource coordinate
+                        list.
+
+    Returns:
+        gids (list): A list of grid IDs.
+    """
+    # Read in shapefile with geopandas - remote urls allowed
+    shp = gpd.read_file(shp_path)
+    shp_crs = shp.crs
+
+    # Check that the shapefile isn't projected, or else reproject it
+    if shp_crs not in TARGET_CRS:
+        shp = shp.to_crs({'init': 'epsg:4326'})
+
+    # The resource data sets are large, subset by bounding box first
+    bbox = shp.geometry.total_bounds
+    grid = box_points(bbox, crd_path, gridids=False)
+
+    # Are there too many points to make a spatial object?
+    to_points = lambda x: Point(tuple(x))
+    grid["geometry"] = grid[["lon", "lat"]].apply(to_points, axis=1)
+    gdf = gpd.GeoDataFrame(grid, crs={'init': 'epsg:4326'},
+                           geometry=grid["geometry"])
+
+    # Use sjoin and filter out empty results
+    points = gpd.sjoin(gdf, shp, how="left")
+    points = points[~pd.isna(points['index_right'])]
+    gids = list(points.index)
 
     return gids
+
 
 
 def check_config(config_file):
