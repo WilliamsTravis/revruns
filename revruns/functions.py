@@ -6,11 +6,12 @@ Created on Tue Nov 12 13:15:55 2019
 
 @author: twillia2
 """
+import json
+import os
+import ssl
 import datetime as dt
 import geopandas as gpd
 import h5py as hp
-import json
-import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -18,18 +19,18 @@ import pandas as pd
 #from PySAM import Pvwattsv5 as pv
 from reV.utilities.exceptions import JSONError
 from shapely.geometry import Point
-import ssl
 
-# Fix remote file transfer issues with ssl
+# Fix remote file transfer issues with ssl (better way?)
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # Times New Roman for plots?
 plt.rcParams['font.family'] = 'Times New Roman'
 
 # Package data path
-_root = os.path.abspath(os.path.dirname(__file__))
-def dp(path):
-    return os.path.join(_root, 'data', path)
+ROOT = os.path.abspath(os.path.dirname(__file__))
+def data_path(path):
+    """Path to local package data directory"""
+    return os.path.join(ROOT, 'data', path)
 
 # Time check
 NOW = dt.datetime.today().strftime("%Y-%m-%d %I:%M %p")
@@ -82,7 +83,7 @@ TARGET_CRS = ["+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ",
               {'init': 'epsg:4326'},
               {'type': 'EPSG', 'properties': {'code': 4326}}]
 
-def box_points(bbox, crd_path=dp("nsrdb_v3_coords.csv"), gridids=True):
+def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv"), gridids=True):
     """Filter grid ids by geographical bounding box
 
     Parameters:
@@ -104,7 +105,7 @@ def box_points(bbox, crd_path=dp("nsrdb_v3_coords.csv"), gridids=True):
                 (grid["lon"] < bbox[2]) &
                 (grid["lat"] < bbox[3])]
 
-    # Just gridids or coordinates? 
+    # Just gridids or coordinates?
     if gridids:
         points = crds.index.to_list()
     else:
@@ -113,7 +114,7 @@ def box_points(bbox, crd_path=dp("nsrdb_v3_coords.csv"), gridids=True):
     return points
 
 
-def shape_points(shp_path, crd_path=dp("nsrdb_v3_coords.csv")):
+def shape_points(shp_path, crd_path=data_path("nsrdb_v3_coords.csv")):
     """Find the grid ids for a specified resource grid within a shapefile
 
     Parameters:
@@ -171,7 +172,7 @@ def compare_profiles(datasets,
                      savefolder=None,
                      dpi=300):
     """Compare profiles from different reV generation models
-    
+
     Parameters:
         outputs (list): A list of reV output profile numpy arrays.
 
@@ -187,11 +188,11 @@ def compare_profiles(datasets,
     nstep = int(len(time) / 15)
     time_ticks = np.arange(0, len(time), nstep)
     time_labels = pd.to_datetime(time[1::nstep]).strftime("%b %d %H:%M")
-    
+
     # Get grouping features
     groups = list(profiles.keys())
-    for i in range(len(groups)):
-        elements = groups[i].split("_")
+    for i, grp in enumerate(groups):
+        elements = grp.split("_")
         module = elements[0].upper()
         group_feature = elements[1].capitalize()
         year = elements[2]
@@ -201,14 +202,14 @@ def compare_profiles(datasets,
 
     # Get the datasets
     outputs = [profiles[key] for key in profiles.keys()]
-    
+
     # Get some information about the outputs
     noutputs = len(outputs)
 
     # Transpose outputs so they're horizontal
     outputs = [out.T for out in outputs]
 
-    # Figure level graph elements    
+    # Figure level graph elements
     fig, axes = plt.subplots(noutputs, 1, figsize=(20, 4))
     fig.suptitle(title, y=1.15, x=.425, fontsize=20)
     fig.tight_layout()
@@ -225,11 +226,11 @@ def compare_profiles(datasets,
     clim = ctim.properties()['clim']
 
     # For each axis plot and format
-    for i in range(len(axes)):
-        axes[i].imshow(outputs[i], cmap=cmap, clim=clim)
-        axes[i].set_aspect('auto')
-        axes[i].set_title(groups[i], fontsize=15)
-        axes[i].set_xticks([])
+    for i, ax in enumerate(axes):
+        ax.imshow(outputs[i], cmap=cmap, clim=clim)
+        ax.set_aspect('auto')
+        ax.set_title(groups[i], fontsize=15)
+        ax.set_xticks([])
 
     # Set date axis on the last one?
     axes[i].set_xticks(time_ticks)
@@ -247,16 +248,16 @@ def compare_profiles(datasets,
             os.makedirs(savefolder)
         file = "_".join([module.lower(), dataset, year]) + ".png"
         path = os.path.join(savefolder, file)
-        fig.savefig(path, bbox_inches = "tight", dpi=dpi)
+        fig.savefig(path, bbox_inches="tight", dpi=dpi)
         plt.close(fig)
 
 
 def extract_arrays(file):
     """Get all output data sets from an HDF5 file.
-    
+
     Parameters:
         files (list): An HDF file path
-    
+
     Output :
         (list): A dictionary of data sets as numpy arrays.
     """
@@ -273,14 +274,14 @@ def extract_arrays(file):
     time = [t.decode("UTF-8") for t in data_sets["time_index"]]
     data_sets["time_index"] = time
 
-    return data_sets 
+    return data_sets
 
 
 def get_coordinates(file, savepath):
     """Get all of the coordintes and their grid ids from an hdf5 file"""
     # Get numpy array of coordinates
-    with hp.File(file, mode="r") as f:
-        crds = f["coordinates"][:]
+    with hp.File(file, mode="r") as pointer:
+        crds = pointer["coordinates"][:]
 
     # Create a data frame and save it
     lats = crds[:, 0]
@@ -320,7 +321,7 @@ def project_points(jobname, resource="nsrdb_v3", points=1000):
             print("   '" + key + "': " + str(var))
 
     # Sample or full grid?
-    if type(points) is int:
+    if isinstance(points, int):
         gridids = np.arange(0, points)
     elif points == "all":
         gridids = np.arange(0, RESOURCE_DIMS[resource])
@@ -333,37 +334,36 @@ def project_points(jobname, resource="nsrdb_v3", points=1000):
     # Return data frame
     return points
 
-   
+
 def show_colorbars():
     """Shows all available color bar keys"""
     cmaps = [('Perceptually Uniform Sequential', [
-                'viridis', 'plasma', 'inferno', 'magma', 'cividis']),
+                 'viridis', 'plasma', 'inferno', 'magma', 'cividis']),
              ('Sequential', [
-                'Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
-                'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
-                'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn']),
+                 'Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+                 'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+                 'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn']),
              ('Sequential (2)', [
-                'binary', 'gist_yarg', 'gist_gray', 'gray', 'bone', 'pink',
-                'spring', 'summer', 'autumn', 'winter', 'cool', 'Wistia',
-                'hot', 'afmhot', 'gist_heat', 'copper']),
+                 'binary', 'gist_yarg', 'gist_gray', 'gray', 'bone', 'pink',
+                 'spring', 'summer', 'autumn', 'winter', 'cool', 'Wistia',
+                 'hot', 'afmhot', 'gist_heat', 'copper']),
              ('Diverging', [
-                'PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu',
-                'RdYlBu', 'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic']),
+                 'PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu',
+                 'RdYlBu', 'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic']),
              ('Cyclic', ['twilight', 'twilight_shifted', 'hsv']),
              ('Qualitative', [
-                'Pastel1', 'Pastel2', 'Paired', 'Accent',
-                'Dark2', 'Set1', 'Set2', 'Set3',
-                'tab10', 'tab20', 'tab20b', 'tab20c']),
+                 'Pastel1', 'Pastel2', 'Paired', 'Accent',
+                 'Dark2', 'Set1', 'Set2', 'Set3',
+                 'tab10', 'tab20', 'tab20b', 'tab20c']),
              ('Miscellaneous', [
-                'flag', 'prism', 'ocean', 'gist_earth', 'terrain', 'gist_stern',
-                'gnuplot', 'gnuplot2', 'CMRmap', 'cubehelix', 'brg',
-                'gist_rainbow', 'rainbow', 'jet', 'nipy_spectral', 'gist_ncar'])]
-    
-    
+                 'flag', 'prism', 'ocean', 'gist_earth', 'terrain',
+                 'gist_stern', 'gnuplot', 'gnuplot2', 'CMRmap', 'cubehelix',
+                 'brg', 'gist_rainbow', 'rainbow', 'jet', 'nipy_spectral',
+                 'gist_ncar'])]
+
     gradient = np.linspace(0, 1, 256)
     gradient = np.vstack((gradient, gradient))
-    
-    
+
     def plot_color_gradients(cmap_category, cmap_list):
         # Create figure and adjust figure height to number of colormaps
         nrows = len(cmap_list)
@@ -371,22 +371,22 @@ def show_colorbars():
         fig, axes = plt.subplots(nrows=nrows, figsize=(6.4, figh))
         fig.subplots_adjust(top=1-.35/figh, bottom=.15/figh, left=0.2,
                             right=0.99)
-    
+
         axes[0].set_title(cmap_category + ' colormaps', fontsize=14)
-    
+
         for ax, name in zip(axes, cmap_list):
             ax.imshow(gradient, aspect='auto', cmap=plt.get_cmap(name))
             ax.text(-.01, .5, name, va='center', ha='right', fontsize=10,
                     transform=ax.transAxes)
-    
+
         # Turn off *all* ticks & spines, not just the ones with colormaps.
         for ax in axes:
             ax.set_axis_off()
-    
-    
+
+
     for cmap_category, cmap_list in cmaps:
         plot_color_gradients(cmap_category, cmap_list)
-    
+
     plt.show()
 
 
@@ -454,7 +454,7 @@ class Config:
         # Check that the json as written correctly
         check_config(config_path)
 
-        # Return configuration dictionary 
+        # Return configuration dictionary
         return config_dict
 
 
