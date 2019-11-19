@@ -466,7 +466,6 @@ class Config:
             "dc_ac_ratio" : params["dc_ac_ratio"],
             "inv_eff" : params["inv_eff"],
             "losses" : params["losses"],
-            "adjust:constant" : params["adjust_constant"],
             "gcr" : params["gcr"],
             "tilt" : params["tilt"],
             "azimuth" : params["azimuth"],
