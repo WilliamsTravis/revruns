@@ -19,8 +19,6 @@ cnfg = Config()
 # Local and remote city shapefiles
 city_shpr = ("https://opendata.arcgis.com/datasets/" +
              "7b0998f4e2ea42bda0068afc8eeaf904_19.zip")
-city_shpl = ("/Users/twillia2/github/data/revruns/run_2/" +
-             "LA_County_City_Boundaries.shp")
 
 # Get a list of target grid IDS
 points = shape_points(city_shpr)
@@ -29,7 +27,7 @@ points = shape_points(city_shpr)
 cnfg.top_params["years"] = [2015]
 cnfg.top_params["outdir"] = "./output"
 cnfg.top_params["logdir"] = "./output/logs"
-cnfg.top_params["outputs"] = ["poa"]
+cnfg.top_params["outputs"] = ["poa", "cf_profile"]
 cnfg.top_params["allocation"] = "rev"
 cnfg.top_params["walltime"] = 0.1
 cnfg.top_params["nodes"] = 1

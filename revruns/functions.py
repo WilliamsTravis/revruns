@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 #import PySAM as sam  # Will need these eventually
+#import reV
 #from PySAM import Pvwattsv5 as pv
 from reV.utilities.exceptions import JSONError
 from shapely.geometry import Point
@@ -57,7 +58,6 @@ SAM_PARAMS = dict(system_capacity=5,
                   dc_ac_ratio=1.1,
                   inv_eff=96,
                   losses=14.0757,
-                  adjust_constant=14.0757,
                   gcr=0.4,
                   tilt=20,
                   azimuth=180,
@@ -70,6 +70,7 @@ TOP_PARAMS = dict(logdir="./logs",
                   outdir="./",
                   outputs="cf_mean",
                   years="all",
+                  resource="nsrdb_v3",
                   pointdir="./project_points",
                   allocation="rev",
                   feature="--qos=normal",
@@ -78,11 +79,12 @@ TOP_PARAMS = dict(logdir="./logs",
                   sites_per_core=100,
                   walltime=0.5)
 
-# Target geographic information
+# Target geographic coordinate system identifiers
 TARGET_CRS = ["+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ",
               {'init': 'epsg:4326'},
               {'type': 'EPSG', 'properties': {'code': 4326}}]
 
+# Functions
 def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv"), gridids=True):
     """Filter grid ids by geographical bounding box
 
@@ -114,6 +116,35 @@ def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv"), gridids=True):
     return points
 
 
+def single_points(lats, lons, crd_path=data_path("nsrdb_v3_coords.csv")):
+    """Take a data frame of single lat/lon coordinates and convert to a list of
+    grid ids.
+
+    Parameters:
+        lats (list): A list containing the latitude coordinates of the desired
+                    points.
+        lons (list): A list containing the longitude coordinates of the desired
+                    points.
+        crd_path (str): The local path to the desired resource coordinate
+                        list.
+
+    Returns:
+        gids (list): A list of grid IDs.    
+    """
+    # Create a second data frame with the new coordinates
+    points = pd.DataFrame({"lat": lats, "lon": lons})
+    points = to_geo(points)
+
+    # Filter the grid by the bounding box of the points
+    bbox = [min(lons), min(lats), max(lons), max(lats)]
+    grid = box_points(bbox, crd_path, gridids=False)
+    grid = to_geo(grid)
+
+    # Find which grid points are closest to each target points
+
+
+
+
 def shape_points(shp_path, crd_path=data_path("nsrdb_v3_coords.csv")):
     """Find the grid ids for a specified resource grid within a shapefile
 
@@ -139,10 +170,7 @@ def shape_points(shp_path, crd_path=data_path("nsrdb_v3_coords.csv")):
     grid = box_points(bbox, crd_path, gridids=False)
 
     # Are there too many points to make a spatial object?
-    to_points = lambda x: Point(tuple(x))
-    grid["geometry"] = grid[["lon", "lat"]].apply(to_points, axis=1)
-    gdf = gpd.GeoDataFrame(grid, crs={'init': 'epsg:4326'},
-                           geometry=grid["geometry"])
+    gdf = to_geo(grid)
 
     # Use sjoin and filter out empty results
     points = gpd.sjoin(gdf, shp, how="left")
@@ -151,6 +179,13 @@ def shape_points(shp_path, crd_path=data_path("nsrdb_v3_coords.csv")):
 
     return gids
 
+
+def to_geo(df, lat="lat", lon="lon"):
+    """ Convert a Pandas data frame to a geopandas geodata frame """
+    df["geometry"] = df[[lon, lat]].apply(lambda x: Point(tuple(x)), axis=1)
+    gdf = gpd.GeoDataFrame(df, crs={'init': 'epsg:4326'},
+                           geometry=df["geometry"])
+    return gdf
 
 
 def check_config(config_file):
@@ -163,6 +198,7 @@ def check_config(config_file):
         emsg = ('JSON Error:\n{}\nCannot read json file: '
                 '"{}"'.format(error, config_file))
         raise JSONError(emsg)
+
 
 def compare_profiles(datasets,
                      dataset="cf_profile",
@@ -389,7 +425,7 @@ def show_colorbars():
 
     plt.show()
 
-
+# Classes
 class Config:
     """Sets reV model key values and generates configuration json files."""
     def __init__(self,
@@ -448,7 +484,7 @@ class Config:
         # Save to json using jobname for file name
         config_path = os.path.join("sam_configs", jobname + ".json")
         with open(config_path, "w") as file:
-            file.write(json.dumps(config_dict))
+            file.write(json.dumps(config_dict, indent=4))
         print(jobname + " SAM config file saved to '" + config_path + "'.")
 
         # Check that the json as written correctly
@@ -456,7 +492,6 @@ class Config:
 
         # Return configuration dictionary
         return config_dict
-
 
     def config_gen(self, tech="pv", jobname="gen"):
         """
@@ -488,7 +523,7 @@ class Config:
             },
             "project_points": os.path.join(params["pointdir"],
                                            jobname + ".csv"),
-            "resource_file": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
+            "resource_file": RESOURCE_DSETS[self.top_params['resource']],
             "sam_files": {
                 jobname: "./sam_configs/" + jobname + ".json"
             }
@@ -497,7 +532,7 @@ class Config:
         # Save to json using jobname for file name
         config_path = os.path.join("config_gen_" + jobname + ".json")
         with open(config_path, "w") as file:
-            file.write(json.dumps(config_dict))
+            file.write(json.dumps(config_dict, indent=4))
         print(jobname + " GEN config file saved to '" + config_path + "'.")
 
         # Check that the json as written correctly
@@ -509,4 +544,4 @@ class Config:
     def _set_years(self):
         """Set years attribute to all available if not specified"""
         if self.top_params["years"] == "all":
-            self.years = range(1998, 2016)
+            self.years = range(1998, 2019)
