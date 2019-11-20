@@ -1,7 +1,7 @@
 {
     "directories": {
-        "logging_directory": "./output/logs",
-        "output_directory": "./output",
+        "logging_directory": "./",
+        "output_directory": "./",
         "collect_directory": "PIPELINE"
     },
     "execution_control": {

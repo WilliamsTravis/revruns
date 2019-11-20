@@ -1,7 +1,7 @@
 {
     "directories": {
-        "logging_directory": "./output/logs",
-        "output_directory": "./output"
+        "logging_directory": "./",
+        "output_directory": "./"
     },
     "execution_control": {
         "allocation": "pxs",
@@ -16,7 +16,6 @@
         "analysis_years": [
             2015
         ],
-        "name": "PLACEHOLDER",
         "technology": "pv",
         "output_request": [
             "cf_profile",

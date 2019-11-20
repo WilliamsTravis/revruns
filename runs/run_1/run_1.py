@@ -20,8 +20,8 @@ points = box_points(bbox)
 # Set common parameters
 cnfg.top_params["set_tag"] = "set1"
 cnfg.top_params["years"] = [2015]
-cnfg.top_params["outdir"] = "./output"
-cnfg.top_params["logdir"] = "./output/logs"
+cnfg.top_params["outdir"] = "./"
+cnfg.top_params["logdir"] = "./"
 cnfg.top_params["outputs"] = ["cf_profile", "cf_mean", "poa"]
 cnfg.top_params["allocation"] = "pxs"
 cnfg.top_params['resource'] = "nsrdb_v3"

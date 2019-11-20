@@ -490,6 +490,9 @@ class Config:
             "pipeline": [
                 {
                     "generation": "./config_gen.json"
+                },
+                {
+                    "collect": "./config_collect.json"
                 }
             ]
         }

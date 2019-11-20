@@ -5,10 +5,10 @@
             "args": {
                 "sam_files": [
                     {
-                        "fixed": "./sam_configs/fixed.json"
+                        "set1": "./sam_configs/fixed.json"
                     },
                     {
-                        "tracking": "./sam_configs/tracking.json"
+                        "set1": "./sam_configs/tracking.json"
                     }
                 ]
             },
