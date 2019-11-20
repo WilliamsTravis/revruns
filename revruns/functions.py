@@ -451,7 +451,8 @@ class Config:
         params = self.top_params
 
         # Create separate files for each job name
-        sam_dicts = [{j: "./sam_configs/" + j + ".json"} for j in jobnames]
+        key = params["set_tag"]
+        sam_dicts = [{key: "./sam_configs/" + j + ".json"} for j in jobnames]
     
         # Create the configuration dictionary
         config_dict = {
