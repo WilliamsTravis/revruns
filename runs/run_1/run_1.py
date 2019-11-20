@@ -34,12 +34,12 @@ cnfg.sam_params["dc_ac_ratio"] = 1.1
 # SAM Config #1
 cnfg.sam_params["array_type"] = 0
 cnfg.sam_params["tilt"] = "latitude"
-sam_config = cnfg.config_sam(jobname="fixed", points="all")
+sam_config = cnfg.config_sam(jobname="fixed")
 
 # SAM Config #2
 cnfg.sam_params["array_type"] = 2
 cnfg.sam_params["tilt"] = 0
-sam_config = cnfg.config_sam(jobname="tracking", points="all")
+sam_config = cnfg.config_sam(jobname="tracking")
 
 # And this should trigger all of the other configuration files  <-------------- (maybe don't call it config_gen)
 gen_config = cnfg.config_gen(jobnames=["fixed", "tracking"], tech="pv",

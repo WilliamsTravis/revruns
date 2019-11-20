@@ -1,0 +1,30 @@
+{
+    "directories": {
+        "logging_directory": "./output/logs",
+        "output_directory": "./output"
+    },
+    "execution_control": {
+        "allocation": "pxs",
+        "feature": "--qos=normal",
+        "nodes": 5,
+        "option": "eagle",
+        "walltime": 2.0,
+        "sites_per_core": 100
+    },
+    "project_control": {
+        "logging_level": "INFO",
+        "analysis_years": [
+            2015
+        ],
+        "name": "PLACEHOLDER",
+        "technology": "pv",
+        "output_request": [
+            "cf_profile",
+            "cf_mean",
+            "poa"
+        ]
+    },
+    "project_points": "./project_points/project_points.csv",
+    "sam_files": "PLACEHOLDER",
+    "resource_file": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5"
+}
