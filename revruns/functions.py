@@ -413,7 +413,7 @@ def show_colorbars():
         for axis, name in zip(axes, cmap_list):
             axis.imshow(gradient, aspect='auto', cmap=plt.get_cmap(name))
             axis.text(-.01, .5, name, va='center', ha='right', fontsize=10,
-                    transform=axis.transAxes)
+                      transform=axis.transAxes)
 
         # Turn off *all* ticks & spines, not just the ones with colormaps.
         for axis in axes:
