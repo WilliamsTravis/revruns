@@ -435,7 +435,7 @@ class Config:
         self.sam_params = sam_params
         self._set_years()
 
-    def config_batch(self, sam_files):
+    def config_batch(self, jobnames):
         """If running mutliple technologies, this configures a batch run.
 
         Note:
@@ -450,13 +450,16 @@ class Config:
         # Separate parameters for space
         params = self.top_params
 
+        # Create separate files for each job name
+        sam_dicts = [{j: "./sam_configs/" + j + ".json"} for j in jobnames]
+    
         # Create the configuration dictionary
         config_dict = {
             "pipeline_config": "./config_pipeline.json",
             "sets": [
                 {
                 "args": {
-                    "sam_files": sam_files
+                    "sam_files": sam_dicts
                 },
                 "files": ["./config_gen.json"],
                 "set_tag": params["set_tag"]
@@ -563,6 +566,7 @@ class Config:
         if len(jobnames) > 1:
             jobname = "PLACEHOLDER"
             sam_files = "PLACEHOLDER"
+            self.config_batch(jobnames)
         else:
             jobname = jobnames[0]
             sam_files = {jobname: "./sam_configs/" + jobname + ".json"}
@@ -612,10 +616,6 @@ class Config:
         # If we are using more than one node, collect the outputs
         if params["nodes"] > 1:
             self.config_collect()
-
-        # If we have more than one sam file, create a batch file
-        if isinstance(sam_files, list):
-            self.config_batch(sam_files)
 
         # Return configuration dictionary
         return config_dict

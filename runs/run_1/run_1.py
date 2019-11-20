@@ -27,7 +27,7 @@ cnfg.top_params["allocation"] = "pxs"
 cnfg.top_params['resource'] = "nsrdb_v3"
 cnfg.top_params["walltime"] = 2.0
 cnfg.top_params["nodes"] = 5
-cnfg.top_params["set_tag"] = "tracking_fixed"
+cnfg.top_params["set_tag"] = "set1"
 cnfg.sam_params["system_capacity"] = 5
 cnfg.sam_params["dc_ac_ratio"] = 1.1
 

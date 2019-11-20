@@ -8,4 +8,5 @@ PKG-INFO
 __pycache__/
 **/*.pyc
 **/*.csv
-*/*.h5
+**/*.h5
+**/*json≈
