@@ -21,12 +21,14 @@ from revruns import compare_profiles, extract_arrays, show_colorbars
 # set wd temporarily
 os.chdir("/Users/twillia2/github/data/revruns/run_1")
 
+# All the files
+files = glob("*h5")
+
 # Profiles
 savefolder = "graphs"
 dpi = 1000
 
 # POA For 2016
-files = glob("*h5")
 datasets = {f.replace(".h5", ""): extract_arrays(f) for
             f in files if "2016" in f}
 compare_profiles(datasets, dataset="poa",
@@ -71,4 +73,6 @@ compare_profiles(datasets, dataset="cf_profile", units="Ratio",
 
 
 # Check the value distributiond of each
-# This will be panel that 
+datasets
+
+

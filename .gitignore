@@ -6,6 +6,6 @@ dist/
 *.egg-info/*
 PKG-INFO
 __pycache__/
-*.pyc
-*.csv
-*.h5
+**/*.pyc
+**/*.csv
+*/*.h5

@@ -18,7 +18,8 @@ bbox = [-105.352679491, 39.4595438351, -104.9022400379, 40.3518303006]
 points = box_points(bbox)
 
 # Set common parameters
-cnfg.top_params["years"] = "all"
+cnfg.top_params["set_tag"] = "set1"
+cnfg.top_params["years"] = [2015]
 cnfg.top_params["outdir"] = "./output"
 cnfg.top_params["logdir"] = "./output/logs"
 cnfg.top_params["outputs"] = ["cf_profile", "cf_mean", "poa"]
@@ -26,17 +27,20 @@ cnfg.top_params["allocation"] = "pxs"
 cnfg.top_params['resource'] = "nsrdb_v3"
 cnfg.top_params["walltime"] = 2.0
 cnfg.top_params["nodes"] = 5
+cnfg.top_params["set_tag"] = "tracking_fixed"
 cnfg.sam_params["system_capacity"] = 5
 cnfg.sam_params["dc_ac_ratio"] = 1.1
 
-# Job #1
+# SAM Config #1
 cnfg.sam_params["array_type"] = 0
 cnfg.sam_params["tilt"] = "latitude"
-sam_config = cnfg.config_sam(jobname="pvwattsv5_fixed", points="all")
-gen_config = cnfg.config_gen(jobname="pvwattsv5_fixed", tech="pv")
+sam_config = cnfg.config_sam(jobname="fixed", points="all")
 
-# Job #2
+# SAM Config #2
 cnfg.sam_params["array_type"] = 2
 cnfg.sam_params["tilt"] = 0
-sam_config = cnfg.config_sam(jobname="pvwattsv5_tracking", points="all")
-gen_config = cnfg.config_gen(jobname="pvwattsv5_tracking", tech="pv")
+sam_config = cnfg.config_sam(jobname="tracking", points="all")
+
+# And this should trigger all of the other configuration files  <-------------- (maybe don't call it config_gen)
+gen_config = cnfg.config_gen(jobnames=["fixed", "tracking"], tech="pv",
+                             points="all")

@@ -67,6 +67,7 @@ SAM_PARAMS = dict(system_capacity=5,
 
 TOP_PARAMS = dict(logdir="./logs",
                   loglevel="INFO",
+                  memory=90,
                   outdir="./",
                   outputs="cf_mean",
                   years="all",
@@ -129,7 +130,7 @@ def single_points(lats, lons, crd_path=data_path("nsrdb_v3_coords.csv")):
                         list.
 
     Returns:
-        gids (list): A list of grid IDs.    
+        gids (list): A list of grid IDs.
     """
     # Create a second data frame with the new coordinates
     points = pd.DataFrame({"lat": lats, "lon": lons})
@@ -141,7 +142,6 @@ def single_points(lats, lons, crd_path=data_path("nsrdb_v3_coords.csv")):
     grid = to_geo(grid)
 
     # Find which grid points are closest to each target points
-
 
 
 
@@ -262,11 +262,11 @@ def compare_profiles(datasets,
     clim = ctim.properties()['clim']
 
     # For each axis plot and format
-    for i, ax in enumerate(axes):
-        ax.imshow(outputs[i], cmap=cmap, clim=clim)
-        ax.set_aspect('auto')
-        ax.set_title(groups[i], fontsize=15)
-        ax.set_xticks([])
+    for i, axis in enumerate(axes):
+        axis.imshow(outputs[i], cmap=cmap, clim=clim)
+        axis.set_aspect('auto')
+        axis.set_title(groups[i], fontsize=15)
+        axis.set_xticks([])
 
     # Set date axis on the last one?
     axes[i].set_xticks(time_ticks)
@@ -322,11 +322,11 @@ def get_coordinates(file, savepath):
     # Create a data frame and save it
     lats = crds[:, 0]
     lons = crds[:, 1]
-    df = pd.DataFrame({"lat": lats, "lon": lons})
-    df.to_csv(savepath, index=False)
+    data = pd.DataFrame({"lat": lats, "lon": lons})
+    data.to_csv(savepath, index=False)
 
 
-def project_points(jobname, resource="nsrdb_v3", points=1000):
+def project_points(tag, resource="nsrdb_v3", points=1000):
     """Generates a required point file for spatial querying in reV.
 
     Parameters:
@@ -365,7 +365,7 @@ def project_points(jobname, resource="nsrdb_v3", points=1000):
         gridids = points
 
     # Create data frame
-    points = pd.DataFrame({"gid": gridids, "config": jobname})
+    points = pd.DataFrame({"gid": gridids, "config": tag})
 
     # Return data frame
     return points
@@ -410,14 +410,14 @@ def show_colorbars():
 
         axes[0].set_title(cmap_category + ' colormaps', fontsize=14)
 
-        for ax, name in zip(axes, cmap_list):
-            ax.imshow(gradient, aspect='auto', cmap=plt.get_cmap(name))
-            ax.text(-.01, .5, name, va='center', ha='right', fontsize=10,
-                    transform=ax.transAxes)
+        for axis, name in zip(axes, cmap_list):
+            axis.imshow(gradient, aspect='auto', cmap=plt.get_cmap(name))
+            axis.text(-.01, .5, name, va='center', ha='right', fontsize=10,
+                    transform=axis.transAxes)
 
         # Turn off *all* ticks & spines, not just the ones with colormaps.
-        for ax in axes:
-            ax.set_axis_off()
+        for axis in axes:
+            axis.set_axis_off()
 
 
     for cmap_category, cmap_list in cmaps:
@@ -435,7 +435,193 @@ class Config:
         self.sam_params = sam_params
         self._set_years()
 
-    def config_sam(self, jobname="gen", resource="nsrdb_v3", points=1000):
+    def config_batch(self, sam_files):
+        """If running mutliple technologies, this configures a batch run.
+
+        Note:
+            This can apparently be done using either multipe sam config files,
+            or multiple arguments. I think, to start, I'll just use multiple
+            sam config files. That will let us configure more unique setups
+            to compare and, once this is done, won't require extra steps.
+
+            Batching the arguments themselves will result in all combinations,
+            which might not always be desired.
+        """
+        # Separate parameters for space
+        params = self.top_params
+
+        # Create the configuration dictionary
+        config_dict = {
+            "pipeline_config": "./config_pipeline.json",
+            "sets": [
+                {
+                "args": {
+                    "sam_files": sam_files
+                },
+                "files": ["./config_gen.json"],
+                "set_tag": params["set_tag"]
+                }
+            ]
+        }
+
+        # Write json to file
+        with open("./config_batch.json", "w") as file:
+            file.write(json.dumps(config_dict, indent=4))
+
+        # Check that the json as written correctly
+        print("BATCH config file saved.")
+        check_config("./config_batch.json")
+
+    def config_pipeline(self):
+        """ What is the pipeline anyways? What conditions require it?"""
+        # Separate parameters for space
+        params = self.top_params
+
+        # Create the configuration dictionary
+        config_dict = {
+            "logging": {
+                "log_file": None,
+                "log_level": params["loglevel"]
+            },
+            "pipeline": [
+                {
+                    "generation": "./config_gen.json"
+                }
+            ]
+        }
+
+        # Write json to file
+        with open("./config_pipeline.json", "w") as file:
+            file.write(json.dumps(config_dict, indent=4))
+
+        # Check that the json as written correctly
+        print("PIPELINE config file saved.")
+        check_config("./config_pipeline.json")
+
+    def config_collect(self):
+        """If there are more than one node we need to combine outputs"""
+        # Separate parameters for space
+        params = self.top_params
+
+        # This also need to be update with parameters
+        points_path = os.path.join(params["pointdir"], "project_points.csv")
+
+        # Create the dictionary from the current set of parameters
+        config_dict = {
+            "directories": {
+                "logging_directory": params["logdir"],
+                "output_directory": params["outdir"],
+                "collect_directory": "PIPELINE"  # <------------------------------ Is this auto generated?
+            },
+            "execution_control": {
+                "allocation": params["allocation"],
+                "feature": params["feature"],
+                "memory": params["memory"],
+                "option": params["option"],
+                "walltime": params["walltime"]
+            },
+            "project_control": {
+                "file_prefixes": "PIPELINE", # <----------------------------------- I guess they're all called PIPELINE_something?
+                "dsets": params["outputs"],
+                "parallel": False,  # <-------------------------------------------- The sample config was lower cased "false"
+                "logging_level": params["loglevel"]
+            },
+            "project_points": points_path
+        }
+
+        # Save to json using jobname for file name
+        with open("./config_collect.json", "w") as file:
+            file.write(json.dumps(config_dict, indent=4))
+
+        # Check that the json as written correctly
+        print("COLLECT config file saved.")
+        check_config("./config_collect.json")
+
+        # Return configuration dictionary
+        return config_dict
+
+    def config_gen(self, tech="pv", jobnames="fixed", points=1000):
+        """create a generation config file.
+
+        Notes:
+
+            This one does extra, I think a lot of it's functionality should
+            be moved to a master config method.
+
+        """
+        # Separate parameters for space
+        params = self.top_params
+
+        # This needs to be updated with parameters
+        points_path = os.path.join(params["pointdir"], "project_points.csv")
+
+        # If job names is singular and expressed as a string, express as list
+        if isinstance(jobnames, str):
+            jobnames = [jobnames]
+
+        # If there are more than one jobs, this will be handled in config_batch
+        if len(jobnames) > 1:
+            jobname = "PLACEHOLDER"
+            sam_files = "PLACEHOLDER"
+        else:
+            jobname = jobnames[0]
+            sam_files = {jobname: "./sam_configs/" + jobname + ".json"}
+
+        # Create the dictionary from the current set of parameters
+        config_dict = {
+            "directories": {
+                "logging_directory": params["logdir"],
+                "output_directory": params["outdir"]
+            },
+            "execution_control": {
+                "allocation": params["allocation"],
+                "feature": params["feature"],
+                "nodes": params["nodes"],
+                "option": params["option"],
+                "walltime": params["walltime"],
+                "sites_per_core": params["sites_per_core"]
+            },
+            "project_control": {
+                "logging_level": params["loglevel"],
+                "analysis_years": params["years"],
+                "name": jobname,
+                "technology": tech,
+                "output_request": params["outputs"]
+            },
+            "project_points": points_path,
+            "sam_files": sam_files,
+            "resource_file": RESOURCE_DSETS[self.top_params['resource']]
+        }
+
+        # Save to json using jobname for file name
+        with open("./config_gen.json", "w") as file:
+            file.write(json.dumps(config_dict, indent=4))
+
+        # Check that the json as written correctly
+        print("GEN config file saved to './config_gen.json'.")
+        check_config("./config_gen.json")
+
+        # Create project points
+        proj_points = project_points(tag=params["set_tag"],
+                                     resource=params["resource"],
+                                     points=points)
+        points_path = os.path.join(params["pointdir"], "project_points.csv")
+        proj_points.to_csv(points_path, index=False)
+        print("Project points" + " saved to '" + points_path + "'.")
+
+        # If we are using more than one node, collect the outputs
+        if params["nodes"] > 1:
+            self.config_collect()
+
+        # If we have more than one sam file, create a batch file
+        if isinstance(sam_files, list):
+            self.config_batch(sam_files)
+
+        # Return configuration dictionary
+        return config_dict
+
+
+    def config_sam(self, jobname="gen"):
         """Configure the System Advisor Model (SAM) portion of a reV model.
 
         Parameters:
@@ -474,67 +660,13 @@ class Config:
             "compute_module" : params["compute_module"]
         }
 
-        # Create project points
-        proj_points = project_points(jobname, resource, points)
-        point_path = os.path.join("project_points", jobname + ".csv")
-        proj_points.to_csv(point_path)
-        print(jobname + " project points" + " saved to '" + point_path + "'.")
-
         # Save to json using jobname for file name
-        config_path = os.path.join("sam_configs", jobname + ".json")
+        config_path = os.path.join(".", "sam_configs", jobname + ".json")
         with open(config_path, "w") as file:
             file.write(json.dumps(config_dict, indent=4))
+
+        # Check that the json as written correctly
         print(jobname + " SAM config file saved to '" + config_path + "'.")
-
-        # Check that the json as written correctly
-        check_config(config_path)
-
-        # Return configuration dictionary
-        return config_dict
-
-    def config_gen(self, tech="pv", jobname="gen"):
-        """
-        create a generation config file.
-        """
-        # Separate parameters for space
-        params = self.top_params
-
-        # Create the dictionary from the current set of parameters
-        config_dict = {
-            "directories": {
-                "logging_directory": params["logdir"],
-                "output_directory": params["outdir"]
-            },
-            "execution_control": {
-                "allocation": params["allocation"],
-                "feature": params["feature"],
-                "nodes": params["nodes"],
-                "option": params["option"],
-                "sites_per_core": params["sites_per_core"],
-                "walltime": params["walltime"]
-            },
-            "project_control": {
-                "analysis_years": params["years"],
-                "logging_level": params["loglevel"],
-                "name": jobname,
-                "output_request": params["outputs"],
-                "technology": tech
-            },
-            "project_points": os.path.join(params["pointdir"],
-                                           jobname + ".csv"),
-            "resource_file": RESOURCE_DSETS[self.top_params['resource']],
-            "sam_files": {
-                jobname: "./sam_configs/" + jobname + ".json"
-            }
-        }
-
-        # Save to json using jobname for file name
-        config_path = os.path.join("config_gen_" + jobname + ".json")
-        with open(config_path, "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
-        print(jobname + " GEN config file saved to '" + config_path + "'.")
-
-        # Check that the json as written correctly
         check_config(config_path)
 
         # Return configuration dictionary
