@@ -515,7 +515,7 @@ class Config:
             "directories": {
                 "logging_directory": params["logdir"],
                 "output_directory": params["outdir"],
-                "collect_directory": "PIPELINE"  # <------------------------------ Is this auto generated?
+                "collect_directory": "PIPELINE"  # <--------------------------- Is this auto generated?
             },
             "execution_control": {
                 "allocation": params["allocation"],
@@ -525,9 +525,9 @@ class Config:
                 "walltime": params["walltime"]
             },
             "project_control": {
-                "file_prefixes": "PIPELINE", # <----------------------------------- I guess they're all called PIPELINE_something?
+                "file_prefixes": "PIPELINE", # <------------------------------- I guess they're all called PIPELINE_something?
                 "dsets": params["outputs"],
-                "parallel": False,  # <-------------------------------------------- The sample config was lower cased "false"
+                "parallel": False,
                 "logging_level": params["loglevel"]
             },
             "project_points": points_path
@@ -540,84 +540,6 @@ class Config:
         # Check that the json as written correctly
         print("COLLECT config file saved.")
         check_config("./config_collect.json")
-
-        # Return configuration dictionary
-        return config_dict
-
-    def config_gen(self, tech="pv", jobnames="fixed", points=1000):
-        """create a generation config file.
-
-        Notes:
-
-            This one does extra, I think a lot of it's functionality should
-            be moved to a master config method.
-
-        """
-        # Separate parameters for space
-        params = self.top_params
-
-        # This needs to be updated with parameters
-        points_path = os.path.join(params["pointdir"], "project_points.csv")
-
-        # If job names is singular and expressed as a string, express as list
-        if isinstance(jobnames, str):
-            jobnames = [jobnames]
-
-        # If there are more than one jobs, this will be handled in config_batch
-        if len(jobnames) > 1:
-            jobname = "PLACEHOLDER"
-            sam_files = "PLACEHOLDER"
-            self.config_batch(jobnames)
-            self.config_pipeline()
-        else:
-            jobname = jobnames[0]
-            sam_files = {jobname: "./sam_configs/" + jobname + ".json"}
-
-        # Create the dictionary from the current set of parameters
-        config_dict = {
-            "directories": {
-                "logging_directory": params["logdir"],
-                "output_directory": params["outdir"]
-            },
-            "execution_control": {
-                "allocation": params["allocation"],
-                "feature": params["feature"],
-                "nodes": params["nodes"],
-                "option": params["option"],
-                "walltime": params["walltime"],
-                "sites_per_core": params["sites_per_core"]
-            },
-            "project_control": {
-                "logging_level": params["loglevel"],
-                "analysis_years": params["years"],
-                "name": jobname,
-                "technology": tech,
-                "output_request": params["outputs"]
-            },
-            "project_points": points_path,
-            "sam_files": sam_files,
-            "resource_file": RESOURCE_DSETS[self.top_params['resource']]
-        }
-
-        # Save to json using jobname for file name
-        with open("./config_gen.json", "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
-
-        # Check that the json as written correctly
-        print("GEN config file saved to './config_gen.json'.")
-        check_config("./config_gen.json")
-
-        # Create project points
-        proj_points = project_points(tag=params["set_tag"],
-                                     resource=params["resource"],
-                                     points=points)
-        points_path = os.path.join(params["pointdir"], "project_points.csv")
-        proj_points.to_csv(points_path, index=False)
-        print("Project points" + " saved to '" + points_path + "'.")
-
-        # If we are using more than one node, collect the outputs
-        if params["nodes"] > 1:
-            self.config_collect()
 
         # Return configuration dictionary
         return config_dict
@@ -670,6 +592,83 @@ class Config:
         # Check that the json as written correctly
         print(jobname + " SAM config file saved to '" + config_path + "'.")
         check_config(config_path)
+
+        # Return configuration dictionary
+        return config_dict
+
+    def config_gen(self, tech="pv", jobnames="fixed", points=1000):
+        """create a generation config file.
+
+        Notes:
+
+            This one does extra, I think a lot of it's functionality should
+            be moved to a master config method.
+
+        """
+        # Separate parameters for space
+        params = self.top_params
+
+        # This needs to be updated with parameters
+        points_path = os.path.join(params["pointdir"], "project_points.csv")
+
+        # If job names is singular and expressed as a string, express as list
+        if isinstance(jobnames, str):
+            jobnames = [jobnames]
+
+        # If there are more than one jobs, this will be handled in config_batch
+        if len(jobnames) > 1:
+            jobname = "PLACEHOLDER"
+            sam_files = "PLACEHOLDER"
+            self.config_batch(jobnames)
+            self.config_pipeline()
+        else:
+            jobname = jobnames[0]
+            sam_files = {jobname: "./sam_configs/" + jobname + ".json"}
+
+        # Create the dictionary from the current set of parameters
+        config_dict = {
+            "directories": {
+                "logging_directory": params["logdir"],
+                "output_directory": params["outdir"]
+            },
+            "execution_control": {
+                "allocation": params["allocation"],
+                "feature": params["feature"],
+                "nodes": params["nodes"],
+                "option": params["option"],
+                "walltime": params["walltime"],
+                "sites_per_core": params["sites_per_core"]
+            },
+            "project_control": {
+                "logging_level": params["loglevel"],
+                "analysis_years": params["years"],
+                "technology": tech,
+                "output_request": params["outputs"]
+            },
+            "project_points": points_path,
+            "sam_files": sam_files,
+            "resource_file": RESOURCE_DSETS[self.top_params['resource']]
+        }
+
+        # Save to json using jobname for file name
+        with open("./config_gen.json", "w") as file:
+            file.write(json.dumps(config_dict, indent=4))
+
+        # Check that the json as written correctly
+        print("GEN config file saved to './config_gen.json'.")
+        check_config("./config_gen.json")
+
+        # Create project points
+        proj_points = project_points(tag=params["set_tag"],
+                                     resource=params["resource"],
+                                     points=points)
+        points_path = os.path.join(params["pointdir"], "project_points.csv")
+        proj_points.to_csv(points_path, index=False)
+        print("Project points" + " saved to '" + points_path + "'.")
+
+        # If we are using more than one node, collect the outputs
+        if params["nodes"] > 1:
+            self.config_collect()
 
         # Return configuration dictionary
         return config_dict
