@@ -567,6 +567,7 @@ class Config:
             jobname = "PLACEHOLDER"
             sam_files = "PLACEHOLDER"
             self.config_batch(jobnames)
+            self.config_pipeline()
         else:
             jobname = jobnames[0]
             sam_files = {jobname: "./sam_configs/" + jobname + ".json"}
