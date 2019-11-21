@@ -9,7 +9,8 @@
         "nodes": 5,
         "option": "eagle",
         "walltime": 2.0,
-        "sites_per_core": 100
+        "sites_per_core": 100,
+        "memory_utilization_limit": 0.2
     },
     "project_control": {
         "logging_level": "INFO",

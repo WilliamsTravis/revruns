@@ -15,9 +15,6 @@ import h5py as hp
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-#import PySAM as sam  # Will need these eventually
-#import reV
-#from PySAM import Pvwattsv5 as pv
 from reV.utilities.exceptions import JSONError
 from shapely.geometry import Point
 
@@ -36,10 +33,22 @@ def data_path(path):
 # Time check
 NOW = dt.datetime.today().strftime("%Y-%m-%d %I:%M %p")
 
+# For CONUS filtering
+CONUS = ['AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'IA',
+         'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN',
+         'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ', 'NM', 'NV', 'NY',
+         'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VA',
+         'VT', 'WA', 'WI', 'WV', 'WY']
+
 # Resource dataset info <------------------------------------------------------ More to add: e.g. the 2018 CONUS solar is 2,091,566, and full is 9,026,712
 RESOURCE_DIMS = {
         "nsrdb_v3": 2018392,
         "wind_conus_v2": 2488136
+        }
+
+RESOURCE_DSETS = {
+        "nsrdb_v3": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
+        "wind_conus_v2": "/datasets/WIND/conus/v2.0.0/wtk_conus_2014.h5"
         }
 
 RESOURCE_LABELS = {
@@ -48,42 +57,40 @@ RESOURCE_LABELS = {
                           "Toolkit - CONUS, v2.0.0")
         }
 
-RESOURCE_DSETS = {
-        "nsrdb_v3": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
-        "wind_conus_v2": "/datasets/WIND/conus/v2.0.0/wtk_conus_2014.h5"
-        }
-
-# Default model parameters
-SAM_PARAMS = dict(system_capacity=5,
-                  dc_ac_ratio=1.1,
-                  inv_eff=96,
-                  losses=14.0757,
-                  gcr=0.4,
-                  tilt=20,
-                  azimuth=180,
-                  array_type=0,
-                  module_type=0,
-                  compute_module="pvwattsv5")
-
-TOP_PARAMS = dict(logdir="./logs",
-                  loglevel="INFO",
-                  memory=90,
-                  outdir="./",
-                  outputs="cf_mean",
-                  years="all",
-                  resource="nsrdb_v3",
-                  pointdir="./project_points",
-                  allocation="rev",
-                  feature="--qos=normal",
-                  nodes=1,
-                  option="eagle",
-                  sites_per_core=100,
-                  walltime=0.5)
-
 # Target geographic coordinate system identifiers
 TARGET_CRS = ["+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ",
               {'init': 'epsg:4326'},
               {'type': 'EPSG', 'properties': {'code': 4326}}]
+
+# Default model parameters
+SAM_PARAMS = dict(azimuth=180,
+                  array_type=0,
+                  compute_module="pvwattsv5",
+                  dc_ac_ratio=1.1,
+                  gcr=0.4,
+                  inv_eff=96,
+                  losses=14.0757,
+                  module_type=0,
+                  system_capacity=5,
+                  tilt=20)
+
+TOP_PARAMS = dict(allocation="rev",
+                  feature="--qos=normal",
+                  logdir="./logs",
+                  loglevel="INFO",
+                  memory=90,
+                  memory_utilization_limit=0.4,
+                  nodes=1,
+                  option="eagle",
+                  outdir="./",
+                  outputs="cf_mean",
+                  parallel=False,
+                  pointdir="./project_points",
+                  resource="nsrdb_v3",
+                  sites_per_worker=100,
+                  tech="pv",
+                  walltime=0.5,
+                  years="all")
 
 # Functions
 def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv"), gridids=True):
@@ -142,10 +149,10 @@ def single_points(lats, lons, crd_path=data_path("nsrdb_v3_coords.csv")):
     grid = to_geo(grid)
 
     # Find which grid points are closest to each target points
+    # ...
 
 
-
-def shape_points(shp_path, crd_path=data_path("nsrdb_v3_coords.csv")):
+def shape_points(shp, crd_path=data_path("nsrdb_v3_coords.csv")):
     """Find the grid ids for a specified resource grid within a shapefile
 
     Parameters:
@@ -156,12 +163,17 @@ def shape_points(shp_path, crd_path=data_path("nsrdb_v3_coords.csv")):
 
     Returns:
         gids (list): A list of grid IDs.
+
+
+    Notes:
+        This could be done much faster.
     """
     # Read in shapefile with geopandas - remote urls allowed
-    shp = gpd.read_file(shp_path)
-    shp_crs = shp.crs
+    if isinstance(shp, str):
+        shp = gpd.read_file(shp)
 
     # Check that the shapefile isn't projected, or else reproject it
+    shp_crs = shp.crs
     if shp_crs not in TARGET_CRS:
         shp = shp.to_crs({'init': 'epsg:4326'})
 
@@ -174,7 +186,7 @@ def shape_points(shp_path, crd_path=data_path("nsrdb_v3_coords.csv")):
 
     # Use sjoin and filter out empty results
     points = gpd.sjoin(gdf, shp, how="left")
-    points = points[~pd.isna(points['index_right'])]
+    points = points[~pd.isna(points["index_right"])]
     gids = list(points.index)
 
     return gids
@@ -193,11 +205,10 @@ def check_config(config_file):
     try:
         with open(config_file, "r") as file:
             json.load(file)
-        print("'" + config_file + "' opens.")
     except json.decoder.JSONDecodeError as error:
-        emsg = ('JSON Error:\n{}\nCannot read json file: '
-                '"{}"'.format(error, config_file))
-        raise JSONError(emsg)
+        msg = ('JSON Error:\n{}\nCannot read json file: '
+               '"{}"'.format(error, config_file))
+        raise JSONError(msg)
 
 
 def compare_profiles(datasets,
@@ -430,123 +441,48 @@ class Config:
     """Sets reV model key values and generates configuration json files."""
     def __init__(self,
                  top_params=TOP_PARAMS.copy(),
-                 sam_params=SAM_PARAMS.copy()):
-        self.top_params = top_params
+                 sam_params=SAM_PARAMS.copy(),
+                 verbose=True):
+        self.points = "all"
         self.sam_params = sam_params
+        self.sam_files = {}
+        self.top_params = top_params
+        self.verbose = verbose
         self._set_years()
+        self._set_points_path()
 
-    def config_batch(self, jobnames):
-        """If running mutliple technologies, this configures a batch run.
+    def config_all(self):
+        """ Call all needed sub configurations except for sam"""
 
-        Note:
-            This can apparently be done using either multipe sam config files,
-            or multiple arguments. I think, to start, I'll just use multiple
-            sam config files. That will let us configure more unique setups
-            to compare and, once this is done, won't require extra steps.
+        # Check that there are specified sam files
+        try:
+            assert len(self.sam_files) > 0
+        except AssertionError:
+            print("Could not configure GENRATION file, no SAM configuration " +
+                  "files detected\n")
+            raise
 
-            Batching the arguments themselves will result in all combinations,
-            which might not always be desired.
-        """
         # Separate parameters for space
         params = self.top_params
 
-        # Create separate files for each job name
-        key = params["set_tag"]
-        sam_dicts = [{key: "./sam_configs/" + j + ".json"} for j in jobnames]
-    
-        # Create the configuration dictionary
-        config_dict = {
-            "pipeline_config": "./config_pipeline.json",
-            "sets": [
-                {
-                "args": {
-                    "sam_files": sam_dicts
-                },
-                "files": ["./config_gen.json"],
-                "set_tag": params["set_tag"]
-                }
-            ]
-        }
+        # Create project points
+        proj_points = project_points(tag=params["set_tag"],
+                                     resource=params["resource"],
+                                     points=self.points)
+        proj_points.to_csv(self.points_path, index=False)
+        print("POINTS" + " saved to '" + self.points_path + "'.")
 
-        # Write json to file
-        with open("./config_batch.json", "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
+        # If we are using more than one node, collect the outputs
+        if params["nodes"] > 1:
+            self._config_collect()
 
-        # Check that the json as written correctly
-        print("BATCH config file saved.")
-        check_config("./config_batch.json")
+        # If there are more than one jobs, use batch and pipeline
+        if len(self.sam_files) > 1:
+            self._config_batch()
+            self._config_pipeline()
 
-    def config_pipeline(self):
-        """ What is the pipeline anyways? What conditions require it?"""
-        # Separate parameters for space
-        params = self.top_params
-
-        # Create the configuration dictionary
-        config_dict = {
-            "logging": {
-                "log_file": None,
-                "log_level": params["loglevel"]
-            },
-            "pipeline": [
-                {
-                    "generation": "./config_gen.json"
-                },
-                {
-                    "collect": "./config_collect.json"
-                }
-            ]
-        }
-
-        # Write json to file
-        with open("./config_pipeline.json", "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
-
-        # Check that the json as written correctly
-        print("PIPELINE config file saved.")
-        check_config("./config_pipeline.json")
-
-    def config_collect(self):
-        """If there are more than one node we need to combine outputs"""
-        # Separate parameters for space
-        params = self.top_params
-
-        # This also need to be update with parameters
-        points_path = os.path.join(params["pointdir"], "project_points.csv")
-
-        # Create the dictionary from the current set of parameters
-        config_dict = {
-            "directories": {
-                "logging_directory": params["logdir"],
-                "output_directory": params["outdir"],
-                "collect_directory": "PIPELINE"  # <--------------------------- Is this auto generated?
-            },
-            "execution_control": {
-                "allocation": params["allocation"],
-                "feature": params["feature"],
-                "memory": params["memory"],
-                "option": params["option"],
-                "walltime": params["walltime"]
-            },
-            "project_control": {
-                "file_prefixes": "PIPELINE", # <------------------------------- I guess they're all called PIPELINE_something?
-                "dsets": params["outputs"],
-                "parallel": False,
-                "logging_level": params["loglevel"]
-            },
-            "project_points": points_path
-        }
-
-        # Save to json using jobname for file name
-        with open("./config_collect.json", "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
-
-        # Check that the json as written correctly
-        print("COLLECT config file saved.")
-        check_config("./config_collect.json")
-
-        # Return configuration dictionary
-        return config_dict
-
+        # Configure the generation file
+        self._config_gen()
 
     def config_sam(self, jobname="gen"):
         """Configure the System Advisor Model (SAM) portion of a reV model.
@@ -587,19 +523,112 @@ class Config:
             "compute_module" : params["compute_module"]
         }
 
-        # Save to json using jobname for file name
+        # Create file name using jobname and store this for gen_config
         config_path = os.path.join(".", "sam_configs", jobname + ".json")
+        self.sam_files[jobname] = config_path
+
+        # Save file
         with open(config_path, "w") as file:
             file.write(json.dumps(config_dict, indent=4))
+        if self.verbose:
+            print(jobname + " SAM config file saved to '" + config_path + "'.")
 
         # Check that the json as written correctly
-        print(jobname + " SAM config file saved to '" + config_path + "'.")
         check_config(config_path)
+        if self.verbose:
+            print("SAM config file save to '" + config_path + "'.")
 
         # Return configuration dictionary
         return config_dict
 
-    def config_gen(self, tech="pv", jobnames="fixed", points=1000):
+
+    def _config_batch(self):
+        """If running mutliple technologies, this configures a batch run.
+
+        Note:
+            This can apparently be done using either multipe sam config files,
+            or multiple arguments. I think, to start, I'll just use multiple
+            sam config files. That will let us configure more unique setups
+            to compare and, once this is done, won't require extra steps.
+
+            Batching the arguments themselves will result in all combinations,
+            which might not always be desired.
+        """
+        # Separate parameters for space
+        params = self.top_params
+
+        # Create separate files for each job name
+        tag = params["set_tag"]
+        sam_dicts = [{tag: file} for _, file in self.sam_files.items()]
+
+        # Create the configuration dictionary
+        config_dict = {
+            "pipeline_config": "./config_pipeline.json",
+            "sets": [
+                {
+                 "args": {
+                          "sam_files": sam_dicts
+                         },
+                 "files": ["./config_gen.json"],
+                 "set_tag": params["set_tag"]
+                }
+            ]
+        }
+
+        # Write json to file
+        with open("./config_batch.json", "w") as file:
+            file.write(json.dumps(config_dict, indent=4))
+        if self.verbose:
+            print("BATCH config file saved to './config_batch.json'.")
+
+        # Check that the json as written correctly
+        check_config("./config_batch.json")
+        if self.verbose:
+            print("BATCH config file opens.")
+
+    def _config_collect(self):
+        """If there are more than one node we need to combine outputs"""
+        # Separate parameters for space
+        params = self.top_params
+
+        # Create the dictionary from the current set of parameters
+        config_dict = {
+            "directories": {
+                "logging_directory": params["logdir"],
+                "output_directory": params["outdir"],
+                "collect_directory": "PIPELINE"  # <--------------------------- Is this auto generated?
+            },
+            "execution_control": {
+                "allocation": params["allocation"],
+                "feature": params["feature"],
+                "memory": params["memory"],
+                "option": params["option"],
+                "walltime": params["walltime"]
+            },
+            "project_control": {
+                "file_prefixes": "PIPELINE", # <------------------------------- I guess they're all called PIPELINE_something?
+                "dsets": params["outputs"],
+                "parallel": params["parallel"],
+                "logging_level": params["loglevel"]
+            },
+            "project_points": self.points_path
+        }
+
+        # Save to json using jobname for file name
+        with open("./config_collect.json", "w") as file:
+            file.write(json.dumps(config_dict, indent=4))
+        if self.verbose:
+            print("COLLECT config file saved to './config_collect.json'.")
+
+        # Check that the json as written correctly
+        check_config("./config_collect.json")
+        if self.verbose:
+            print("COLLECT config file opens.")
+
+        # Return configuration dictionary
+        return config_dict
+
+    def _config_gen(self):
         """create a generation config file.
 
         Notes:
@@ -611,22 +640,11 @@ class Config:
         # Separate parameters for space
         params = self.top_params
 
-        # This needs to be updated with parameters
-        points_path = os.path.join(params["pointdir"], "project_points.csv")
-
-        # If job names is singular and expressed as a string, express as list
-        if isinstance(jobnames, str):
-            jobnames = [jobnames]
-
-        # If there are more than one jobs, this will be handled in config_batch
-        if len(jobnames) > 1:
-            jobname = "PLACEHOLDER"
+        # If there are more than one jobs, use batch and pipeline
+        if len(self.sam_files) > 1:
             sam_files = "PLACEHOLDER"
-            self.config_batch(jobnames)
-            self.config_pipeline()
         else:
-            jobname = jobnames[0]
-            sam_files = {jobname: "./sam_configs/" + jobname + ".json"}
+            sam_files = self.sam_files
 
         # Create the dictionary from the current set of parameters
         config_dict = {
@@ -640,15 +658,16 @@ class Config:
                 "nodes": params["nodes"],
                 "option": params["option"],
                 "walltime": params["walltime"],
-                "sites_per_core": params["sites_per_core"]
+                "sites_per_core": params["sites_per_worker"],
+                "memory_utilization_limit": params["memory_utilization_limit"]
             },
             "project_control": {
                 "logging_level": params["loglevel"],
                 "analysis_years": params["years"],
-                "technology": tech,
+                "technology": params["tech"],
                 "output_request": params["outputs"]
             },
-            "project_points": points_path,
+            "project_points": self.points_path,
             "sam_files": sam_files,
             "resource_file": RESOURCE_DSETS[self.top_params['resource']]
         }
@@ -661,20 +680,45 @@ class Config:
         print("GEN config file saved to './config_gen.json'.")
         check_config("./config_gen.json")
 
-        # Create project points
-        proj_points = project_points(tag=params["set_tag"],
-                                     resource=params["resource"],
-                                     points=points)
-        points_path = os.path.join(params["pointdir"], "project_points.csv")
-        proj_points.to_csv(points_path, index=False)
-        print("Project points" + " saved to '" + points_path + "'.")
-
-        # If we are using more than one node, collect the outputs
-        if params["nodes"] > 1:
-            self.config_collect()
-
         # Return configuration dictionary
         return config_dict
+
+    def _config_pipeline(self):
+        """ What is the pipeline anyways? What conditions require it?"""
+        # Separate parameters for space
+        params = self.top_params
+
+        # Create the configuration dictionary
+        config_dict = {
+            "logging": {
+                "log_file": None,
+                "log_level": params["loglevel"]
+            },
+            "pipeline": [
+                {
+                    "generation": "./config_gen.json"
+                },
+                {
+                    "collect": "./config_collect.json"
+                }
+            ]
+        }
+
+        # Write json to file
+        with open("./config_pipeline.json", "w") as file:
+            file.write(json.dumps(config_dict, indent=4))
+        if self.verbose:
+            print("PIPELINE config file saved to './config_pipeline.json'.")
+
+        # Check that the json as written correctly
+        check_config("./config_pipeline.json")
+        if self.verbose:
+            print("PIPELINE config file opens.")
+
+    def _set_points_path(self):
+        """Set the path name for the points file."""
+        self.points_path = os.path.join(self.top_params["pointdir"],
+                                        "project_points.csv")
 
     def _set_years(self):
         """Set years attribute to all available if not specified"""
