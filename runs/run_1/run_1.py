@@ -17,9 +17,12 @@ cnfg = Config()
 bbox = [-105.352679491, 39.4595438351, -104.9022400379, 40.3518303006]
 points = box_points(bbox)
 
+# Set years explicitly
+years = [y for y in range(1998, 2019)]
+
 # Set common parameters
 cnfg.top_params["set_tag"] = "set1"
-cnfg.top_params["years"] = [2015]
+cnfg.top_params["years"] = years
 cnfg.top_params["outdir"] = "./"
 cnfg.top_params["logdir"] = "./"
 cnfg.top_params["outputs"] = ["cf_profile", "cf_mean", "poa"]

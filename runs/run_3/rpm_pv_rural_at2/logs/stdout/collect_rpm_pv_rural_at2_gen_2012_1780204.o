@@ -1,0 +1,10 @@
+Running on: r1i5n13, Machine Type: x86_64-redhat-linux-gnu
+INFO - 2019-11-20 12:43:03,075 [cli_collect.py:162] : Collection is being run for "['cf_mean', 'cf_profile', 'lcoe_fcr']" with job name "collect_rpm_pv_rural_at2_gen_2012" and collection dir: /home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/. Target output path is: /home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/rpm_pv_rural_at2_gen_2012.h5
+INFO - 2019-11-20 12:43:03,075 [collection.py:467] : Collecting means (cf_mean) from rpm_pv_rural_at2_gen_2012*.h5 files in /home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/ to /home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/rpm_pv_rural_at2_gen_2012.h5
+INFO - 2019-11-20 12:43:03,215 [collection.py:482] : Collection complete
+INFO - 2019-11-20 12:43:03,215 [collection.py:536] : Collecting cf_profile from rpm_pv_rural_at2_gen_2012*.h5 files in /home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/ and adding to /home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/rpm_pv_rural_at2_gen_2012.h5
+INFO - 2019-11-20 12:43:03,400 [collection.py:553] : cf_profile collected
+INFO - 2019-11-20 12:43:03,400 [collection.py:536] : Collecting lcoe_fcr from rpm_pv_rural_at2_gen_2012*.h5 files in /home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/ and adding to /home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/rpm_pv_rural_at2_gen_2012.h5
+INFO - 2019-11-20 12:43:03,483 [collection.py:553] : lcoe_fcr collected
+INFO - 2019-11-20 12:43:03,518 [collection.py:506] : Purged chunk files from /home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/
+INFO - 2019-11-20 12:43:03,519 [cli_collect.py:179] : Collection completed in: 0.01 min.

@@ -1,0 +1,12 @@
+Running on: r6i6n20, Machine Type: x86_64-redhat-linux-gnu
+INFO - 2019-11-20 12:40:49,941 [cli_gen.py:323] : Gen local is being run with with job name "rpm_pv_urban_at1_gen_2012_09" and resource file: /datasets/NSRDB/v3.0.1/nsrdb_2012.h5. Target output path is: /home/twillia2/github/revruns/runs/run_3/rpm_pv_urban_at1/rpm_pv_urban_at1_gen_2012_node09.h5
+INFO - 2019-11-20 12:40:49,965 [generation.py:459] : Output results from a single site are calculated to use 0.0 KB of memory.
+INFO - 2019-11-20 12:40:49,965 [generation.py:430] : Generation limited to storing 1137227 sites in memory (99.6 GB total hardware, 39.9 GB available with 40.0% utilization).
+INFO - 2019-11-20 12:40:49,965 [generation.py:377] : Initializing in-memory outputs for 17 sites with gids 89468 through 90261 inclusive (site list index 0 through 16)
+INFO - 2019-11-20 12:40:49,967 [generation.py:316] : Initializing full output file: "/home/twillia2/github/revruns/runs/run_3/rpm_pv_urban_at1/rpm_pv_urban_at1_gen_2012_node09.h5"
+INFO - 2019-11-20 12:41:05,468 [generation.py:1088] : Running reV generation for: PointsControl for sites 89468 through 90261
+INFO - 2019-11-20 12:41:05,469 [execution.py:750] : Executing parallel run on a local cluster with 36 workers over 2 total iterations.
+INFO - 2019-11-20 12:41:08,069 [execution.py:721] : Parallel run at iteration END. Memory utilization is 2.313 GB out of 99.647 GB total (2.3% used, limit of 100.0%)
+INFO - 2019-11-20 12:41:08,069 [execution.py:732] : Flushing memory to disk. The memory utilization is 2.32% and the limit is 100.00%.
+INFO - 2019-11-20 12:41:08,069 [generation.py:929] : Flushing outputs to disk, target file: "/home/twillia2/github/revruns/runs/run_3/rpm_pv_urban_at1/rpm_pv_urban_at1_gen_2012_node09.h5"
+INFO - 2019-11-20 12:41:08,114 [cli_gen.py:346] : Gen compute complete for project points "/home/twillia2/github/revruns/runs/run_3/rpm_pv_urban_at1/project_points.csv" with points range [216, 233]. Time elapsed: 0.30 min. Target output dir: /home/twillia2/github/revruns/runs/run_3/rpm_pv_urban_at1/
