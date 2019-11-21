@@ -1,0 +1,7 @@
+INFO - 2019-11-20 12:42:50,663 [cli_collect.py:55] : Running reV 2.0 collection from config file: "config_collect.json"
+INFO - 2019-11-20 12:42:50,663 [cli_collect.py:56] : Target output directory: "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/"
+INFO - 2019-11-20 12:42:50,663 [cli_collect.py:57] : Target logging directory: "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/logs/"
+INFO - 2019-11-20 12:42:50,664 [cli_collect.py:58] : Target collection directory: "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/"
+INFO - 2019-11-20 12:42:50,664 [cli_collect.py:60] : The following project points were specified: "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/project_points.csv"
+INFO - 2019-11-20 12:42:50,666 [cli_collect.py:294] : Running reV collection on Eagle with node name "collect_rpm_pv_rural_at2_gen_2012", collecting data to "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/rpm_pv_rural_at2_gen_2012.h5" from "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/" with file prefix "rpm_pv_rural_at2_gen_2012".
+INFO - 2019-11-20 12:42:50,745 [cli_collect.py:312] : Kicked off reV collection job "collect_rpm_pv_rural_at2_gen_2012" (SLURM jobid #1780204) on Eagle.

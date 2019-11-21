@@ -1,0 +1,12 @@
+Running on: r7i1n7, Machine Type: x86_64-redhat-linux-gnu
+INFO - 2019-11-20 12:40:32,734 [cli_gen.py:323] : Gen local is being run with with job name "rpm_pv_rural_at2_gen_2012_00" and resource file: /datasets/NSRDB/v3.0.1/nsrdb_2012.h5. Target output path is: /home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/rpm_pv_rural_at2_gen_2012_node00.h5
+INFO - 2019-11-20 12:40:32,849 [generation.py:459] : Output results from a single site are calculated to use 0.0 KB of memory.
+INFO - 2019-11-20 12:40:32,849 [generation.py:430] : Generation limited to storing 2295245 sites in memory (201.1 GB total hardware, 80.4 GB available with 40.0% utilization).
+INFO - 2019-11-20 12:40:32,849 [generation.py:377] : Initializing in-memory outputs for 24 sites with gids 76979 through 81218 inclusive (site list index 0 through 23)
+INFO - 2019-11-20 12:40:32,850 [generation.py:316] : Initializing full output file: "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/rpm_pv_rural_at2_gen_2012_node00.h5"
+INFO - 2019-11-20 12:40:48,621 [generation.py:1088] : Running reV generation for: PointsControl for sites 76979 through 81218
+INFO - 2019-11-20 12:40:48,622 [execution.py:750] : Executing parallel run on a local cluster with 36 workers over 2 total iterations.
+INFO - 2019-11-20 12:40:54,124 [execution.py:721] : Parallel run at iteration END. Memory utilization is 3.123 GB out of 201.115 GB total (1.6% used, limit of 100.0%)
+INFO - 2019-11-20 12:40:54,124 [execution.py:732] : Flushing memory to disk. The memory utilization is 1.55% and the limit is 100.00%.
+INFO - 2019-11-20 12:40:54,124 [generation.py:929] : Flushing outputs to disk, target file: "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/rpm_pv_rural_at2_gen_2012_node00.h5"
+INFO - 2019-11-20 12:40:54,168 [cli_gen.py:346] : Gen compute complete for project points "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/project_points.csv" with points range [0, 24]. Time elapsed: 0.36 min. Target output dir: /home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/

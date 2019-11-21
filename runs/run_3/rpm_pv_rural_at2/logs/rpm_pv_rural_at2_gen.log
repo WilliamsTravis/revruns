@@ -1,0 +1,26 @@
+INFO - 2019-11-20 12:40:12,888 [cli_gen.py:77] : Running reV 2.0 generation from config file: "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/config_gen.json"
+INFO - 2019-11-20 12:40:12,888 [cli_gen.py:78] : Target output directory: "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/"
+INFO - 2019-11-20 12:40:12,888 [cli_gen.py:79] : Target logging directory: "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/logs/"
+INFO - 2019-11-20 12:40:12,888 [cli_gen.py:81] : The following project points were specified: "/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/project_points.csv"
+INFO - 2019-11-20 12:40:12,888 [cli_gen.py:84] : The following SAM configs are available to this run:
+{   'default': '/home/twillia2/github/revruns/runs/run_3/rpm_pv_rural_at2/rpm_pv.json'}
+INFO - 2019-11-20 12:40:12,898 [cli_gen.py:698] : Running reV generation on Eagle with node name "rpm_pv_rural_at2_gen_2012_00" for PointsControl for sites 76979 through 90261 (points range: [0, 24]).
+INFO - 2019-11-20 12:40:17,325 [cli_gen.py:717] : Kicked off reV generation job "rpm_pv_rural_at2_gen_2012_00" (SLURM jobid #1780143) on Eagle.
+INFO - 2019-11-20 12:40:17,328 [cli_gen.py:698] : Running reV generation on Eagle with node name "rpm_pv_rural_at2_gen_2012_01" for PointsControl for sites 76979 through 90261 (points range: [24, 48]).
+INFO - 2019-11-20 12:40:17,382 [cli_gen.py:717] : Kicked off reV generation job "rpm_pv_rural_at2_gen_2012_01" (SLURM jobid #1780144) on Eagle.
+INFO - 2019-11-20 12:40:17,383 [cli_gen.py:698] : Running reV generation on Eagle with node name "rpm_pv_rural_at2_gen_2012_02" for PointsControl for sites 76979 through 90261 (points range: [48, 72]).
+INFO - 2019-11-20 12:40:17,431 [cli_gen.py:717] : Kicked off reV generation job "rpm_pv_rural_at2_gen_2012_02" (SLURM jobid #1780145) on Eagle.
+INFO - 2019-11-20 12:40:17,433 [cli_gen.py:698] : Running reV generation on Eagle with node name "rpm_pv_rural_at2_gen_2012_03" for PointsControl for sites 76979 through 90261 (points range: [72, 96]).
+INFO - 2019-11-20 12:40:17,486 [cli_gen.py:717] : Kicked off reV generation job "rpm_pv_rural_at2_gen_2012_03" (SLURM jobid #1780146) on Eagle.
+INFO - 2019-11-20 12:40:17,488 [cli_gen.py:698] : Running reV generation on Eagle with node name "rpm_pv_rural_at2_gen_2012_04" for PointsControl for sites 76979 through 90261 (points range: [96, 120]).
+INFO - 2019-11-20 12:40:17,535 [cli_gen.py:717] : Kicked off reV generation job "rpm_pv_rural_at2_gen_2012_04" (SLURM jobid #1780147) on Eagle.
+INFO - 2019-11-20 12:40:17,537 [cli_gen.py:698] : Running reV generation on Eagle with node name "rpm_pv_rural_at2_gen_2012_05" for PointsControl for sites 76979 through 90261 (points range: [120, 144]).
+INFO - 2019-11-20 12:40:17,621 [cli_gen.py:717] : Kicked off reV generation job "rpm_pv_rural_at2_gen_2012_05" (SLURM jobid #1780148) on Eagle.
+INFO - 2019-11-20 12:40:17,623 [cli_gen.py:698] : Running reV generation on Eagle with node name "rpm_pv_rural_at2_gen_2012_06" for PointsControl for sites 76979 through 90261 (points range: [144, 168]).
+INFO - 2019-11-20 12:40:20,220 [cli_gen.py:717] : Kicked off reV generation job "rpm_pv_rural_at2_gen_2012_06" (SLURM jobid #1780149) on Eagle.
+INFO - 2019-11-20 12:40:20,222 [cli_gen.py:698] : Running reV generation on Eagle with node name "rpm_pv_rural_at2_gen_2012_07" for PointsControl for sites 76979 through 90261 (points range: [168, 192]).
+INFO - 2019-11-20 12:40:22,264 [cli_gen.py:717] : Kicked off reV generation job "rpm_pv_rural_at2_gen_2012_07" (SLURM jobid #1780151) on Eagle.
+INFO - 2019-11-20 12:40:22,266 [cli_gen.py:698] : Running reV generation on Eagle with node name "rpm_pv_rural_at2_gen_2012_08" for PointsControl for sites 76979 through 90261 (points range: [192, 216]).
+INFO - 2019-11-20 12:40:22,324 [cli_gen.py:717] : Kicked off reV generation job "rpm_pv_rural_at2_gen_2012_08" (SLURM jobid #1780152) on Eagle.
+INFO - 2019-11-20 12:40:22,326 [cli_gen.py:698] : Running reV generation on Eagle with node name "rpm_pv_rural_at2_gen_2012_09" for PointsControl for sites 76979 through 90261 (points range: [216, 233]).
+INFO - 2019-11-20 12:40:22,380 [cli_gen.py:717] : Kicked off reV generation job "rpm_pv_rural_at2_gen_2012_09" (SLURM jobid #1780153) on Eagle.

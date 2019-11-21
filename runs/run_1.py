@@ -25,8 +25,12 @@ points = box_points(bbox)
 #shp = shp[shp['STUSPS'].isin(CONUS)]
 #points = shape_points(shp)
 
+# Set years explicitly
+years = [y for y in range(1998, 2019)]
+
 # Set common parameters
 cnfg.top_params["allocation"] = "rev"
+cnfg.sam_params["dc_ac_ratio"] = 1.1
 cnfg.top_params["logdir"] = "./"
 cnfg.top_params["memory_utilization_limit"] = 0.2
 cnfg.top_params["nodes"] = 10
@@ -36,9 +40,8 @@ cnfg.top_params["resource"] = "nsrdb_v3"
 cnfg.top_params["set_tag"] = "set1"
 cnfg.top_params["tech"] = "pv"
 cnfg.top_params["walltime"] = 2.0
-cnfg.top_params["years"] = [2015]
 cnfg.sam_params["system_capacity"] = 5
-cnfg.sam_params["dc_ac_ratio"] = 1.1
+cnfg.top_params["years"] = years
 cnfg.points = points
 
 # SAM Config #1
