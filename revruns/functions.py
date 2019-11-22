@@ -15,10 +15,10 @@ import h5py as hp
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from reV.utilities.exceptions import JSONError
 from shapely.geometry import Point
-
-# Fix remote file transfer issues with ssl (better way?)
+from reV.utilities.exceptions import JSONError
+ 
+# Fix remote file transfer issues with ssl (for gpd, find a better way)
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # Times New Roman for plots?
@@ -48,13 +48,13 @@ RESOURCE_DIMS = {
 
 RESOURCE_DSETS = {
         "nsrdb_v3": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
-        "wind_conus_v2": "/datasets/WIND/conus/v2.0.0/wtk_conus_2014.h5"
+        "wind_conus_v1": "/datasets/WIND/conus/v1.0.0/wtk_conus_{}.h5"
         }
 
 RESOURCE_LABELS = {
         "nsrdb_v3": "National Solar Radiation Database - v3.0.1",
-        "wind_conus_v2": ("Wind Integration National Dataset (WIND) " + # <---- Use v1 ( we aren't sure about the differences with v2 yet)
-                          "Toolkit - CONUS, v2.0.0")
+        "wind_conus_v1": ("Wind Integration National Dataset (WIND) " + # <---- Use v1 ( we aren't sure about the differences with v2 yet)
+                          "Toolkit - CONUS, v1.0.0")
         }
 
 # Target geographic coordinate system identifiers
@@ -63,34 +63,72 @@ TARGET_CRS = ["+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ",
               {'type': 'EPSG', 'properties': {'code': 4326}}]
 
 # Default model parameters
-SAM_PARAMS = dict(azimuth=180,
-                  array_type=0,
-                  compute_module="pvwattsv5",
-                  dc_ac_ratio=1.1,
-                  gcr=0.4,
-                  inv_eff=96,
-                  losses=14.0757,
-                  module_type=0,
-                  system_capacity=5,
-                  tilt=20)
+SOLAR_SAM_PARAMS = {"azimuth": 180,
+                    "array_type": 0,
+                    "compute_module": "pvwattsv5",
+                    "dc_ac_ratio": 1.1,
+                    "gcr": 0.4,
+                    "inv_eff": 96,
+                    "losses": 14.0757,
+                    "module_type": 0,
+                    "system_capacity": 5,
+                    "tilt": 20}
 
-TOP_PARAMS = dict(allocation="rev",
-                  feature="--qos=normal",
-                  logdir="./logs",
-                  loglevel="INFO",
-                  memory=90,
-                  memory_utilization_limit=0.4,
-                  nodes=1,
-                  option="eagle",
-                  outdir="./",
-                  outputs="cf_mean",
-                  parallel=False,
-                  pointdir="./project_points",
-                  resource="nsrdb_v3",
-                  sites_per_worker=100,
-                  tech="pv",
-                  walltime=0.5,
-                  years="all")
+# Default Wind Turbine Powercurve Powerout (until something better comes along)
+DEFAULT_WTPO = np.zeros(161)
+DEFAULT_WTPO[38: 100] = 4500.0
+DEFAULT_WTPO[13: 38] = [122.675, 169.234, 222.943, 284.313, 353.853, 432.076,
+                        519.492, 616.610, 723.943, 842.001, 971.294, 1112.330,
+                        1265.630, 1431.690, 1611.040, 1804.170, 2011.600,
+                        2233.840, 2471.400, 2724.790, 2994.530, 3281.120,
+                        3585.070, 3906.900, 4247.120]
+
+WIND_SAM_PARAMS = {
+        "adjust:constant": 0.0,
+	    "en_low_temp_cutoff": "placeholder",
+        "low_temp_cutoff": -10,
+        "en_icing_cutoff": "placeholder",
+        "icing_cutoff_temp": 0.0,
+        "icing_cutoff_rh": 95.0,
+        "system_capacity": 200000,
+        "wind_farm_losses_percent": 12.8,
+        "wind_farm_wake_model": 0,
+        "wind_farm_xCoordinates": None, # <------------------------------------ Don't we set these in the points file?
+        "wind_farm_yCoordinates": None,
+        "wind_resource_model_choice": 0,
+        "wind_resource_shear": 0.140,
+        "wind_resource_turbulence_coeff": 0.10,
+        "wind_turbine_cutin": 0.0,
+        "wind_turbine_hub_ht": 100.0,
+        "wind_turbine_powercurve_powerout": DEFAULT_WTPO,
+        "wind_turbine_powercurve_windspeeds": list(np.arange(0, 40.25, 0.25)),
+        "wind_turbine_rotor_diameter": 167.0,
+        "capital_cost" : 245000000,
+        "fixed_operating_cost" : 7790000,
+        "fixed_charge_rate": 0.052,
+        "variable_operating_cost": 0
+}
+
+SAM_PARAMS = {"pv": SOLAR_SAM_PARAMS, "wind": WIND_SAM_PARAMS}
+
+TOP_PARAMS = {"allocation": "rev",
+              "feature": "--qos=normal",
+              "logdir": "./logs",
+              "loglevel": "INFO",
+              "memory": 90,
+              "memory_utilization_limit": 0.4,
+              "nodes": 1,
+              "option": "eagle",
+              "outdir": "./",
+              "outputs": "cf_mean",
+              "parallel": False,
+              "pointdir": "./project_points",
+              "resource": "nsrdb_v3",
+              "sites_per_worker": 100,
+              "tech": "pv",
+              "walltime": 0.5,
+              "years": "all"}
+
 
 # Functions
 def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv"), gridids=True):
@@ -201,7 +239,10 @@ def to_geo(df, lat="lat", lon="lon"):
 
 
 def check_config(config_file):
-    """Check that a json file loads without error."""
+    """Check that a json file loads without error.
+
+    Try loading with reV.utilities.safe_json_load!
+    """
     try:
         with open(config_file, "r") as file:
             json.load(file)
@@ -436,17 +477,20 @@ def show_colorbars():
 
     plt.show()
 
+
+
+
 # Classes
 class Config:
     """Sets reV model key values and generates configuration json files."""
     def __init__(self,
+                 technology="pv",
                  top_params=TOP_PARAMS.copy(),
-                 sam_params=SAM_PARAMS.copy(),
                  verbose=True):
         self.points = "all"
-        self.sam_params = sam_params
-        self.sam_files = {}
         self.top_params = top_params
+        self.sam_params = SAM_PARAMS.copy()[technology]
+        self.sam_files = {}
         self.verbose = verbose
         self._set_years()
         self._set_points_path()
@@ -566,11 +610,11 @@ class Config:
             "pipeline_config": "./config_pipeline.json",
             "sets": [
                 {
-                 "args": {
-                          "sam_files": sam_dicts
-                         },
-                 "files": ["./config_gen.json"],
-                 "set_tag": params["set_tag"]
+                    "args": {
+                        "sam_files": sam_dicts
+                    },
+                    "files": ["./config_gen.json"],
+                    "set_tag": params["set_tag"]
                 }
             ]
         }
@@ -723,4 +767,7 @@ class Config:
     def _set_years(self):
         """Set years attribute to all available if not specified"""
         if self.top_params["years"] == "all":
-            self.years = range(1998, 2019)
+            if "nsrdb" in self.top_params["resource"]:
+                self.years = range(1998, 2019)
+            else:
+                self.years = range(2007, 2014)
