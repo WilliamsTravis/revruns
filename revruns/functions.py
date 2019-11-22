@@ -40,21 +40,49 @@ CONUS = ['AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'IA',
          'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VA',
          'VT', 'WA', 'WI', 'WV', 'WY']
 
-# Resource dataset info <------------------------------------------------------ More to add: e.g. the 2018 CONUS solar is 2,091,566, and full is 9,026,712
+# Resource dataset info <------------------------------------------------------ More dimensions and data sets to add: e.g. the 2018 CONUS solar is 2,091,566, and full is 9,026,712
 RESOURCE_DIMS = {
         "nsrdb_v3": 2018392,
-        "wind_conus_v2": 2488136
+        "wind_conus_v1": 2488136,
+        "wind_canada_v1": 2894781,
+        "wind_canada_v1bc": 2894781,
+        "wind_mexico_v1": 1736130,
+        "wind_conus_v1_1": 2488136,
+        "wind_canada_v1_1": 289478,
+        "wind_canada_v1_1bc": 289478,
+        "wind_mexico_v1_1": 1736130
         }
 
-RESOURCE_DSETS = {
+RESOURCE_DATASETS = {
         "nsrdb_v3": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
-        "wind_conus_v1": "/datasets/WIND/conus/v1.0.0/wtk_conus_{}.h5"
+        "wind_conus_v1": "/datasets/WIND/conus/v1.0.0/wtk_conus_{}.h5",
+        "wind_canada_v1": "/datasets/WIND/canada/v1.0.0/wtk_canada_{}.h5",
+        "wind_canada_v1bc": "/datasets/WIND/canada/v1.0.0bc/wtk_canada_{}.h5",
+        "wind_mexico_v1": "/datasets/WIND/mexico/v1.0.0/wtk_mexico_{}.h5",
+        "wind_conus_v1_1": "/datasets/WIND/conus/v1.1.0/wtk_conus_{}.h5",
+        "wind_canada_v1_1": "/datasets/WIND/canada/v1.1.0/wtk_canada_{}.h5",
+        "wind_canada_v1_1bc": "/datasets/WIND/canada/v1.1.0bc/wtk_canada_{}.h5",
+        "wind_mexico_v1_1": "/datasets/WIND/mexico/v1.0.0/wtk_mexico_{}.h5"
         }
 
 RESOURCE_LABELS = {
         "nsrdb_v3": "National Solar Radiation Database - v3.0.1",
-        "wind_conus_v1": ("Wind Integration National Dataset (WIND) " + # <---- Use v1 ( we aren't sure about the differences with v2 yet)
-                          "Toolkit - CONUS, v1.0.0")
+        "wind_conus_v1": ("Wind Integration National Dataset (WIND) " +
+                          "Toolkit - CONUS, v1.0.0"),
+        "wind_canada_v1": ("Wind Integration National Dataset (WIND) " +
+                           "Toolkit - Canada, v1.0.0"),
+        "wind_canada_v1bc": ("Wind Integration National Dataset (WIND) " +
+                             "Toolkit - Canada, v1.1.0"),
+        "wind_mexico_v1": ("Wind Integration National Dataset (WIND) " +
+                           "Toolkit - Mexico, v1.0.0"),
+        "wind_conus_v1_1":("Wind Integration National Dataset (WIND) " +
+                           "Toolkit - CONUS, v1.1.0"),
+        "wind_canada_v1_1": ("Wind Integration National Dataset (WIND) " +
+                             "Toolkit - Canada, v1.1.0"),
+        "wind_canada_v1_1bc": ("Wind Integration National Dataset (WIND) " +
+                               "Toolkit - Canada, v1.1.0bc"),
+        "wind_mexico_v1_1": ("Wind Integration National Dataset (WIND) " +
+                             "Toolkit - Mexico, v1.0.0"),
         }
 
 # Target geographic coordinate system identifiers
@@ -82,6 +110,7 @@ DEFAULT_WTPO[13: 38] = [122.675, 169.234, 222.943, 284.313, 353.853, 432.076,
                         1265.630, 1431.690, 1611.040, 1804.170, 2011.600,
                         2233.840, 2471.400, 2724.790, 2994.530, 3281.120,
                         3585.070, 3906.900, 4247.120]
+DEFAULT_WTPO = list(DEFAULT_WTPO)
 
 WIND_SAM_PARAMS = {
         "adjust:constant": 0.0,
@@ -514,7 +543,8 @@ class Config:
                                      resource=params["resource"],
                                      points=self.points)
         proj_points.to_csv(self.points_path, index=False)
-        print("POINTS" + " saved to '" + self.points_path + "'.")
+        if self.verbose:
+             print("POINTS" + " saved to '" + self.points_path + "'.")
 
         # If we are using more than one node, collect the outputs
         if params["nodes"] > 1:
@@ -551,21 +581,7 @@ class Config:
             os.mkdir("./sam_configs")
 
         # Separate parameters for space
-        params = self.sam_params
-
-        # Create the dictionary from the current set of parameters
-        config_dict = {
-            "system_capacity" : params["system_capacity"],
-            "dc_ac_ratio" : params["dc_ac_ratio"],
-            "inv_eff" : params["inv_eff"],
-            "losses" : params["losses"],
-            "gcr" : params["gcr"],
-            "tilt" : params["tilt"],
-            "azimuth" : params["azimuth"],
-            "array_type" : params["array_type"],
-            "module_type" : params["module_type"],
-            "compute_module" : params["compute_module"]
-        }
+        config_dict = self.sam_params
 
         # Create file name using jobname and store this for gen_config
         config_path = os.path.join(".", "sam_configs", jobname + ".json")
@@ -575,12 +591,13 @@ class Config:
         with open(config_path, "w") as file:
             file.write(json.dumps(config_dict, indent=4))
         if self.verbose:
-            print(jobname + " SAM config file saved to '" + config_path + "'.")
+            print("SAM job " + jobname + " config file saved to '" +
+                  config_path + "'.")
 
         # Check that the json as written correctly
         check_config(config_path)
         if self.verbose:
-            print("SAM config file save to '" + config_path + "'.")
+            print("SAM job " + jobname + " config file opens.")
 
         # Return configuration dictionary
         return config_dict
@@ -713,16 +730,19 @@ class Config:
             },
             "project_points": self.points_path,
             "sam_files": sam_files,
-            "resource_file": RESOURCE_DSETS[self.top_params['resource']]
+            "resource_file": RESOURCE_DATASETS[self.top_params['resource']]
         }
 
         # Save to json using jobname for file name
         with open("./config_gen.json", "w") as file:
             file.write(json.dumps(config_dict, indent=4))
+        if self.verbose:
+            print("GEN config file saved to './config_gen.json'.")
 
         # Check that the json as written correctly
-        print("GEN config file saved to './config_gen.json'.")
         check_config("./config_gen.json")
+        if self.verbose:
+            print("GEN config file opens.")
 
         # Return configuration dictionary
         return config_dict
