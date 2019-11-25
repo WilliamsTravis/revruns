@@ -14,6 +14,7 @@ import geopandas as gpd
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+from osgeo import gdal
 import pandas as pd
 from shapely.geometry import Point
 from reV.utilities.exceptions import JSONError
@@ -43,23 +44,18 @@ CONUS = ['AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'IA',
 # For checking if a requested output requires economic treatment.
 ECON_MODULES = ["lcoe_fcr"]
 
-# Checks for reasonable model output value ranges.
+# Checks for reasonable model output value ranges. No scaling factors here.
 VARIABLE_CHECKS = {  
-        "poa": (0, 1000),
-        "cf_mean": (0, 14),
-        "cf_profile": (0, 90)
+        "poa": (0, 1000),  # 1,000 MW m-2
+        "cf_mean": (0, 240),  # 24 %
+        "cf_profile": (0, 990)  # 99 %
         }
-
-
-
-
 
 ########## Construction Zone ###########
 class Check_Variables():
     def __init__(self, files):
         self.files = files
         self._read_files()
-
 
     def check_variables(self):
         """Check a set of hdf5 model output files for potential anomalies.
@@ -69,19 +65,37 @@ class Check_Variables():
         # For each data set in each file, check the values
         flagged = {}
         for hdf in self.hdfs:
-            for key in hdf.keys():
-                data = hdf[key]
-                minv = VARIABLE_CHECKS[key][0]
-                maxv = VARIABLE_CHECKS[key][1]
-                if min(data) < minv:
-                    filename = os.basename(hdf.filename)
-                    flag = ":".join([filename, key])
-                    message = " - minimum value is less than {}".format(minv)
+            # Get the list of sub data sets in each file
+            subds = hdf.GetSubDatasets()
+            
+            # Will meta and time index mess this up?
+            # subds.remove("meta")
+            # subds.remove("time_index")
+
+            # For each of these sub data sets, get an info dictionary
+            for sub in subds:      
+                info_str = gdal.Info(sub[0], options=["-stats", "-json"])      
+                info = json.loads(info_str)
+                filename = info["files"][0]
+                desc = info["description"]
+                var = desc[desc.index("//") + 2: ]
+                max_data = info["bands"][0]["max"]
+                min_data = info["bands"][0]["minimum"]
+                max_threshold = VARIABLE_CHECKS[var][1]
+                min_threshold = VARIABLE_CHECKS[var][0]
+
+                # Check the thresholds. Could add more for mean and stdDev. 
+                if max_data > max_threshold:
+                    filename = os.path.basename(filename)
+                    flag = ":".join([filename, var])
+                    message = (" - maximum value is greater than " +
+                               max_threshold)
                     flagged[flag] = message
-                if max(data) > maxv:
-                    filename = os.basename(hdf.filename)
-                    flag = ":".join([filename, key])
-                    message = " - maximum value is greater than {}".format(maxv)
+                if min_data < min_threshold:
+                    filename = os.path.basename(filename)
+                    flag = ":".join([filename, var])
+                    message = (" - minimum value is less than " +
+                               min_threshold)
                     flagged[flag] = message
 
         # Return the dictionary of messages
@@ -90,17 +104,11 @@ class Check_Variables():
     def _read_files(self):
         """Check and read all hdf files."""
         try:
-            hdfs = [h5py.File(file) for file in self.files]
+            hdfs = [gdal.Open(file) for file in self.files]
         except OSError:
             print("Could not read all files, are these hdf5 formats?")
         self.hdfs = hdfs
 ########################################
-
-
-
-
-
-
 
 # Resource data set dimensions. Just the number of grid points for the moment.
 RESOURCE_DIMS = {

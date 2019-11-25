@@ -23,10 +23,14 @@ write_help = "Write output to file (checkvars.csv)."
 @click.option("--write", default=False, help=write_help)
 def main(directory, write):
     """Checks hdf5 files in current directory for threshold values in data
-    sets."""
+    sets.
+    
+    directory = "/Users/twillia2/github/data/revruns/run_1"
+    
+    """
 
     # Get and open files. 
-    files = glob("*h5")
+    files = glob(os.path.join(directory, "*h5"))
     checks = Check_Variables(files)
     flags = checks.check_variables()
 
