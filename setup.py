@@ -12,5 +12,8 @@ setup(
     description="Helps to create config and point files for NREL's reV",
     author="Travis Williams",
     author_email="travis.williams@nrel.gov",
-    install_requires=['numpy', 'pandas']
+    install_requires=['h5py', 'numpy', 'pandas'],
+    entry_points = {"console_scripts":
+        ["checkvars = revruns.checkvars:main",
+         "getpoints = revruns.getpoints:main"]}
     )
