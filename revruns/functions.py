@@ -17,6 +17,7 @@ import numpy as np
 from osgeo import gdal
 import pandas as pd
 from shapely.geometry import Point
+from tqdm import tqdm
 from reV.utilities.exceptions import JSONError
  
 # Fix remote file transfer issues with ssl (for gpd, find a better way).
@@ -64,7 +65,7 @@ class Check_Variables():
         """    
         # For each data set in each file, check the values
         flagged = {}
-        for hdf in self.hdfs:
+        for hdf in tqdm(self.hdfs, position=0):
             # Get the list of sub data sets in each file
             subds = hdf.GetSubDatasets()
             
@@ -79,7 +80,7 @@ class Check_Variables():
                 filename = info["files"][0]
                 desc = info["description"]
                 var = desc[desc.index("//") + 2: ]
-                max_data = info["bands"][0]["max"]
+                max_data = info["bands"][0]["maximum"]
                 min_data = info["bands"][0]["minimum"]
                 max_threshold = VARIABLE_CHECKS[var][1]
                 min_threshold = VARIABLE_CHECKS[var][0]

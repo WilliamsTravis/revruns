@@ -1,6 +1,7 @@
 build/
 dist/
 runs/directories
+samples/
 **/nohup.out
 **/.DS_Store
 *.egg-info
