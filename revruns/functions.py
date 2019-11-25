@@ -11,36 +11,98 @@ import os
 import ssl
 import datetime as dt
 import geopandas as gpd
-import h5py as hp
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from shapely.geometry import Point
 from reV.utilities.exceptions import JSONError
  
-# Fix remote file transfer issues with ssl (for gpd, find a better way)
+# Fix remote file transfer issues with ssl (for gpd, find a better way).
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # Times New Roman for plots?
 plt.rcParams['font.family'] = 'Times New Roman'
 
-# Package data path
+# Package data path.
 ROOT = os.path.abspath(os.path.dirname(__file__))
 def data_path(path):
     """Path to local package data directory"""
     return os.path.join(ROOT, 'data', path)
 
-# Time check
+# Time check.
 NOW = dt.datetime.today().strftime("%Y-%m-%d %I:%M %p")
 
-# For CONUS filtering
+# For CONUS filtering.
 CONUS = ['AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'IA',
          'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN',
          'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ', 'NM', 'NV', 'NY',
          'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VA',
          'VT', 'WA', 'WI', 'WV', 'WY']
 
-# Resource dataset info <------------------------------------------------------ More dimensions and data sets to add: e.g. the 2018 CONUS solar is 2,091,566, and full is 9,026,712
+# For checking if a requested output requires economic treatment.
+ECON_MODULES = ["lcoe_fcr"]
+
+# Checks for reasonable model output value ranges.
+VARIABLE_CHECKS = {  
+        "poa": (0, 1000),
+        "cf_mean": (0, 14),
+        "cf_profile": (0, 90)
+        }
+
+
+
+
+
+########## Construction Zone ###########
+class Check_Variables():
+    def __init__(self, files):
+        self.files = files
+        self._read_files()
+
+
+    def check_variables(self):
+        """Check a set of hdf5 model output files for potential anomalies.
+        
+        files = glob('/Users/twillia2/github/data/revruns/run_1/*')
+        """    
+        # For each data set in each file, check the values
+        flagged = {}
+        for hdf in self.hdfs:
+            for key in hdf.keys():
+                data = hdf[key]
+                minv = VARIABLE_CHECKS[key][0]
+                maxv = VARIABLE_CHECKS[key][1]
+                if min(data) < minv:
+                    filename = os.basename(hdf.filename)
+                    flag = ":".join([filename, key])
+                    message = " - minimum value is less than {}".format(minv)
+                    flagged[flag] = message
+                if max(data) > maxv:
+                    filename = os.basname(hdf.filename)
+                    flag = ":".join([filename, key])
+                    message = " - maximum value is greater than {}".format(maxv)
+                    flagged[flag] = message
+
+        # Return the dictionary of messages
+        return flagged
+
+    def _read_files(self):
+        """Check and read all hdf files."""
+        try:
+            hdfs = [h5py.File(file) for file in self.files]
+        except OSError:
+            print("Could not read all files, are these hdf5 formats?")
+        self.hdfs = hdfs
+########################################
+
+
+
+
+
+
+
+# Resource data set dimensions. Just the number of grid points for the moment.
 RESOURCE_DIMS = {
         "nsrdb_v3": 2018392,
         "wind_conus_v1": 2488136,
@@ -53,6 +115,7 @@ RESOURCE_DIMS = {
         "wind_mexico_v1_1": 1736130
         }
 
+# The Eagle HPC path to each resource data set. Brackets indicate years.
 RESOURCE_DATASETS = {
         "nsrdb_v3": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
         "wind_conus_v1": "/datasets/WIND/conus/v1.0.0/wtk_conus_{}.h5",
@@ -61,10 +124,12 @@ RESOURCE_DATASETS = {
         "wind_mexico_v1": "/datasets/WIND/mexico/v1.0.0/wtk_mexico_{}.h5",
         "wind_conus_v1_1": "/datasets/WIND/conus/v1.1.0/wtk_conus_{}.h5",
         "wind_canada_v1_1": "/datasets/WIND/canada/v1.1.0/wtk_canada_{}.h5",
-        "wind_canada_v1_1bc": "/datasets/WIND/canada/v1.1.0bc/wtk_canada_{}.h5",
+        "wind_canada_v1_1bc": ("/datasets/WIND/canada/v1.1.0bc/" +
+                               "wtk_canada_{}.h5"),
         "wind_mexico_v1_1": "/datasets/WIND/mexico/v1.0.0/wtk_mexico_{}.h5"
         }
 
+# The title of each resource data set.
 RESOURCE_LABELS = {
         "nsrdb_v3": "National Solar Radiation Database - v3.0.1",
         "wind_conus_v1": ("Wind Integration National Dataset (WIND) " +
@@ -85,12 +150,12 @@ RESOURCE_LABELS = {
                              "Toolkit - Mexico, v1.0.0"),
         }
 
-# Target geographic coordinate system identifiers
+# Target geographic coordinate system identifiers.  # <------------------------- Check this
 TARGET_CRS = ["+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ",
               {'init': 'epsg:4326'},
               {'type': 'EPSG', 'properties': {'code': 4326}}]
 
-# Default model parameters
+# Default SAM model parameters for pvwattsv5.
 SOLAR_SAM_PARAMS = {"azimuth": 180,
                     "array_type": 0,
                     "compute_module": "pvwattsv5",
@@ -102,7 +167,7 @@ SOLAR_SAM_PARAMS = {"azimuth": 180,
                     "system_capacity": 5,
                     "tilt": 20}
 
-# Default Wind Turbine Powercurve Powerout (until something better comes along)
+# Default Wind Turbine Powercurve Powerout (until a better way shows up).
 DEFAULT_WTPO = np.zeros(161)
 DEFAULT_WTPO[38: 100] = 4500.0
 DEFAULT_WTPO[13: 38] = [122.675, 169.234, 222.943, 284.313, 353.853, 432.076,
@@ -112,6 +177,7 @@ DEFAULT_WTPO[13: 38] = [122.675, 169.234, 222.943, 284.313, 353.853, 432.076,
                         3585.070, 3906.900, 4247.120]
 DEFAULT_WTPO = list(DEFAULT_WTPO)
 
+# Default SAM model parameters for wind.  # <---------------------------------- Check that these are indeed the defaults.
 WIND_SAM_PARAMS = {
         "adjust:constant": 0.0,
 	    "en_low_temp_cutoff": "placeholder",
@@ -138,8 +204,11 @@ WIND_SAM_PARAMS = {
         "variable_operating_cost": 0
 }
 
-SAM_PARAMS = {"pv": SOLAR_SAM_PARAMS, "wind": WIND_SAM_PARAMS}
+# All default SAM model parameters.  # <-------------------------------------------------- Add as more models are discovered
+SAM_PARAMS = {"pv": SOLAR_SAM_PARAMS,
+              "wind": WIND_SAM_PARAMS}
 
+# Default 'Top Level' parameters, i.e. those that are shared between runs.
 TOP_PARAMS = {"allocation": "rev",
               "feature": "--qos=normal",
               "logdir": "./logs",
@@ -159,7 +228,7 @@ TOP_PARAMS = {"allocation": "rev",
               "years": "all"}
 
 
-# Functions
+# Functions.
 def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv"), gridids=True):
     """Filter grid ids by geographical bounding box
 
@@ -189,82 +258,6 @@ def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv"), gridids=True):
         points = crds
 
     return points
-
-
-def single_points(lats, lons, crd_path=data_path("nsrdb_v3_coords.csv")):
-    """Take a data frame of single lat/lon coordinates and convert to a list of
-    grid ids.
-
-    Parameters:
-        lats (list): A list containing the latitude coordinates of the desired
-                    points.
-        lons (list): A list containing the longitude coordinates of the desired
-                    points.
-        crd_path (str): The local path to the desired resource coordinate
-                        list.
-
-    Returns:
-        gids (list): A list of grid IDs.
-    """
-    # Create a second data frame with the new coordinates
-    points = pd.DataFrame({"lat": lats, "lon": lons})
-    points = to_geo(points)
-
-    # Filter the grid by the bounding box of the points
-    bbox = [min(lons), min(lats), max(lons), max(lats)]
-    grid = box_points(bbox, crd_path, gridids=False)
-    grid = to_geo(grid)
-
-    # Find which grid points are closest to each target points
-    # ...
-
-
-def shape_points(shp, crd_path=data_path("nsrdb_v3_coords.csv")):
-    """Find the grid ids for a specified resource grid within a shapefile
-
-    Parameters:
-        shp_path (str): A local path to a shape file or remote url to a zipped
-                        folder containing a shapefile.
-        crd_path (str): The local path to the desired resource coordinate
-                        list.
-
-    Returns:
-        gids (list): A list of grid IDs.
-
-
-    Notes:
-        This could be done much faster.
-    """
-    # Read in shapefile with geopandas - remote urls allowed
-    if isinstance(shp, str):
-        shp = gpd.read_file(shp)
-
-    # Check that the shapefile isn't projected, or else reproject it
-    shp_crs = shp.crs
-    if shp_crs not in TARGET_CRS:
-        shp = shp.to_crs({'init': 'epsg:4326'})
-
-    # The resource data sets are large, subset by bounding box first
-    bbox = shp.geometry.total_bounds
-    grid = box_points(bbox, crd_path, gridids=False)
-
-    # Are there too many points to make a spatial object?
-    gdf = to_geo(grid)
-
-    # Use sjoin and filter out empty results
-    points = gpd.sjoin(gdf, shp, how="left")
-    points = points[~pd.isna(points["index_right"])]
-    gids = list(points.index)
-
-    return gids
-
-
-def to_geo(df, lat="lat", lon="lon"):
-    """ Convert a Pandas data frame to a geopandas geodata frame """
-    df["geometry"] = df[[lon, lat]].apply(lambda x: Point(tuple(x)), axis=1)
-    gdf = gpd.GeoDataFrame(df, crs={'init': 'epsg:4326'},
-                           geometry=df["geometry"])
-    return gdf
 
 
 def check_config(config_file):
@@ -379,7 +372,7 @@ def extract_arrays(file):
         (list): A dictionary of data sets as numpy arrays.
     """
     # Open file
-    pointer = hp.File(file, mode="r")
+    pointer = h5py.File(file, mode="r")
 
     # Get keys?
     keys = pointer.keys()
@@ -397,7 +390,7 @@ def extract_arrays(file):
 def get_coordinates(file, savepath):
     """Get all of the coordintes and their grid ids from an hdf5 file"""
     # Get numpy array of coordinates
-    with hp.File(file, mode="r") as pointer:
+    with h5py.File(file, mode="r") as pointer:
         crds = pointer["coordinates"][:]
 
     # Create a data frame and save it
@@ -450,6 +443,46 @@ def project_points(tag, resource="nsrdb_v3", points=1000):
 
     # Return data frame
     return points
+
+
+def shape_points(shp, crd_path=data_path("nsrdb_v3_coords.csv")):
+    """Find the grid ids for a specified resource grid within a shapefile
+
+    Parameters:
+        shp_path (str): A local path to a shape file or remote url to a zipped
+                        folder containing a shapefile.
+        crd_path (str): The local path to the desired resource coordinate
+                        list.
+
+    Returns:
+        gids (list): A list of grid IDs.
+
+
+    Notes:
+        This could be done much faster.
+    """
+    # Read in shapefile with geopandas - remote urls allowed
+    if isinstance(shp, str):
+        shp = gpd.read_file(shp)
+
+    # Check that the shapefile isn't projected, or else reproject it
+    shp_crs = shp.crs
+    if shp_crs not in TARGET_CRS:
+        shp = shp.to_crs({'init': 'epsg:4326'})
+
+    # The resource data sets are large, subset by bounding box first
+    bbox = shp.geometry.total_bounds
+    grid = box_points(bbox, crd_path, gridids=False)
+
+    # Are there too many points to make a spatial object?
+    gdf = to_geo(grid)
+
+    # Use sjoin and filter out empty results
+    points = gpd.sjoin(gdf, shp, how="left")
+    points = points[~pd.isna(points["index_right"])]
+    gids = list(points.index)
+
+    return gids
 
 
 def show_colorbars():
@@ -507,9 +540,43 @@ def show_colorbars():
     plt.show()
 
 
+def single_points(lats, lons, crd_path=data_path("nsrdb_v3_coords.csv")):
+    """Take a data frame of single lat/lon coordinates and convert to a list of
+    grid ids.
+
+    Parameters:
+        lats (list): A list containing the latitude coordinates of the desired
+                    points.
+        lons (list): A list containing the longitude coordinates of the desired
+                    points.
+        crd_path (str): The local path to the desired resource coordinate
+                        list.
+
+    Returns:
+        gids (list): A list of grid IDs.
+    """
+    # Create a second data frame with the new coordinates
+    points = pd.DataFrame({"lat": lats, "lon": lons})
+    points = to_geo(points)
+
+    # Filter the grid by the bounding box of the points
+    bbox = [min(lons), min(lats), max(lons), max(lats)]
+    grid = box_points(bbox, crd_path, gridids=False)
+    grid = to_geo(grid)
+
+    # Find which grid points are closest to each target points
+    # ...
 
 
-# Classes
+def to_geo(df, lat="lat", lon="lon"):
+    """ Convert a Pandas data frame to a geopandas geodata frame """
+    df["geometry"] = df[[lon, lat]].apply(lambda x: Point(tuple(x)), axis=1)
+    gdf = gpd.GeoDataFrame(df, crs={'init': 'epsg:4326'},
+                           geometry=df["geometry"])
+    return gdf
+
+
+# Classes.
 class Config:
     """Sets reV model key values and generates configuration json files."""
     def __init__(self,
@@ -550,7 +617,14 @@ class Config:
         if params["nodes"] > 1:
             self._config_collect()
 
-        # If there are more than one jobs, use batch and pipeline
+        # If we are modeling economic modules, use pipeline and econ
+        outputs = self.top_params["outputs"]
+        econ_outputs = [o in ECON_MODULES for o in outputs]
+        if any(econ_outputs):
+            self._config_econ()
+            self._config_pipeline()
+
+        # If more than one jobs are needed, use batch and pipeline
         if len(self.sam_files) > 1:
             self._config_batch()
             self._config_pipeline()
@@ -558,7 +632,7 @@ class Config:
         # Configure the generation file
         self._config_gen()
 
-    def config_sam(self, jobname="gen"):
+    def config_sam(self, jobname="job"):
         """Configure the System Advisor Model (SAM) portion of a reV model.
 
         Parameters:
@@ -689,15 +763,58 @@ class Config:
         # Return configuration dictionary
         return config_dict
 
+    def _config_econ(self):
+        """Create a econ config file."""
+        # Separate parameters for space
+        params = self.top_params
+
+        # Get only the econ outputs
+        outputs = self.top_params["outputs"]
+        econ_outputs = [o in ECON_MODULES for o in outputs]
+
+        # Create the dictionary from the current set of parameters
+        config_dict = {
+              "cf_file": "PIPELINE",
+              "directories": {
+                "logging_directory": params["logdir"],
+                "output_directory": params["outdir"]
+              },
+              "execution_control": {
+                "allocation": params["allocation"],
+                "feature": params["feature"],
+                "nodes": params["nodes"],
+                "option": params["option"],
+                "sites_per_core": params["sites_per_core"],
+                "walltime": params["walltime"]
+              },
+              "project_control": {
+                "analysis_years": params["years"],
+                "logging_level": params["loglevel"],
+                "name": "econ",  # <------------------------------------------- How important is it to set this one?
+                "output_request": econ_outputs
+              },
+              "project_points": "./project_points/project_points.csv",
+              "sam_files": self.sam_files  # <--------------------------------- The example keeps the econ sam config separate from the gen config...is that necessary?
+            }
+
+        # Save to json using jobname for file name
+        with open("./config_econ.json", "w") as file:
+            file.write(json.dumps(config_dict, indent=4))
+        if self.verbose:
+            print("ECON config file saved to './config_econ.json'.")
+
+        # Check that the json as written correctly
+        check_config("./config_econ.json")
+        if self.verbose:
+            print("ECON config file opens.")
+
+        # Return configuration dictionary
+        return config_dict      
+
+
+
     def _config_gen(self):
-        """create a generation config file.
-
-        Notes:
-
-            This one does extra, I think a lot of it's functionality should
-            be moved to a master config method.
-
-        """
+        """create a generation config file."""
         # Separate parameters for space
         params = self.top_params
 
@@ -767,6 +884,12 @@ class Config:
                 }
             ]
         }
+
+        # If there are econ modules
+        outputs = self.top_params["outputs"]
+        econ_outputs = [o in ECON_MODULES for o in outputs]
+        if any(econ_outputs):
+            config_dict["pipeline"].append({"econ": "./config_econ.json"})
 
         # Write json to file
         with open("./config_pipeline.json", "w") as file:

@@ -1,3 +1,0 @@
-INFO - 2019-11-20 12:09:43,039 [cli_collect.py:55] : Running reV 2.0 collection from config file: "config_collect.json"
-INFO - 2019-11-20 12:09:43,039 [cli_collect.py:56] : Target output directory: "/home/twillia2/github/revruns/runs/run_1/"
-INFO - 2019-11-20 12:09:43,039 [cli_collect.py:57] : Target logging directory: "/home/twillia2/github/revruns/runs/run_1/"
