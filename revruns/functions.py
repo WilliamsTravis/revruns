@@ -79,7 +79,7 @@ class Check_Variables():
                     message = " - minimum value is less than {}".format(minv)
                     flagged[flag] = message
                 if max(data) > maxv:
-                    filename = os.basname(hdf.filename)
+                    filename = os.basename(hdf.filename)
                     flag = ":".join([filename, key])
                     message = " - maximum value is greater than {}".format(maxv)
                     flagged[flag] = message

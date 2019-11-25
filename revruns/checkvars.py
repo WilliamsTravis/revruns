@@ -40,6 +40,8 @@ def main(directory, write):
             messages = [message for _, message in flags.items()]
             out = pd.DataFrame({"datasets": datasets, "messages": messages})
             out.to_csv("checkvars.csv", index=False)
+    else:
+        print("All files passed.")
 
 if __name__ == "__main__":
     main()
