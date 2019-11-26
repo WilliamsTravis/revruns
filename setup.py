@@ -14,6 +14,8 @@ setup(
     author_email="travis.williams@nrel.gov",
     install_requires=['h5py', 'numpy', 'pandas'],
     entry_points = {"console_scripts":
-        ["checkvars = revruns.checkvars:main",
-         "getpoints = revruns.getpoints:main"]}
+        ["rrcheck = revruns.rrcheck:main",
+         "rrpoints = revruns.rrpoints:main",
+         "rrmax = revruns.rrmax:main",
+         "rrmin = revruns.rrmin:main"]}
     )
