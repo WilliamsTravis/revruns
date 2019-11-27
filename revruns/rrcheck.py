@@ -18,25 +18,21 @@ import pandas as pd
 from revruns import VARIABLE_CHECKS
 from tqdm import tqdm
 
-dir_help = "The directory from which to read the hdf5 files. Defaults to '.'"
-write_help = "Write output to file (checkvars.csv)."
+# Help printouts
+dir_help = "The directory from which to read the hdf5 files (Defaults to '.')."
+write_help = "Write output to file (saved as 'checkvars.csv')."
 
+# The command
 @click.command()
-@click.option("-directory", default=".", help=dir_help)
-@click.option("--write", default=False, help=write_help)
+@click.option("--directory", "-d", default=".", help=dir_help)
+@click.option("--write", "-w", is_flag=True, help=write_help)
 def main(directory, write):
-    """Checks hdf5 files in current directory for threshold values in data
-    sets.
-    directory = "."
-    directory = "/Users/twillia2/github/data/revruns/run_1"
-    
+    """Checks all hdf5 files in a current directory for threshold values in data
+    sets. This uses GDALINFO and also otputs an XML file with summary statistics
+    and attribute information for each hdf5 file.
     """
-
     # Get and open files. 
     files = glob(os.path.join(directory, "*h5"))
-#    checks = Check_Variables(files)
-#    flags = checks.check_variables()
-
     flagged = {}
     for file in tqdm(files, position=0):
         # Open the file
