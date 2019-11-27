@@ -58,7 +58,7 @@ class Check_Variables():
         self.files = files
         self._read_files()
 
-    def check_variables(self):
+    def checkvars(self):
         """Check a set of hdf5 model output files for potential anomalies.
         
         files = glob('/Users/twillia2/github/data/revruns/run_1/*')
@@ -422,7 +422,7 @@ def project_points(tag, resource="nsrdb_v3", points=1000):
                                    available points in the chosen resource
                                    data set.
         coords (list): A list of geographic coordinates to be converted to grid
-                       IDs. (not yet implemented)
+                       IDs. (not yet implemented, but leaving this reminder)
 
     Returns:
         pandas.core.frame.DataFrame: A data frame of grid IDs and SAM config
@@ -434,24 +434,38 @@ def project_points(tag, resource="nsrdb_v3", points=1000):
 
     # Print out options
     if not resource:
-        print("Resource required...")
         print("Available resource datasets: ")
         for key, var in RESOURCE_LABELS.items():
             print("   '" + key + "': " + str(var))
+        raise ValueError("'resource' argument required. Please provide the " +
+                         "key to one of the above options as the value for " + 
+                         "config.top_params['resource'].")
+
+    # Get the coordinates for the resource data set.
+    point_path = resource + "_coords.csv"
+    try:
+        coords = pd.read_csv(data_path(point_path))
+    except:
+        raise ValueError("Sorry, working on this. Please use the CLI " + 
+                         "'rrpoints' on " + 
+                         RESOURCE_DATASETS[resource].format(2018) + 
+                         " (or any other year) and save the output file " +
+                         "to " + data_path(point_path) + ".")
 
     # Sample or full grid?
     if isinstance(points, int):
         gridids = np.arange(0, points)
-    elif points == "all":
+    elif points == "all":      
         gridids = np.arange(0, RESOURCE_DIMS[resource])
     else:
         gridids = points
 
-    # Create data frame
-    points = pd.DataFrame({"gid": gridids, "config": tag})
+    # Create data frame and join coordinates
+    point_df = pd.DataFrame({"gid": gridids, "config": tag})
+    point_df = point_df.join(coords)
 
     # Return data frame
-    return points
+    return point_df
 
 
 def shape_points(shp, crd_path=data_path("nsrdb_v3_coords.csv")):
@@ -600,8 +614,17 @@ class Config:
         self._set_years()
         self._set_points_path()
 
-    def config_all(self):
-        """ Call all needed sub configurations except for sam"""
+    def config_all(self, excl_pos_lon=False):
+        """ Call all needed sub configurations except for sam
+
+        Parameter:
+            excl_pos_lon (boolean): Exclude (potentially problematic) positive
+                                    longitudes. This is temporarily here until
+                                    a better way is found, since it is the
+                                    easiest place to access.
+        Returns:
+            JSON cofiguration files for reV.
+        """
 
         # Check that there are specified sam files
         try:
@@ -615,10 +638,15 @@ class Config:
         params = self.top_params
 
         # Create project points
-        proj_points = project_points(tag=params["set_tag"],
-                                     resource=params["resource"],
-                                     points=self.points)
-        proj_points.to_csv(self.points_path, index=False)
+        point_df = project_points(tag=params["set_tag"],
+                                  resource=params["resource"],
+                                  points=self.points)
+
+        # If we are excluding positive longitudes
+        if excl_pos_lon:
+            point_df = point_df[point_df["lon"] < 0]
+
+        point_df.to_csv(self.points_path, index=False)
         if self.verbose:
              print("POINTS" + " saved to '" + self.points_path + "'.")
 
