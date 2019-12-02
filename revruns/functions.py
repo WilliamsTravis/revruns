@@ -927,7 +927,7 @@ class Config:
             config_dict["pipeline"].append({"econ": "./config_econ.json"})
 
         # Collect probably has to be last, is this run in order?
-        config_dict["pipeline"].append({"collect": "./config_collect"})
+        config_dict["pipeline"].append({"collect": "./config_collect.json"})
 
         # Write json to file
         with open("./config_pipeline.json", "w") as file:
