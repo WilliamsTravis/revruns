@@ -35,7 +35,7 @@ points = box_points(bbox, resource="nsrdb_v3")
 years = [y for y in range(2015, 2019)]
 ```
 
-#### Store top level parameters. These are parameters that will be shared by all model runs.
+#### Store all shared parameters. These include top level parameters that control elements like computation allocations and directory structure, temporal and spatial information, as well as any Systems Advisor Model (SAM) parameters that will be shared by all model runs.
 ```python
 # Set common parameters
 cnfg.top_params["allocation"] = "rev"
