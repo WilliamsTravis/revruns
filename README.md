@@ -29,7 +29,7 @@ bbox = [-105.352679491, 39.4595438351, -104.9022400379, 40.3518303006]
 points = box_points(bbox, resource="nsrdb_v3")
 ```
 
-#### Set the years to be run by creating a list
+#### Set the years to be run by creating a list.
 ```python
 # Set years explicitly
 years = [y for y in range(2015, 2019)]
@@ -74,7 +74,7 @@ sam_config = cnfg.config_sam(jobname="tracking")
 gen_config = cnfg.config_all(excl_pos_lon=True)
 ```
 
-#### Run reV in the command line
+#### Run reV in the command line.
 `reV -c config_batch.json batch`
 
 
