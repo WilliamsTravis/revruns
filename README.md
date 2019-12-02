@@ -54,7 +54,7 @@ cnfg.sam_params["dc_ac_ratio"] = 1.1
 cnfg.sam_params["system_capacity"] = 5
 ```
 
-#### Store the individual Systems Advisor Model (SAM) configuration parameters and generate seperate configuration files for each. SAM is responsible for simulating power generation technologies, fixed and tracking pv solar panels in this case.
+#### Store the individual Systems Advisor Model (SAM) configuration parameters and generate seperate configuration files for each. SAM is responsible for simulating power generation technologies, fixed and tracking photo-voltaic solar panels in this case.
 ```python
 # SAM Config #1
 cnfg.sam_params["array_type"] = 0
