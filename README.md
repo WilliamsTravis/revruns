@@ -15,7 +15,7 @@ and\
 from revruns import Config
 ```
 
-#### Create a configuration object
+#### Create a configuration object.
 ```python
 cnfg = Config()
 ```
@@ -68,7 +68,7 @@ sam_config = cnfg.config_sam(jobname="tracking")
 ```
 
 
-#### Generate all of the required configuration files
+#### Generate all of the required configuration files. In this case we are excluding positive longitudes because, for the moment, reV cannot handle them. 
 ```python
 # And this should trigger all of the other configuration files
 gen_config = cnfg.config_all(excl_pos_lon=True)
