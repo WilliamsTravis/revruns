@@ -166,6 +166,7 @@ SAM_PARAMS = {"pv": SOLAR_SAM_PARAMS,
 # Default 'Top Level' parameters, i.e. those that are shared between runs.
 TOP_PARAMS = {"allocation": "rev",
               "feature": "--qos=normal",
+              "keep_chunks": False,
               "logdir": "./logs",
               "loglevel": "INFO",
               "memory": 90,
@@ -767,9 +768,9 @@ class Config:
         # Create the dictionary from the current set of parameters
         config_dict = {
             "directories": {
+                "collect_directory": "PIPELINE", # <--------------------------- Is this auto generated?
                 "logging_directory": params["logdir"],
-                "output_directory": params["outdir"],
-                "collect_directory": "PIPELINE"  # <--------------------------- Is this auto generated?
+                "output_directory": params["outdir"]
             },
             "execution_control": {
                 "allocation": params["allocation"],
@@ -779,10 +780,11 @@ class Config:
                 "walltime": params["walltime"]
             },
             "project_control": {
-                "file_prefixes": "PIPELINE", # <------------------------------- I guess they're all called PIPELINE_something?
                 "dsets": params["outputs"],
-                "parallel": params["parallel"],
-                "logging_level": params["loglevel"]
+                "file_prefixes": "PIPELINE", # <------------------------------- I guess they're all called PIPELINE_something?
+                "keep_chunks": params["keep_chunks"],
+                "logging_level": params["loglevel"],
+                "parallel": params["parallel"]
             },
             "project_points": self.points_path
         }
@@ -871,11 +873,11 @@ class Config:
             "execution_control": {
                 "allocation": params["allocation"],
                 "feature": params["feature"],
+                "memory_utilization_limit": params["memory_utilization_limit"],
                 "nodes": params["nodes"],
                 "option": params["option"],
-                "walltime": params["walltime"],
-                "sites_per_core": params["sites_per_worker"],
-                "memory_utilization_limit": params["memory_utilization_limit"]
+                "sites_per_worker": params["sites_per_worker"],
+                "walltime": params["walltime"]
             },
             "project_control": {
                 "logging_level": params["loglevel"],

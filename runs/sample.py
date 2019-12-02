@@ -17,6 +17,7 @@ years = [y for y in range(2015, 2019)]
 # Set common parameters
 cnfg.top_params["allocation"] = "rev"
 cnfg.top_params["logdir"] = "./"
+cnfg.top_params["keep_chunks"] = True
 cnfg.top_params["memory"] = 192
 cnfg.top_params["nodes"] = 25
 cnfg.top_params["outdir"] = "./"
