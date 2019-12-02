@@ -6,9 +6,6 @@ file key.
 
 # Set path to repo root a get functions
 import revruns
-import os
-
-os.chdir("/Users/twillia2/Desktop/landwind_v2_fix_attempt/test_run")
 
 # Signal Setup
 print("Setting up reV run 'Windland V2'...\n")

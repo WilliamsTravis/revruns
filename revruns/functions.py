@@ -43,7 +43,12 @@ CONUS = ['AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'IA',
          'VT', 'WA', 'WI', 'WV', 'WY']
 
 # For checking if a requested output requires economic treatment.
-ECON_MODULES = ["lcoe_fcr"]
+ECON_MODULES = ["flip_actual_irr"
+                "lcoe_fcr",
+                "lcoe_nom",
+                "lcoe_real",
+                "ppa_price",
+                "project_return_aftertax_npv"]
 
 # Checks for reasonable model output value ranges. No scaling factors here.
 VARIABLE_CHECKS = {  
@@ -51,65 +56,6 @@ VARIABLE_CHECKS = {
         "cf_mean": (0, 240),  # 24 %
         "cf_profile": (0, 990)  # 99 %
         }
-
-########## Construction Zone ###########
-class Check_Variables():
-    def __init__(self, files):
-        self.files = files
-        self._read_files()
-
-    def checkvars(self):
-        """Check a set of hdf5 model output files for potential anomalies.
-        
-        files = glob('/Users/twillia2/github/data/revruns/run_1/*')
-        """    
-        # For each data set in each file, check the values
-        flagged = {}
-        for hdf in tqdm(self.hdfs, position=0):
-            # Get the list of sub data sets in each file
-            subds = hdf.GetSubDatasets()
-            
-            # Will meta and time index mess this up?
-            # subds.remove("meta")
-            # subds.remove("time_index")
-
-            # For each of these sub data sets, get an info dictionary
-            for sub in subds:      
-                info_str = gdal.Info(sub[0], options=["-stats", "-json"])      
-                info = json.loads(info_str)
-                filename = info["files"][0]
-                desc = info["description"]
-                var = desc[desc.index("//") + 2: ]
-                max_data = info["bands"][0]["maximum"]
-                min_data = info["bands"][0]["minimum"]
-                max_threshold = VARIABLE_CHECKS[var][1]
-                min_threshold = VARIABLE_CHECKS[var][0]
-
-                # Check the thresholds. Could add more for mean and stdDev. 
-                if max_data > max_threshold:
-                    filename = os.path.basename(filename)
-                    flag = ":".join([filename, var])
-                    message = (" - maximum value is greater than " +
-                               max_threshold)
-                    flagged[flag] = message
-                if min_data < min_threshold:
-                    filename = os.path.basename(filename)
-                    flag = ":".join([filename, var])
-                    message = (" - minimum value is less than " +
-                               min_threshold)
-                    flagged[flag] = message
-
-        # Return the dictionary of messages
-        return flagged
-
-    def _read_files(self):
-        """Check and read all hdf files."""
-        try:
-            hdfs = [gdal.Open(file) for file in self.files]
-        except OSError:
-            print("Could not read all files, are these hdf5 formats?")
-        self.hdfs = hdfs
-########################################
 
 # Resource data set dimensions. Just the number of grid points for the moment.
 RESOURCE_DIMS = {
@@ -238,7 +184,7 @@ TOP_PARAMS = {"allocation": "rev",
 
 
 # Functions.
-def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv"), gridids=True):
+def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv")):
     """Filter grid ids by geographical bounding box
 
     Parameters:
@@ -249,7 +195,7 @@ def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv"), gridids=True):
                         list.
 
     Returns:
-        gids (list): A list of grid IDs.
+        pandas.core.frame.DataFrame: A data frame of grid IDs and coordinates.
     """
     # Resource coordinate data frame from get_coordinates
     grid = pd.read_csv(crd_path)
@@ -260,13 +206,7 @@ def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv"), gridids=True):
                 (grid["lon"] < bbox[2]) &
                 (grid["lat"] < bbox[3])]
 
-    # Just gridids or coordinates?
-    if gridids:
-        points = crds.index.to_list()
-    else:
-        points = crds
-
-    return points
+    return crds
 
 
 def check_config(config_file):
@@ -455,14 +395,16 @@ def project_points(tag, resource="nsrdb_v3", points=1000):
     # Sample or full grid?
     if isinstance(points, int):
         gridids = np.arange(0, points)
-    elif points == "all":      
+        point_df = pd.DataFrame({"gid": gridids, "config": tag})
+        point_df = point_df.join(coords)
+    elif isinstance(points, str) and points == "all":      
         gridids = np.arange(0, RESOURCE_DIMS[resource])
+        point_df = pd.DataFrame({"gid": gridids, "config": tag})
+        point_df = point_df.join(coords)
     else:
-        gridids = points
-
-    # Create data frame and join coordinates
-    point_df = pd.DataFrame({"gid": gridids, "config": tag})
-    point_df = point_df.join(coords)
+        point_df = points.copy()
+        point_df["gid"] = point_df.index
+        point_df["config"] = tag
 
     # Return data frame
     return point_df
@@ -599,6 +541,65 @@ def to_geo(df, lat="lat", lon="lon"):
     return gdf
 
 
+########## Construction Zone ###########
+class Check_Variables():
+    def __init__(self, files):
+        self.files = files
+        self._read_files()
+
+    def checkvars(self):
+        """Check a set of hdf5 model output files for potential anomalies.
+        
+        files = glob('/Users/twillia2/github/data/revruns/run_1/*')
+        """    
+        # For each data set in each file, check the values
+        flagged = {}
+        for hdf in tqdm(self.hdfs, position=0):
+            # Get the list of sub data sets in each file
+            subds = hdf.GetSubDatasets()
+            
+            # Will meta and time index mess this up?
+            # subds.remove("meta")
+            # subds.remove("time_index")
+
+            # For each of these sub data sets, get an info dictionary
+            for sub in subds:      
+                info_str = gdal.Info(sub[0], options=["-stats", "-json"])      
+                info = json.loads(info_str)
+                filename = info["files"][0]
+                desc = info["description"]
+                var = desc[desc.index("//") + 2: ]
+                max_data = info["bands"][0]["maximum"]
+                min_data = info["bands"][0]["minimum"]
+                max_threshold = VARIABLE_CHECKS[var][1]
+                min_threshold = VARIABLE_CHECKS[var][0]
+
+                # Check the thresholds. Could add more for mean and stdDev. 
+                if max_data > max_threshold:
+                    filename = os.path.basename(filename)
+                    flag = ":".join([filename, var])
+                    message = (" - maximum value is greater than " +
+                               max_threshold)
+                    flagged[flag] = message
+                if min_data < min_threshold:
+                    filename = os.path.basename(filename)
+                    flag = ":".join([filename, var])
+                    message = (" - minimum value is less than " +
+                               min_threshold)
+                    flagged[flag] = message
+
+        # Return the dictionary of messages
+        return flagged
+
+    def _read_files(self):
+        """Check and read all hdf files."""
+        try:
+            hdfs = [gdal.Open(file) for file in self.files]
+        except OSError:
+            print("Could not read all files, are these hdf5 formats?")
+        self.hdfs = hdfs
+########################################
+
 # Classes.
 class Config:
     """Sets reV model key values and generates configuration json files."""
@@ -631,7 +632,7 @@ class Config:
             assert len(self.sam_files) > 0
         except AssertionError:
             print("Could not configure GENRATION file, no SAM configuration " +
-                  "files detected\n")
+                  "files detected.\n")
             raise
 
         # Separate parameters for space
@@ -656,7 +657,7 @@ class Config:
 
         # If we are modeling economic modules, use pipeline and econ
         outputs = self.top_params["outputs"]
-        econ_outputs = [o in ECON_MODULES for o in outputs]
+        econ_outputs = [o for o in outputs if o in ECON_MODULES]
         if any(econ_outputs):
             self._config_econ()
             self._config_pipeline()
@@ -807,7 +808,7 @@ class Config:
 
         # Get only the econ outputs
         outputs = self.top_params["outputs"]
-        econ_outputs = [o in ECON_MODULES for o in outputs]
+        econ_outputs = [o for o in outputs if o in ECON_MODULES]
 
         # Create the dictionary from the current set of parameters
         config_dict = {
@@ -821,7 +822,7 @@ class Config:
                 "feature": params["feature"],
                 "nodes": params["nodes"],
                 "option": params["option"],
-                "sites_per_core": params["sites_per_core"],
+                "sites_per_worker": params["sites_per_worker"],
                 "walltime": params["walltime"]
               },
               "project_control": {
@@ -915,9 +916,6 @@ class Config:
             "pipeline": [
                 {
                     "generation": "./config_gen.json"
-                },
-                {
-                    "collect": "./config_collect.json"
                 }
             ]
         }
@@ -927,6 +925,9 @@ class Config:
         econ_outputs = [o in ECON_MODULES for o in outputs]
         if any(econ_outputs):
             config_dict["pipeline"].append({"econ": "./config_econ.json"})
+
+        # Collect probably has to be last, is this run in order?
+        config_dict["pipeline"].append({"collect": "./config_collect"})
 
         # Write json to file
         with open("./config_pipeline.json", "w") as file:
