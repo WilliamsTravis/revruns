@@ -20,8 +20,14 @@ from revruns import Config
 cnfg = Config()
 ```
 
-#### If you don't want to run reV for all available points (and there are millions), use one of revrun's point object generators. Here, we are using `box_points` to create a data frame of point coordinates and grid ids associated with the
-NSRDB V3.0.1 dataset.
+#### If you don't want to run reV for all available points (and there are millions), use one of revrun's point object generators. Here, we are using a set of bounding box coordinates and the function `box_points` to create a data frame of point coordinates and grid ids associated with the NSRDB V3.0.1 dataset.
+```python
+from revruns import box_points
+
+# Points from a bounding box around Denver's portion of the Front Range
+bbox = [-105.352679491, 39.4595438351, -104.9022400379, 40.3518303006]
+points = box_points(bbox, resource="nsrdb_v3")
+```
 
 #### Store top level parameters. These are parameters that will be shared by all model runs.
 
