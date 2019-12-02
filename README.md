@@ -29,11 +29,50 @@ bbox = [-105.352679491, 39.4595438351, -104.9022400379, 40.3518303006]
 points = box_points(bbox, resource="nsrdb_v3")
 ```
 
-#### Store top level parameters. These are parameters that will be shared by all model runs.
+#### Set the years to be run by creating a list
+```python
+# Set years explicitly
+years = [y for y in range(2015, 2019)]
+```
 
-#### Store the individual SAM configuration parameters and generate seperate configuration files for each.
+#### Store top level parameters. These are parameters that will be shared by all model runs.
+```python
+# Set common parameters
+cnfg.top_params["allocation"] = "rev"
+cnfg.top_params["logdir"] = "./"
+cnfg.top_params["keep_chunks"] = True
+cnfg.top_params["memory"] = 192
+cnfg.top_params["nodes"] = 25
+cnfg.top_params["outdir"] = "./"
+cnfg.top_params["outputs"] = ["cf_profile", "cf_mean", "poa"]
+cnfg.top_params["resource"] = "nsrdb_v3"
+cnfg.top_params["set_tag"] = "nsrdb"
+cnfg.top_params["walltime"] = 1.0
+cnfg.top_params["years"] = years
+cnfg.points = points
+cnfg.sam_params["dc_ac_ratio"] = 1.1
+cnfg.sam_params["system_capacity"] = 5
+```
+
+#### Store the individual Systems Advisor Model (SAM) configuration parameters and generate seperate configuration files for each. SAM is responsible for simulating power generation technologies, fixed and tracking pv solar panels in this case.
+```python
+# SAM Config #1
+cnfg.sam_params["array_type"] = 0
+cnfg.sam_params["tilt"] = "latitude"
+sam_config = cnfg.config_sam(jobname="fixed")
+
+# SAM Config #2
+cnfg.sam_params["array_type"] = 2
+cnfg.sam_params["tilt"] = 0
+sam_config = cnfg.config_sam(jobname="tracking")
+```
+
 
 #### Generate all of the required configuration files
+```python
+# And this should trigger all of the other configuration files
+gen_config = cnfg.config_all(excl_pos_lon=True)
+```
 
 #### Run reV in the command line
 `reV -c config_batch.json batch`
