@@ -6,7 +6,7 @@ Examining a way to streamline the configuration and execution of the Renewable E
 or\
 `pip install git+https://github.com/NREL/reV.git`\
 and\
-`pip install -e .`
+`python setup.py install`
 
 ## Examples:
  #### Import the Config class from revruns, this will contain all of the configuration information and create the configuration needed to run the reV model.
