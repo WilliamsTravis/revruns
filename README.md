@@ -31,13 +31,11 @@ points = box_points(bbox, resource="nsrdb_v3")
 
 #### Set the years to be run by creating a list.
 ```python
-# Set years explicitly
 years = [y for y in range(2015, 2019)]
 ```
 
 #### Store all shared parameters. These include top level parameters that control elements like computation allocations and directory structure, temporal and spatial information, as well as any Systems Advisor Model (SAM) parameters that will be shared by all model runs.
 ```python
-# Set common parameters
 cnfg.top_params["allocation"] = "rev"
 cnfg.top_params["logdir"] = "./"
 cnfg.top_params["keep_chunks"] = True
@@ -70,7 +68,6 @@ sam_config = cnfg.config_sam(jobname="tracking")
 
 #### Generate all of the required configuration files. In this case we are excluding positive longitudes because, for the moment, reV cannot handle them. 
 ```python
-# And this should trigger all of the other configuration files
 gen_config = cnfg.config_all(excl_pos_lon=True)
 ```
 
