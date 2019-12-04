@@ -1,57 +1,35 @@
-# -*- coding: utf-8 -*-
 """
-Functions for revruns/brainstorming intuitive and easy config building
-
-Created on Tue Nov 12 13:15:55 2019
+Created on Wed Dec  4 07:58:42 2019
 
 @author: twillia2
 """
 import json
 import os
 import ssl
-import datetime as dt
-import geopandas as gpd
 import h5py
-import matplotlib.pyplot as plt
+import geopandas as gpd
 import numpy as np
-from osgeo import gdal
 import pandas as pd
-from shapely.geometry import Point
-from tqdm import tqdm
+#import matplotlib.pyplot as plt
 from reV.utilities.exceptions import JSONError
- 
+from shapely.geometry import Point
+
 # Fix remote file transfer issues with ssl (for gpd, find a better way).
 ssl._create_default_https_context = ssl._create_unverified_context
 
-# Times New Roman for plots?
-plt.rcParams['font.family'] = 'Times New Roman'
-
-# Package data path.
+# For package data
 ROOT = os.path.abspath(os.path.dirname(__file__))
-def data_path(path):
-    """Path to local package data directory"""
-    return os.path.join(ROOT, 'data', path)
-
-# Time check.
-NOW = dt.datetime.today().strftime("%Y-%m-%d %I:%M %p")
-
-# For CONUS filtering.
-CONUS = ['AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'IA',
-         'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN',
-         'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ', 'NM', 'NV', 'NY',
-         'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VA',
-         'VT', 'WA', 'WI', 'WV', 'WY']
 
 # For checking if a requested output requires economic treatment.
-ECON_MODULES = ["flip_actual_irr"
-                "lcoe_fcr",
+ECON_MODULES = ["flip_actual_irr",
+                "lcoe_fcr",  # <---------------------------------------------------------------------------------------- This might not actually need the econ module
                 "lcoe_nom",
                 "lcoe_real",
                 "ppa_price",
                 "project_return_aftertax_npv"]
 
 # Checks for reasonable model output value ranges. No scaling factors here.
-VARIABLE_CHECKS = {  
+VARIABLE_CHECKS = {
         "poa": (0, 1000),  # 1,000 MW m-2
         "cf_mean": (0, 240),  # 24 %
         "cf_profile": (0, 990)  # 99 %
@@ -135,12 +113,16 @@ DEFAULT_WTPO = list(DEFAULT_WTPO)
 # Default SAM model parameters for wind.  # <---------------------------------- Check that these are indeed the defaults.
 WIND_SAM_PARAMS = {
         "adjust:constant": 0.0,
+        "capital_cost" : 245000000,
 	    "en_low_temp_cutoff": "placeholder",
-        "low_temp_cutoff": -10,
         "en_icing_cutoff": "placeholder",
+        "fixed_operating_cost" : 7790000,
+        "fixed_charge_rate": 0.052,
         "icing_cutoff_temp": 0.0,
         "icing_cutoff_rh": 95.0,
+        "low_temp_cutoff": -10,
         "system_capacity": 200000,
+        "variable_operating_cost": 0,
         "wind_farm_losses_percent": 12.8,
         "wind_farm_wake_model": 0,
         "wind_farm_xCoordinates": None, # <------------------------------------ Don't we set these in the points file?
@@ -152,11 +134,7 @@ WIND_SAM_PARAMS = {
         "wind_turbine_hub_ht": 100.0,
         "wind_turbine_powercurve_powerout": DEFAULT_WTPO,
         "wind_turbine_powercurve_windspeeds": list(np.arange(0, 40.25, 0.25)),
-        "wind_turbine_rotor_diameter": 167.0,
-        "capital_cost" : 245000000,
-        "fixed_operating_cost" : 7790000,
-        "fixed_charge_rate": 0.052,
-        "variable_operating_cost": 0
+        "wind_turbine_rotor_diameter": 167.0
 }
 
 # All default SAM model parameters.  # <-------------------------------------------------- Add as more models are discovered
@@ -185,6 +163,11 @@ TOP_PARAMS = {"allocation": "rev",
 
 
 # Functions.
+def data_path(path):
+    """Path to local package data directory"""
+    return os.path.join(ROOT, 'data', path)
+
+
 def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv")):
     """Filter grid ids by geographical bounding box
 
@@ -209,7 +192,6 @@ def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv")):
 
     return crds
 
-
 def check_config(config_file):
     """Check that a json file loads without error.
 
@@ -223,93 +205,94 @@ def check_config(config_file):
                '"{}"'.format(error, config_file))
         raise JSONError(msg)
 
-
-def compare_profiles(datasets,
-                     dataset="cf_profile",
-                     units="$\mathregular{m^{-2}}$",
-                     title="Output Profiles",
-                     cmap="viridis",
-                     savefolder=None,
-                     dpi=300):
-    """Compare profiles from different reV generation models
-
-    Parameters:
-        outputs (list): A list of reV output profile numpy arrays.
-
-    Returns:
-        (png): An image comparing output profiles over time.
-    """
-    # Get the profiles from the datasets
-    profiles = {key: datasets[key][dataset] for key in datasets}
-
-    # Get the time values from one of the data sets
-    keys = list(datasets.keys())
-    time = datasets[keys[0]]["time_index"]
-    nstep = int(len(time) / 15)
-    time_ticks = np.arange(0, len(time), nstep)
-    time_labels = pd.to_datetime(time[1::nstep]).strftime("%b %d %H:%M")
-
-    # Get grouping features
-    groups = list(profiles.keys())
-    for i, grp in enumerate(groups):
-        elements = grp.split("_")
-        module = elements[0].upper()
-        group_feature = elements[1].capitalize()
-        year = elements[2]
-        elements = [module, group_feature, year]
-        group = " ".join(elements)
-        groups[i] = group
-
-    # Get the datasets
-    outputs = [profiles[key] for key in profiles.keys()]
-
-    # Get some information about the outputs
-    noutputs = len(outputs)
-
-    # Transpose outputs so they're horizontal
-    outputs = [out.T for out in outputs]
-
-    # Figure level graph elements
-    fig, axes = plt.subplots(noutputs, 1, figsize=(20, 4))
-    fig.suptitle(title, y=1.15, x=.425, fontsize=20)
-    fig.tight_layout()
-    fig.text(0.425, 0.001, 'Date', ha='center', va='center', fontsize=15)
-    fig.text(0.00, .6, 'Site #', ha='center', va='center', fontsize=15,
-             rotation='vertical')
-
-    # We need a common color map
-    maxes = [np.max(out) for out in outputs]
-    if np.diff(maxes) == 0:
-        maxes[0] = maxes[0] - 1
-    color_template = outputs[int(np.where(maxes == max(maxes))[0])]
-    ctim = axes[0].imshow(color_template, cmap=cmap)
-    clim = ctim.properties()['clim']
-
-    # For each axis plot and format
-    for i, axis in enumerate(axes):
-        axis.imshow(outputs[i], cmap=cmap, clim=clim)
-        axis.set_aspect('auto')
-        axis.set_title(groups[i], fontsize=15)
-        axis.set_xticks([])
-
-    # Set date axis on the last one?
-    axes[i].set_xticks(time_ticks)
-    axes[i].set_xticklabels(time_labels)
-    fig.autofmt_xdate(rotation=-35, ha="left")
-
-    # Set the colorbar
-    cbr = fig.colorbar(ctim, ax=axes.ravel().tolist(), shrink=.9,
-                       pad=0.02)
-    cbr.ax.set_ylabel(units, fontsize=15, rotation=270, labelpad=15)
-
-    # Also save to file
-    if savefolder:
-        if not os.path.exists(savefolder):
-            os.makedirs(savefolder)
-        file = "_".join([module.lower(), dataset, year]) + ".png"
-        path = os.path.join(savefolder, file)
-        fig.savefig(path, bbox_inches="tight", dpi=dpi)
-        plt.close(fig)
+#
+#def compare_profiles(datasets,
+#                     dataset="cf_profile",
+#                     units="$\mathregular{m^{-2}}$",
+#                     title="Output Profiles",
+#                     cmap="viridis",
+#                     savefolder=None,
+#                     dpi=300):
+#    """Compare profiles from different reV generation models
+#
+#    Parameters:
+#        outputs (list): A list of reV output profile numpy arrays.
+#
+#    Returns:
+#        (png): An image comparing output profiles over time.
+#    """
+#    # Get the profiles from the datasets
+#    profiles = {key: datasets[key][dataset] for key in datasets}
+#
+#    # Get the time values from one of the data sets
+#    keys = list(datasets.keys())
+#    time = datasets[keys[0]]["time_index"]
+#    nstep = int(len(time) / 15)
+#    time_ticks = np.arange(0, len(time), nstep)
+#    time_labels = pd.to_datetime(time[1::nstep]).strftime("%b %d %H:%M")
+#
+#    # Get grouping features
+#    groups = list(profiles.keys())
+#    for i, grp in enumerate(groups):
+#        elements = grp.split("_")
+#        module = elements[0].upper()
+#        group_feature = elements[1].capitalize()
+#        year = elements[2]
+#        elements = [module, group_feature, year]
+#        group = " ".join(elements)
+#        groups[i] = group
+#
+#    # Get the datasets
+#    outputs = [profiles[key] for key in profiles.keys()]
+#
+#    # Get some information about the outputs
+#    noutputs = len(outputs)
+#
+#    # Transpose outputs so they're horizontal
+#    outputs = [out.T for out in outputs]
+#
+#    # Figure level graph elements
+#    fig, axes = plt.subplots(noutputs, 1, figsize=(20, 4))
+#    fig.suptitle(title, y=1.15, x=.425, fontsize=20)
+#    fig.tight_layout()
+#    fig.text(0.425, 0.001, 'Date', ha='center', va='center', fontsize=15)
+#    fig.text(0.00, .6, 'Site #', ha='center', va='center', fontsize=15,
+#             rotation='vertical')
+#
+#    # We need a common color map
+#    maxes = [np.max(out) for out in outputs]
+#    if np.diff(maxes) == 0:
+#        maxes[0] = maxes[0] - 1
+#    color_template = outputs[int(np.where(maxes == max(maxes))[0])]
+#    ctim = axes[0].imshow(color_template, cmap=cmap)
+#    clim = ctim.properties()['clim']
+#
+#    # For each axis plot and format
+#    for i, axis in enumerate(axes):
+#        axis.imshow(outputs[i], cmap=cmap, clim=clim)
+#        axis.set_aspect('auto')
+#        axis.set_title(groups[i], fontsize=15)
+#        axis.set_xticks([])
+#
+#    # Set date axis on the last one?
+#    axes[i].set_xticks(time_ticks)
+#    axes[i].set_xticklabels(time_labels)
+#    fig.autofmt_xdate(rotation=-35, ha="left")
+#
+#    # Set the colorbar
+#    cbr = fig.colorbar(ctim, ax=axes.ravel().tolist(), shrink=.9,
+#                       pad=0.02)
+#    cbr.ax.set_ylabel(units, fontsize=15, rotation=270, labelpad=15)
+#
+#    # Also save to file
+#    if savefolder:
+#        if not os.path.exists(savefolder):
+#            os.makedirs(savefolder)
+#        file = "_".join([module.lower(), dataset, year]) + ".png"
+#        path = os.path.join(savefolder, file)
+#        fig.savefig(path, bbox_inches="tight", dpi=dpi)
+#        plt.close(fig)
+#
 
 
 def extract_arrays(file):
@@ -379,7 +362,7 @@ def project_points(tag, resource="nsrdb_v3", points=1000):
         for key, var in RESOURCE_LABELS.items():
             print("   '" + key + "': " + str(var))
         raise ValueError("'resource' argument required. Please provide the " +
-                         "key to one of the above options as the value for " + 
+                         "key to one of the above options as the value for " +
                          "config.top_params['resource'].")
 
     # Get the coordinates for the resource data set.
@@ -387,9 +370,9 @@ def project_points(tag, resource="nsrdb_v3", points=1000):
     try:
         coords = pd.read_csv(data_path(point_path))
     except:
-        raise ValueError("Sorry, working on this. Please use the CLI " + 
-                         "'rrpoints' on " + 
-                         RESOURCE_DATASETS[resource].format(2018) + 
+        raise ValueError("Sorry, working on this. Please use the CLI " +
+                         "'rrpoints' on " +
+                         RESOURCE_DATASETS[resource].format(2018) +
                          " (or any other year) and save the output file " +
                          "to " + data_path(point_path) + ".")
 
@@ -398,7 +381,7 @@ def project_points(tag, resource="nsrdb_v3", points=1000):
         gridids = np.arange(0, points)
         point_df = pd.DataFrame({"gid": gridids, "config": tag})
         point_df = point_df.join(coords)
-    elif isinstance(points, str) and points == "all":      
+    elif isinstance(points, str) and points == "all":
         gridids = np.arange(0, RESOURCE_DIMS[resource])
         point_df = pd.DataFrame({"gid": gridids, "config": tag})
         point_df = point_df.join(coords)
@@ -411,7 +394,23 @@ def project_points(tag, resource="nsrdb_v3", points=1000):
     return point_df
 
 
-def shape_points(shp, crd_path=data_path("nsrdb_v3_coords.csv")):
+def conus_points(resource):
+    """It takes so long to get all the CONUS points, so until I've fixed
+    shape_points, I'm going to store these in the data folder."""
+
+    # If it isn't saved yet, retrieve and save
+    if not os.path.exists(data_path(resource + "_conus_coords.csv")):
+        shp = gpd.read_file("https://www2.census.gov/geo/tiger/TIGER2017/" +
+                            "STATE/tl_2017_us_state.zip")
+        points = shape_points(shp, resource)
+        points.to_csv(data_path(resource + "_conus_coords.csv"), index = False)
+    else:
+        points = pd.read_csv(data_path(resource + "_conus_coords.csv"))
+
+    return points
+
+
+def shape_points(shp, resource="nsrdb_v3"):
     """Find the grid ids for a specified resource grid within a shapefile
 
     Parameters:
@@ -422,7 +421,6 @@ def shape_points(shp, crd_path=data_path("nsrdb_v3_coords.csv")):
 
     Returns:
         gids (list): A list of grid IDs.
-
 
     Notes:
         This could be done much faster.
@@ -436,9 +434,13 @@ def shape_points(shp, crd_path=data_path("nsrdb_v3_coords.csv")):
     if shp_crs not in TARGET_CRS:
         shp = shp.to_crs({'init': 'epsg:4326'})
 
+    # Get the coordinates associated with the resource
+    crd_file = resource + "_coords.csv"
+    crd_path = data_path(crd_file)
+
     # The resource data sets are large, subset by bounding box first
     bbox = shp.geometry.total_bounds
-    grid = box_points(bbox, crd_path, gridids=False)
+    grid = box_points(bbox, crd_path)
 
     # Are there too many points to make a spatial object?
     gdf = to_geo(grid)
@@ -446,92 +448,11 @@ def shape_points(shp, crd_path=data_path("nsrdb_v3_coords.csv")):
     # Use sjoin and filter out empty results
     points = gpd.sjoin(gdf, shp, how="left")
     points = points[~pd.isna(points["index_right"])]
-    gids = list(points.index)
 
-    return gids
+    # We only need the coordinates here.
+    points = points[["lat", "lon"]]
 
-
-def show_colorbars():
-    """Shows all available color bar keys"""
-    cmaps = [('Perceptually Uniform Sequential', [
-                 'viridis', 'plasma', 'inferno', 'magma', 'cividis']),
-             ('Sequential', [
-                 'Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
-                 'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
-                 'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn']),
-             ('Sequential (2)', [
-                 'binary', 'gist_yarg', 'gist_gray', 'gray', 'bone', 'pink',
-                 'spring', 'summer', 'autumn', 'winter', 'cool', 'Wistia',
-                 'hot', 'afmhot', 'gist_heat', 'copper']),
-             ('Diverging', [
-                 'PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu',
-                 'RdYlBu', 'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic']),
-             ('Cyclic', ['twilight', 'twilight_shifted', 'hsv']),
-             ('Qualitative', [
-                 'Pastel1', 'Pastel2', 'Paired', 'Accent',
-                 'Dark2', 'Set1', 'Set2', 'Set3',
-                 'tab10', 'tab20', 'tab20b', 'tab20c']),
-             ('Miscellaneous', [
-                 'flag', 'prism', 'ocean', 'gist_earth', 'terrain',
-                 'gist_stern', 'gnuplot', 'gnuplot2', 'CMRmap', 'cubehelix',
-                 'brg', 'gist_rainbow', 'rainbow', 'jet', 'nipy_spectral',
-                 'gist_ncar'])]
-
-    gradient = np.linspace(0, 1, 256)
-    gradient = np.vstack((gradient, gradient))
-
-    def plot_color_gradients(cmap_category, cmap_list):
-        # Create figure and adjust figure height to number of colormaps
-        nrows = len(cmap_list)
-        figh = 0.35 + 0.15 + (nrows + (nrows-1)*0.1)*0.22
-        fig, axes = plt.subplots(nrows=nrows, figsize=(6.4, figh))
-        fig.subplots_adjust(top=1-.35/figh, bottom=.15/figh, left=0.2,
-                            right=0.99)
-
-        axes[0].set_title(cmap_category + ' colormaps', fontsize=14)
-
-        for axis, name in zip(axes, cmap_list):
-            axis.imshow(gradient, aspect='auto', cmap=plt.get_cmap(name))
-            axis.text(-.01, .5, name, va='center', ha='right', fontsize=10,
-                      transform=axis.transAxes)
-
-        # Turn off *all* ticks & spines, not just the ones with colormaps.
-        for axis in axes:
-            axis.set_axis_off()
-
-
-    for cmap_category, cmap_list in cmaps:
-        plot_color_gradients(cmap_category, cmap_list)
-
-    plt.show()
-
-
-def single_points(lats, lons, crd_path=data_path("nsrdb_v3_coords.csv")):
-    """Take a data frame of single lat/lon coordinates and convert to a list of
-    grid ids.
-
-    Parameters:
-        lats (list): A list containing the latitude coordinates of the desired
-                    points.
-        lons (list): A list containing the longitude coordinates of the desired
-                    points.
-        crd_path (str): The local path to the desired resource coordinate
-                        list.
-
-    Returns:
-        gids (list): A list of grid IDs.
-    """
-    # Create a second data frame with the new coordinates
-    points = pd.DataFrame({"lat": lats, "lon": lons})
-    points = to_geo(points)
-
-    # Filter the grid by the bounding box of the points
-    bbox = [min(lons), min(lats), max(lons), max(lats)]
-    grid = box_points(bbox, crd_path, gridids=False)
-    grid = to_geo(grid)
-
-    # Find which grid points are closest to each target points
-    # ...
+    return points
 
 
 def to_geo(df, lat="lat", lon="lon"):
@@ -542,66 +463,6 @@ def to_geo(df, lat="lat", lon="lon"):
     return gdf
 
 
-########## Construction Zone ###########
-class Check_Variables():
-    def __init__(self, files):
-        self.files = files
-        self._read_files()
-
-    def checkvars(self):
-        """Check a set of hdf5 model output files for potential anomalies.
-        
-        files = glob('/Users/twillia2/github/data/revruns/run_1/*')
-        """    
-        # For each data set in each file, check the values
-        flagged = {}
-        for hdf in tqdm(self.hdfs, position=0):
-            # Get the list of sub data sets in each file
-            subds = hdf.GetSubDatasets()
-            
-            # Will meta and time index mess this up?
-            # subds.remove("meta")
-            # subds.remove("time_index")
-
-            # For each of these sub data sets, get an info dictionary
-            for sub in subds:      
-                info_str = gdal.Info(sub[0], options=["-stats", "-json"])      
-                info = json.loads(info_str)
-                filename = info["files"][0]
-                desc = info["description"]
-                var = desc[desc.index("//") + 2: ]
-                max_data = info["bands"][0]["maximum"]
-                min_data = info["bands"][0]["minimum"]
-                max_threshold = VARIABLE_CHECKS[var][1]
-                min_threshold = VARIABLE_CHECKS[var][0]
-
-                # Check the thresholds. Could add more for mean and stdDev. 
-                if max_data > max_threshold:
-                    filename = os.path.basename(filename)
-                    flag = ":".join([filename, var])
-                    message = (" - maximum value is greater than " +
-                               max_threshold)
-                    flagged[flag] = message
-                if min_data < min_threshold:
-                    filename = os.path.basename(filename)
-                    flag = ":".join([filename, var])
-                    message = (" - minimum value is less than " +
-                               min_threshold)
-                    flagged[flag] = message
-
-        # Return the dictionary of messages
-        return flagged
-
-    def _read_files(self):
-        """Check and read all hdf files."""
-        try:
-            hdfs = [gdal.Open(file) for file in self.files]
-        except OSError:
-            print("Could not read all files, are these hdf5 formats?")
-        self.hdfs = hdfs
-########################################
-
-# Classes.
 class Config:
     """Sets reV model key values and generates configuration json files."""
     def __init__(self,
@@ -648,9 +509,10 @@ class Config:
         if excl_pos_lon:
             point_df = point_df[point_df["lon"] < 0]
 
+        # Save project points
         point_df.to_csv(self.points_path, index=False)
         if self.verbose:
-             print("POINTS" + " saved to '" + self.points_path + "'.")
+            print("POINTS" + " saved to '" + self.points_path + "'.")
 
         # If we are using more than one node, collect the outputs
         if params["nodes"] > 1:
@@ -814,27 +676,27 @@ class Config:
 
         # Create the dictionary from the current set of parameters
         config_dict = {
-              "cf_file": "PIPELINE",
-              "directories": {
+            "cf_file": "PIPELINE",
+            "directories": {
                 "logging_directory": params["logdir"],
                 "output_directory": params["outdir"]
-              },
-              "execution_control": {
+                },
+            "execution_control": {
                 "allocation": params["allocation"],
                 "feature": params["feature"],
                 "nodes": params["nodes"],
                 "option": params["option"],
                 "sites_per_worker": params["sites_per_worker"],
                 "walltime": params["walltime"]
-              },
-              "project_control": {
+                },
+            "project_control": {
                 "analysis_years": params["years"],
                 "logging_level": params["loglevel"],
                 "name": "econ",  # <------------------------------------------- How important is it to set this one?
                 "output_request": econ_outputs
-              },
-              "project_points": "./project_points/project_points.csv",
-              "sam_files": self.sam_files  # <--------------------------------- The example keeps the econ sam config separate from the gen config...is that necessary?
+                },
+            "project_points": "./project_points/project_points.csv",
+            "sam_files": self.sam_files  # <--------------------------------- The example keeps the econ sam config separate from the gen config...is that necessary?
             }
 
         # Save to json using jobname for file name
@@ -849,7 +711,7 @@ class Config:
             print("ECON config file opens.")
 
         # Return configuration dictionary
-        return config_dict      
+        return config_dict
 
 
 
