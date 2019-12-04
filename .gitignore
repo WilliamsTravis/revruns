@@ -2,6 +2,7 @@ build/
 dist/
 runs/directories
 samples/
+.idea/
 **/nohup.out
 **/.DS_Store
 *.egg-info
