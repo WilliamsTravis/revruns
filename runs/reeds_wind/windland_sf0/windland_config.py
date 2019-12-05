@@ -24,7 +24,6 @@ years = [y for y in range(2007, 2014)]
 cnfg.top_params["allocation"] = "rev"
 cnfg.top_params["feature"] = "--qos=high"
 cnfg.top_params["logdir"] = "./logs"
-cnfg.top_params["multi_year"] = True
 cnfg.top_params["nodes"] = 10
 cnfg.top_params["outdir"] = "./outputs"
 cnfg.top_params["outputs"] = ["cf_profile", "cf_mean", "lcoe_fcr", "ws_mean"]

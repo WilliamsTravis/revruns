@@ -162,6 +162,7 @@ TOP_PARAMS = {"allocation": "rev",
               "loglevel": "INFO",
               "memory": 90,
               "memory_utilization_limit": 0.4,
+              "multi_year": False,
               "nodes": 1,
               "option": "eagle",
               "outdir": "./",
@@ -515,14 +516,32 @@ class Config:
 
         # Separate parameters for space
         params = self.top_params
+        outputs = self.top_params["outputs"]
+        econ_outputs = [o for o in outputs if o in ECON_MODULES]
 
-        # If there is only one sam file, use its jobname for the points file
-        if len(self.sam_files) == 1:
+        # Configure the generation file
+        self._config_gen()
+
+        # If we are using more than one node, collect the outputs
+        if params["nodes"] > 1:
+            self._config_collect()
+
+        # If we are modeling certain economic modules, use pipeline and econ
+        if any(econ_outputs):
+            self._config_econ()
+            self._config_pipeline()
+
+        # If more than one jobs are needed, use batch and pipeline
+        if len(self.sam_files) > 1:
+            self._config_batch()
+            self._config_pipeline()
+            tag = params["set_tag"]
+        else:
             tag = list(self.sam_files.keys())[0]
 
-        # If there are more than one, we will assign the same tag to each
-        else:
-            tag = params["set_tag"]
+        # If we are combining yearly output
+        if len(params["years"]) > 1 and params["multi_year"]:
+            self._config_multiyear()
 
         # Create project points
         point_df = project_points(tag=tag,
@@ -537,25 +556,6 @@ class Config:
         point_df.to_csv(self.points_path, index=False)
         if self.verbose:
             print("POINTS" + " saved to '" + self.points_path + "'.")
-
-        # If we are using more than one node, collect the outputs
-        if params["nodes"] > 1:
-            self._config_collect()
-
-        # If we are modeling economic modules, use pipeline and econ
-        outputs = self.top_params["outputs"]
-        econ_outputs = [o for o in outputs if o in ECON_MODULES]
-        if any(econ_outputs):
-            self._config_econ()
-            self._config_pipeline()
-
-        # If more than one jobs are needed, use batch and pipeline
-        if len(self.sam_files) > 1:
-            self._config_batch()
-            self._config_pipeline()
-
-        # Configure the generation file
-        self._config_gen()
 
     def config_sam(self, jobname="job"):
         """Configure the System Advisor Model (SAM) portion of a reV model.
@@ -575,6 +575,7 @@ class Config:
             dict: A dictionary of default and user specified SAM parameters.
             file: A local json file
         """
+
         # Make sure there is a sam config folder
         if not os.path.exists("./sam_configs"):
             os.mkdir("./sam_configs")
@@ -614,6 +615,7 @@ class Config:
             Batching the arguments themselves will result in all combinations,
             which might not always be desired.
         """
+
         # Separate parameters for space
         params = self.top_params
 
@@ -648,6 +650,7 @@ class Config:
 
     def _config_collect(self):
         """If there are more than one node we need to combine outputs"""
+
         # Separate parameters for space
         params = self.top_params
 
@@ -691,6 +694,7 @@ class Config:
 
     def _config_econ(self):
         """Create a econ config file."""
+
         # Separate parameters for space
         params = self.top_params
 
@@ -737,10 +741,9 @@ class Config:
         # Return configuration dictionary
         return config_dict
 
-
-
     def _config_gen(self):
         """create a generation config file."""
+
         # Separate parameters for space
         params = self.top_params
 
@@ -790,8 +793,56 @@ class Config:
         # Return configuration dictionary
         return config_dict
 
+    def _config_multiyear(self):
+        """ If we want to get multiyear figures we need this."""
+
+        # Separate parameters for space
+        params = self.top_params
+
+        # Create the configuration dictionary
+        config_dict = {
+            "directories": {
+                "logging_directory": params["logdir"],
+                "output_directory":  params["outdir"]
+            },
+            "execution_control": {
+                "allocation":  params["allocation"],
+                "feature": params["allocation"],
+                "memory": params["memory"],
+                "option": params["option"],
+                "walltime": params["walltime"]
+            },
+            "groups": {
+                "none": {
+                    "dsets": params["outputs"],
+                    "source_dir": params["outdir"],
+                    "source_files": "PIPELINE",
+                    "source_prefix": ""
+                }
+              },
+              "project_control": {
+                "logging_level": params["loglevel"]
+              }
+        }
+
+        # Save to json using jobname for file name
+        with open("./config_multi-year.json", "w") as file:
+            file.write(json.dumps(config_dict, indent=4))
+        if self.verbose:
+            print("Multi-year config file saved to " +
+                  "'./config_multi-year.json'.")
+
+        # Check that the json as written correctly
+        check_config("./config_multi-year.json")
+        if self.verbose:
+            print("MULTI-YEAR config file opens.")
+
+        # Return configuration dictionary
+        return config_dict
+
     def _config_pipeline(self):
-        """ What is the pipeline anyways? What conditions require it?"""
+        """ If we are trying to run multiple modules at once we need this."""
+
         # Separate parameters for space
         params = self.top_params
 
