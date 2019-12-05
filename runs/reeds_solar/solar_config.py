@@ -33,7 +33,7 @@ cnfg.top_params["set_tag"] = "nsrdb"
 cnfg.top_params["walltime"] = 4.0
 cnfg.top_params["years"] = years
 cnfg.points = points
-cnfg.sam_params["dc_ac_ratio"] = 1.1
+cnfg.sam_params["dc_ac_ratio"] = 1.3
 cnfg.sam_params["system_capacity"] = 20000
 
 # SAM Config #1

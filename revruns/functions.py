@@ -20,6 +20,13 @@ ssl._create_default_https_context = ssl._create_unverified_context
 # For package data
 ROOT = os.path.abspath(os.path.dirname(__file__))
 
+# For filtering COUNS
+CONUS_FIPS = ['54', '12', '17', '27', '24', '44', '16', '33', '37', '50', '09',
+              '10', '35', '06', '34', '55', '41', '31', '42', '53', '22', '13',
+              '01', '49', '39', '48', '08', '45', '40', '47', '56', '38', '21',
+              '23', '36', '32', '26', '05', '28', '29', '30', '20', '18', '46',
+              '25', '51', '11', '19', '04']
+
 # For checking if a requested output requires economic treatment.
 ECON_MODULES = ["flip_actual_irr",
                 # "lcoe_fcr",  # <---------------------------------------------------------------------------------------- This might not actually need the econ module
@@ -410,6 +417,7 @@ def conus_points(resource):
     if not os.path.exists(data_path(resource + "_conus_coords.csv")):
         shp = gpd.read_file("https://www2.census.gov/geo/tiger/TIGER2017/" +
                             "STATE/tl_2017_us_state.zip")
+        shp = shp[shp["STATEFP"].isin(CONUS_FIPS)]
         points = shape_points(shp, resource)
         points.to_csv(data_path(resource + "_conus_coords.csv"), index = False)
     else:
@@ -508,8 +516,16 @@ class Config:
         # Separate parameters for space
         params = self.top_params
 
+        # If there is only one sam file, use its jobname for the points file
+        if len(self.sam_files) == 1:
+            tag = list(self.sam_files.keys())[0]
+
+        # If there are more than one, we will assign the same tag to each
+        else:
+            tag = params["set_tag"]
+
         # Create project points
-        point_df = project_points(tag=params["set_tag"],
+        point_df = project_points(tag=tag,
                                   resource=params["resource"],
                                   points=self.points)
 
