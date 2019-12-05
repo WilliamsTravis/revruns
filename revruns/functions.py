@@ -22,7 +22,7 @@ ROOT = os.path.abspath(os.path.dirname(__file__))
 
 # For checking if a requested output requires economic treatment.
 ECON_MODULES = ["flip_actual_irr",
-                "lcoe_fcr",  # <---------------------------------------------------------------------------------------- This might not actually need the econ module
+                # "lcoe_fcr",  # <---------------------------------------------------------------------------------------- This might not actually need the econ module
                 "lcoe_nom",
                 "lcoe_real",
                 "ppa_price",
@@ -91,14 +91,20 @@ TARGET_CRS = ["+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ",
 # Default SAM model parameters for pvwattsv5.
 SOLAR_SAM_PARAMS = {"azimuth": 180,
                     "array_type": 0,
+                    "capital_cost": 39767200,
+                    "clearsky": False,
                     "compute_module": "pvwattsv5",
                     "dc_ac_ratio": 1.1,
+                    "fixed_charge_rate": 0.096,
+                    "fixed_operating_cost": 260000,
                     "gcr": 0.4,
                     "inv_eff": 96,
-                    "losses": 14.0757,
+                    "losses": 14.07566,
                     "module_type": 0,
-                    "system_capacity": 5,
-                    "tilt": 20}
+                    "system_capacity": 5000,
+                    "tilt": "latitude",
+                    "variable_operating_cost": 0
+                    }
 
 # Default Wind Turbine Powercurve Powerout (until a better way shows up).
 DEFAULT_WTPO = np.zeros(161)
@@ -192,6 +198,7 @@ def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv")):
 
     return crds
 
+
 def check_config(config_file):
     """Check that a json file loads without error.
 
@@ -205,7 +212,7 @@ def check_config(config_file):
                '"{}"'.format(error, config_file))
         raise JSONError(msg)
 
-#
+
 #def compare_profiles(datasets,
 #                     dataset="cf_profile",
 #                     units="$\mathregular{m^{-2}}$",
@@ -292,7 +299,7 @@ def check_config(config_file):
 #        path = os.path.join(savefolder, file)
 #        fig.savefig(path, bbox_inches="tight", dpi=dpi)
 #        plt.close(fig)
-#
+
 
 
 def extract_arrays(file):
@@ -396,7 +403,8 @@ def project_points(tag, resource="nsrdb_v3", points=1000):
 
 def conus_points(resource):
     """It takes so long to get all the CONUS points, so until I've fixed
-    shape_points, I'm going to store these in the data folder."""
+    shape_points, I'm going to store these in the data folder.
+    """
 
     # If it isn't saved yet, retrieve and save
     if not os.path.exists(data_path(resource + "_conus_coords.csv")):
