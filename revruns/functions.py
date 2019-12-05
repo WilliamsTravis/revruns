@@ -522,6 +522,7 @@ class Config:
         # If we are using more than one node, collect the outputs
         if params["nodes"] > 1:
             self._config_collect()
+            self._config_pipeline()
 
         # If we are modeling certain economic modules, use pipeline and econ
         if any(econ_outputs):

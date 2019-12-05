@@ -108,7 +108,7 @@ def single_info(file):
     for ds in data_sets.keys():
         values = data_sets[ds]
         if ds in VARIABLE_CHECKS:
-            max_threshold = VARIABLE_CHECKS[ds][1]  # Figure out the thresholds for these
+            max_threshold = VARIABLE_CHECKS[ds][1]  # <------------------------ Figure out the thresholds for these
             min_threshold = VARIABLE_CHECKS[ds][0]
         else:
             max_threshold = np.nan
