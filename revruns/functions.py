@@ -127,8 +127,8 @@ DEFAULT_WTPO = list(DEFAULT_WTPO)
 WIND_SAM_PARAMS = {
         "adjust:constant": 0.0,
         "capital_cost" : 245000000,
-	    "en_low_temp_cutoff": "placeholder",
-        "en_icing_cutoff": "placeholder",
+#	    "en_low_temp_cutoff": "placeholder",  # what are these defaults?
+#        "en_icing_cutoff": "placeholder",
         "fixed_operating_cost" : 7790000,
         "fixed_charge_rate": 0.052,
         "icing_cutoff_temp": 0.0,
@@ -519,9 +519,6 @@ class Config:
         outputs = self.top_params["outputs"]
         econ_outputs = [o for o in outputs if o in ECON_MODULES]
 
-        # Configure the generation file
-        self._config_gen()
-
         # If we are using more than one node, collect the outputs
         if params["nodes"] > 1:
             self._config_collect()
@@ -542,6 +539,9 @@ class Config:
         # If we are combining yearly output
         if len(params["years"]) > 1 and params["multi_year"]:
             self._config_multiyear()
+
+        # Configure the generation file
+        self._config_gen()
 
         # Create project points
         point_df = project_points(tag=tag,
