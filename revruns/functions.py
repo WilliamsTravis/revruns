@@ -602,6 +602,21 @@ class Config:
         # Return configuration dictionary
         return config_dict
 
+#    def _config_aggregation(self):
+#        """If aggregating... """
+#
+#        # Separate parameters for space
+#        params = self.top_params
+#
+#        # Create configuration dictionary
+#        config_dict = {}
+#
+#        # Write json to file
+#        self._write_config(config_dict, "./config_aggregation.json")
+#
+#        # Return configuration dictionary
+#        return config_dict
+
 
     def _config_batch(self):
         """If running mutliple technologies, this configures a batch run.
@@ -638,15 +653,10 @@ class Config:
         }
 
         # Write json to file
-        with open("./config_batch.json", "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
-        if self.verbose:
-            print("BATCH config file saved to './config_batch.json'.")
+        self._write_config(config_dict, "./config_batch.json")
 
-        # Check that the json as written correctly
-        check_config("./config_batch.json")
-        if self.verbose:
-            print("BATCH config file opens.")
+        # Return configuration dictionary
+        return config_dict
 
     def _config_collect(self):
         """If there are more than one node we need to combine outputs"""
@@ -679,15 +689,7 @@ class Config:
         }
 
         # Save to json using jobname for file name
-        with open("./config_collect.json", "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
-        if self.verbose:
-            print("COLLECT config file saved to './config_collect.json'.")
-
-        # Check that the json as written correctly
-        check_config("./config_collect.json")
-        if self.verbose:
-            print("COLLECT config file opens.")
+        self._write_config(config_dict, "./config_collect.json")
 
         # Return configuration dictionary
         return config_dict
@@ -728,15 +730,7 @@ class Config:
             }
 
         # Save to json using jobname for file name
-        with open("./config_econ.json", "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
-        if self.verbose:
-            print("ECON config file saved to './config_econ.json'.")
-
-        # Check that the json as written correctly
-        check_config("./config_econ.json")
-        if self.verbose:
-            print("ECON config file opens.")
+        self._write_config(config_dict, "./config_econ.json")
 
         # Return configuration dictionary
         return config_dict
@@ -780,15 +774,7 @@ class Config:
         }
 
         # Save to json using jobname for file name
-        with open("./config_gen.json", "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
-        if self.verbose:
-            print("GEN config file saved to './config_gen.json'.")
-
-        # Check that the json as written correctly
-        check_config("./config_gen.json")
-        if self.verbose:
-            print("GEN config file opens.")
+        self._write_config(config_dict, "./config_gen.json")
 
         # Return configuration dictionary
         return config_dict
@@ -826,16 +812,7 @@ class Config:
         }
 
         # Save to json using jobname for file name
-        with open("./config_multi-year.json", "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
-        if self.verbose:
-            print("Multi-year config file saved to " +
-                  "'./config_multi-year.json'.")
-
-        # Check that the json as written correctly
-        check_config("./config_multi-year.json")
-        if self.verbose:
-            print("MULTI-YEAR config file opens.")
+        self._write_config(config_dict, "./config_multi-year.json")
 
         # Return configuration dictionary
         return config_dict
@@ -865,19 +842,48 @@ class Config:
         if any(econ_outputs):
             config_dict["pipeline"].append({"econ": "./config_econ.json"})
 
-        # Collect probably has to be last, is this run in order?
-        config_dict["pipeline"].append({"collect": "./config_collect.json"})
+        # If there are multiple nodes, collect. Is this run in order?
+        if self.top_params["nodes"] > 1:
+            config_dict["pipeline"].append(
+                    {"collect": "./config_collect.json"})
+
+        # If multiyear is on
+        if self.top_params["multi_year"] and len(self.top_params["years"]) > 1:
+            config_dict["pipeline"].append(
+                    {"multi-year": "./config_multi-year.json"})
 
         # Write json to file
-        with open("./config_pipeline.json", "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
-        if self.verbose:
-            print("PIPELINE config file saved to './config_pipeline.json'.")
+        self._write_config(config_dict, "./config_pipeline.json")
 
-        # Check that the json as written correctly
-        check_config("./config_pipeline.json")
-        if self.verbose:
-            print("PIPELINE config file opens.")
+#    def _config_rep_profiles(self):
+#        """If generating representative profiles... """
+#
+#        # Separate parameters for space
+#        params = self.top_params
+#
+#        # Create configuration dictionary
+#        config_dict = {}
+#
+#        # Write json to file
+#        self._write_config(config_dict, "./config_rep-profiles.json")
+#
+#        # Return configuration dictionary
+#        return config_dict
+
+#    def _config_supply_curve(self):
+#        """If generating supply curves... """
+#
+#        # Separate parameters for space
+#        params = self.top_params
+#
+#        # Create configuration dictionary
+#        config_dict = {}
+#
+#        # Write json to file
+#        self._write_config(config_dict, "./config_supply-curve.json")
+#
+#        # Return configuration dictionary
+#        return config_dict
 
     def _set_points_path(self):
         """Set the path name for the points file."""
@@ -891,3 +897,19 @@ class Config:
                 self.years = range(1998, 2019)
             else:
                 self.years = range(2007, 2014)
+
+    def _write_config(self, config_dict, path):
+        """ Write a configuration dictionary to a json file."""
+        # what type of configuration is this?
+        module = path.split("_")[1].replace(".json", "").upper()
+
+        # Write json to file
+        with open(path, "w") as file:
+            file.write(json.dumps(config_dict, indent=4))
+        if self.verbose:
+            print("BATCH config file saved to " + path + ".")
+
+        # Check that the json as written correctly
+        check_config(path)
+        if self.verbose:
+            print(module + " config file opens.")
