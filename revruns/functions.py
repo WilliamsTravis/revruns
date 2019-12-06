@@ -138,8 +138,8 @@ WIND_SAM_PARAMS = {
         "variable_operating_cost": 0,
         "wind_farm_losses_percent": 12.8,
         "wind_farm_wake_model": 0,
-        "wind_farm_xCoordinates": None, # <------------------------------------ Don't we set these in the points file?
-        "wind_farm_yCoordinates": None,
+#        "wind_farm_xCoordinates": None, # <------------------------------------ Don't we set these in the points file?
+#        "wind_farm_yCoordinates": None,
         "wind_resource_model_choice": 0,
         "wind_resource_shear": 0.140,
         "wind_resource_turbulence_coeff": 0.10,
