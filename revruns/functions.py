@@ -39,7 +39,9 @@ ECON_MODULES = ["flip_actual_irr",
 VARIABLE_CHECKS = {
         "poa": (0, 1000),  # 1,000 MW m-2
         "cf_mean": (0, 240),  # 24 %
-        "cf_profile": (0, 990)  # 99 %
+        "cf_profile": (0, 990),  # 99 %
+        "ghi_mean": (0, 1000),
+        "lcoe_fcr": (0, 1000)
         }
 
 # Resource data set dimensions. Just the number of grid points for the moment.
