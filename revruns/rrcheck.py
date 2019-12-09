@@ -48,53 +48,58 @@ def single_info(file):
     subds = pointer.GetSubDatasets()
 
     # If there was only one detectable data set, we'll need to use this instead
-    if len(subds) == 0:
-        subds = [(pointer.GetDescription(),)]
+    if len(subds) > 0:
+        if len(subds) == 1:
+            subds = [(pointer.GetDescription(),)]
 
-    # For each of these sub data sets, get an info dictionary
-    stat_dicts = []
-    for sub in subds:
+        # For each of these sub data sets, get an info dictionary
+        stat_dicts = []
+        for sub in subds:
 
-        # Turn off most options to try and speed this up
-        info_str = gdal.Info(sub[0],
-                             stats=True,
-                             showFileList=True,
-                             format="json",
-                             listMDD=False,
-                             approxStats=False,
-                             deserialize=False,
-                             computeMinMax=False,
-                             reportHistograms=False,
-                             reportProj4=False,
-                             computeChecksum=False,
-                             showGCPs=False,
-                             showMetadata=False,
-                             showRAT=False,
-                             showColorTable=False,
-                             allMetadata=False,
-                             extraMDDomains=None)
+            # Turn off most options to try and speed this up
+            info_str = gdal.Info(sub[0],
+                                 stats=True,
+                                 showFileList=True,
+                                 format="json",
+                                 listMDD=False,
+                                 approxStats=False,
+                                 deserialize=False,
+                                 computeMinMax=False,
+                                 reportHistograms=False,
+                                 reportProj4=False,
+                                 computeChecksum=False,
+                                 showGCPs=False,
+                                 showMetadata=False,
+                                 showRAT=False,
+                                 showColorTable=False,
+                                 allMetadata=False,
+                                 extraMDDomains=None)
 
-        # Read this as a dictionary
-        info = json.loads(info_str)
-        desc = info["description"]
-        ds = desc[desc.index("//") + 2: ]  # data set name
-        stats = info["bands"][0]
-        max_threshold = VARIABLE_CHECKS[ds][1]
-        min_threshold = VARIABLE_CHECKS[ds][0]
+            # Read this as a dictionary
+            info = json.loads(info_str)
+            desc = info["description"]
+            ds = desc[desc.index("//") + 2: ]  # data set name
+            stats = info["bands"][0]
+            max_threshold = VARIABLE_CHECKS[ds][1]
+            min_threshold = VARIABLE_CHECKS[ds][0]
 
-        # Return just these elements
-        stat_dict = {"file": file,
-                     "data_set": ds,
-                     "min": stats["minimum"],
-                     "max": stats["maximum"],
-                     "mean": stats["mean"],
-                     "std": stats["stdDev"],
-                     "min_threshold": min_threshold,
-                     "max_threshold": max_threshold}
-        stat_dicts.append(stat_dict)
+            # Return just these elements
+            stat_dict = {"file": file,
+                         "data_set": ds,
+                         "min": stats["minimum"],
+                         "max": stats["maximum"],
+                         "mean": stats["mean"],
+                         "std": stats["stdDev"],
+                         "min_threshold": min_threshold,
+                         "max_threshold": max_threshold}
+            stat_dicts.append(stat_dict)
 
-    # To better account for completed data sets, make a data frame
-    gdal_data = pd.DataFrame(stat_dicts)
+        # To better account for completed data sets, make a data frame
+        gdal_data = pd.DataFrame(stat_dicts)
+        gdal_datasets = list(gdal_data["data_set"].values)
+
+    else:
+        gdal_datasets = []
 
     # H5py for one-dimensional data sets
     with h5py.File(file) as data_set:
@@ -102,7 +107,7 @@ def single_info(file):
         keys = [k for k in keys if k not in ["meta", "time_index"]]
         scale_factors = {k: data_set[k].attrs["scale_factor"] for k in keys}
         units = {k: data_set[k].attrs["units"] for k in keys}
-        keys = [k for k in keys if k not in gdal_data["data_set"].values]
+        keys = [k for k in keys if k not in gdal_datasets]
         data_sets = {k: data_set[k][:] for k in keys}
         meta = data_set["meta"][:]
 
@@ -133,8 +138,9 @@ def single_info(file):
     # Make another data frame with the 1-D data set statistics
     hdf_data = pd.DataFrame(stat_dicts)
 
-    # Concatenate the two together
-    summary_df = pd.concat([gdal_data, hdf_data]).reset_index(drop=True)
+    # Concatenate the two together if needed
+    if len(subds) > 0:
+        summary_df = pd.concat([gdal_data, hdf_data]).reset_index(drop=True)
 
     # Add the scale factors and units
     summary_df["scale_factor"] = summary_df["data_set"].map(scale_factors)
@@ -143,13 +149,16 @@ def single_info(file):
     # Now let's get a clue to our location
     meta_df = pd.DataFrame(meta)
     meta_df["urban"] = meta_df["urban"].apply(lambda x: x.decode("utf-8"))
+    meta_df["country"] = meta_df["country"].apply(lambda x: x.decode("utf-8"))
     max_pop = meta_df["population"].max()
-    city = meta_df["urban"][meta_df["population"] == max_pop].values[0]
+    city = meta_df[["urban", "country"]][meta_df["population"] == max_pop]
+    city = ", ".join(city.values[0])
     summary_df["largest_city"] = city
 
     # Lets also get overall min and max
     group = summary_df.groupby("data_set")
     summary_df["overall_min"] = group["min"].transform("min")
+    summary_df["overall_max"] = group["max"].transform("max")
 
     return summary_df
 
@@ -175,7 +184,7 @@ def main(directory, savepath):
     # Create a multiprocessin pool
     pool = mp.Pool(ncores - 1)
 
-    # Try to dl in parallel with progress bar
+    # Try to dl in parallel with progress bar - - Attribute Error
     info_dfs = []
     for info_df in tqdm(pool.imap(single_info, files),
                         total=len(files), position=0,
