@@ -33,13 +33,16 @@ def gdal_info(file):
     data sets in hdf files.
     """
     # GDAL For multidimensional data sets
-    pointer = gdal.Open(file)
+    try:
+        pointer = gdal.Open(file)
+    except:
+        print("Broken File: " + file)
 
     # Get the list of sub data sets in each file
     subds = pointer.GetSubDatasets()
 
     # If there was only one detectable data set, we'll need to use this instead
-    if len(subds) == 1:
+    if len(subds) == 0:
         subds = [(pointer.GetDescription(),)]
 
     # For each of these sub data sets, get an info dictionary
@@ -121,7 +124,7 @@ def single_info(file):
         units = {k: data_set[k].attrs["units"] for k in keys}
         keys = [k for k in keys if k not in gdal_datasets]
         data_sets = {k: data_set[k][:] for k in keys}
-        meta = data_set["meta"][:]
+#        meta = data_set["meta"][:]
 
     # Now we have to calculate these "manually" (lol)
     stat_dicts = []
@@ -161,13 +164,13 @@ def single_info(file):
     summary_df["units"] = summary_df["data_set"].map(units)
 
     # Now let's get a clue to our location
-    meta_df = pd.DataFrame(meta)
-    meta_df["urban"] = meta_df["urban"].apply(lambda x: x.decode("utf-8"))
-    meta_df["country"] = meta_df["country"].apply(lambda x: x.decode("utf-8"))
-    max_pop = meta_df["population"].max()
-    city = meta_df[["urban", "country"]][meta_df["population"] == max_pop]
-    city = ", ".join(city.values[0])
-    summary_df["largest_city"] = city
+#    meta_df = pd.DataFrame(meta)
+#    meta_df["state"] = meta_df["state"].apply(lambda x: x.decode("utf-8"))
+#    meta_df["country"] = meta_df["country"].apply(lambda x: x.decode("utf-8"))
+#    max_pop = meta_df["population"].max()
+#    state = meta_df[["urban", "country"]][meta_df["population"] == max_pop]
+#    state = ", ".join(state.values[0])
+#    summary_df["largest_state"] = state
 
     # Lets also get overall min and max
     group = summary_df.groupby("data_set")
