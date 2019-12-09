@@ -9,8 +9,7 @@ Things to do:
     1) Check that the files opens to begin with...using either h5py or gdal.
     2) If a file fails to open, save the error in a field in the data frame.
     3) Suggest uniform meta data for all of our resource data sets.
-
-
+    4) Make it work better.
 
 Created on Mon Nov 25 08:52:00 2019
 
@@ -45,8 +44,9 @@ def gdal_info(file):
     # GDAL For multidimensional data sets
     try:
         pointer = gdal.Open(file)
-    except RuntimeError:
-        # Create an error entry for the data frame...?
+    except RuntimeError as e:
+        # We could handle this some how
+        print("Broken file")
         raise
 
     # Get the list of sub data sets in each file
@@ -107,22 +107,12 @@ def gdal_info(file):
 def single_info(file):
     """Return summary statistics of all data sets in a single hdf5 file.
 
-    So, GDAL handles the multi-dimesional data sets fairly quickly, but doesn't
+    So, GDAL handles the multi-dimensional data sets fairly quickly, but doesn't
     even detect the singular dimensional data sets. Actually, it doesn't always
-    detect the multidimensional datasets!
-
-    For the 1-D data sets, we could probably just use 5py, but definitely not
-    for the 2-D ones. However, if it is inconsistently detecting even these,
-    what to do?
-
-    First, see if this has happened to anyone else...
-
+    detect the multidimensional data sets!
     """
     # Get the summary statistics data frame for multidimensional data sets
-    try:
-        gdal_data = gdal_info(file)
-    except:
-        raise
+    gdal_data, health = gdal_info(file)
 
     # It might be empty
     if gdal_data.shape[0] > 0:
@@ -131,6 +121,7 @@ def single_info(file):
         gdal_datasets = []
 
     # H5py for one-dimensional data sets
+    if health == "good":
     with h5py.File(file) as data_set:
         keys = data_set.keys()
         keys = [k for k in keys if k not in ["meta", "time_index"]]
@@ -203,6 +194,9 @@ def single_info(file):
     group = summary_df.groupby("data_set")
     summary_df["overall_min"] = group["min"].transform("min")
     summary_df["overall_max"] = group["max"].transform("max")
+
+    # Finally, in case the file is broken, add a flag
+    summary_df["file_health"] = health
 
     return summary_df
 
