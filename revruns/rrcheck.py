@@ -124,7 +124,7 @@ def single_info(file):
         units = {k: data_set[k].attrs["units"] for k in keys}
         keys = [k for k in keys if k not in gdal_datasets]
         data_sets = {k: data_set[k][:] for k in keys}
-#        meta = data_set["meta"][:]
+        meta = data_set["meta"][:]
 
     # Now we have to calculate these "manually" (lol)
     stat_dicts = []
@@ -164,13 +164,26 @@ def single_info(file):
     summary_df["units"] = summary_df["data_set"].map(units)
 
     # Now let's get a clue to our location
-#    meta_df = pd.DataFrame(meta)
-#    meta_df["state"] = meta_df["state"].apply(lambda x: x.decode("utf-8"))
-#    meta_df["country"] = meta_df["country"].apply(lambda x: x.decode("utf-8"))
-#    max_pop = meta_df["population"].max()
-#    state = meta_df[["urban", "country"]][meta_df["population"] == max_pop]
-#    state = ", ".join(state.values[0])
-#    summary_df["largest_state"] = state
+    meta_df = pd.DataFrame(meta)
+    meta_df["reV_tech"] = meta_df["reV_tech"].apply(
+            lambda x: x.decode("utf-8"))
+
+
+    # Different meta data between wind and solar, no urban or pop in wind
+    if "wind" in meta_df["reV_tech"].unique():
+        meta_df["county"] = meta_df["county"].apply(lambda x: x.decode("utf-8"))
+        meta_df["country"] = meta_df["country"].apply(lambda x: x.decode("utf-8"))
+        meta_df["locale"] = meta_df["county"] +", " + meta_df["country"]
+        locale = meta_df["locale"][~pd.isnull(meta_df["county"])].iloc[0]
+        summary_df["sample_location"] = locale
+    else:
+        meta_df["urban"] = meta_df["urban"].apply(lambda x: x.decode("utf-8"))
+        meta_df["country"] = meta_df["country"].apply(
+                lambda x: x.decode("utf-8"))
+        max_pop = meta_df["population"].max()
+        city = meta_df[["urban", "country"]][meta_df["population"] == max_pop]
+        city = ", ".join(city.values[0])
+        summary_df["largest_city"] = city
 
     # Lets also get overall min and max
     group = summary_df.groupby("data_set")
