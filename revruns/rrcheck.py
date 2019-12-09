@@ -27,6 +27,69 @@ DIR_HELP = "The directory from which to read the hdf5 files (Defaults to '.')."
 SAVE_HELP = ("The path to use for the csv output file (defaults to " +
              "'./checkvars.csv').")
 
+def gdal_info(file):
+    """ gdalinfo is able to retrieve summary statistics of multidimensional
+    data sets quickly enough, but it doesn't even detect single dimensional
+    data sets in hdf files.
+    """
+    # GDAL For multidimensional data sets
+    pointer = gdal.Open(file)
+
+    # Get the list of sub data sets in each file
+    subds = pointer.GetSubDatasets()
+
+    # If there was only one detectable data set, we'll need to use this instead
+    if len(subds) == 1:
+        subds = [(pointer.GetDescription(),)]
+
+    # For each of these sub data sets, get an info dictionary
+    stat_dicts = []
+    for sub in subds:
+
+        # Turn off most options to try and speed this up
+        info_str = gdal.Info(sub[0],
+                             stats=True,
+                             showFileList=True,
+                             format="json",
+                             listMDD=False,
+                             approxStats=False,
+                             deserialize=False,
+                             computeMinMax=False,
+                             reportHistograms=False,
+                             reportProj4=False,
+                             computeChecksum=False,
+                             showGCPs=False,
+                             showMetadata=False,
+                             showRAT=False,
+                             showColorTable=False,
+                             allMetadata=False,
+                             extraMDDomains=None)
+
+        # Read this as a dictionary
+        info = json.loads(info_str)
+        desc = info["description"]
+        ds = desc[desc.index("//") + 2: ]  # data set name
+        stats = info["bands"][0]
+        max_threshold = VARIABLE_CHECKS[ds][1]
+        min_threshold = VARIABLE_CHECKS[ds][0]
+
+        # Return just these elements
+        stat_dict = {"file": file,
+                     "data_set": ds,
+                     "min": stats["minimum"],
+                     "max": stats["maximum"],
+                     "mean": stats["mean"],
+                     "std": stats["stdDev"],
+                     "min_threshold": min_threshold,
+                     "max_threshold": max_threshold}
+        stat_dicts.append(stat_dict)
+
+    # To better account for completed data sets, make a data frame
+    gdal_data = pd.DataFrame(stat_dicts)
+
+    return gdal_data
+
+
 def single_info(file):
     """Return summary statistics of all data sets in a single hdf5 file.
 
@@ -41,63 +104,12 @@ def single_info(file):
     First, see if this has happened to anyone else...
 
     """
-    # GDAL For multidimensional data sets
-    pointer = gdal.Open(file)
+    # Get the summary statistics data frame for multidimensional data sets
+    gdal_data = gdal_info(file)
 
-    # Get the list of sub data sets in each file
-    subds = pointer.GetSubDatasets()
-
-    # If there was only one detectable data set, we'll need to use this instead
-    if len(subds) > 0:
-        if len(subds) == 1:
-            subds = [(pointer.GetDescription(),)]
-
-        # For each of these sub data sets, get an info dictionary
-        stat_dicts = []
-        for sub in subds:
-
-            # Turn off most options to try and speed this up
-            info_str = gdal.Info(sub[0],
-                                 stats=True,
-                                 showFileList=True,
-                                 format="json",
-                                 listMDD=False,
-                                 approxStats=False,
-                                 deserialize=False,
-                                 computeMinMax=False,
-                                 reportHistograms=False,
-                                 reportProj4=False,
-                                 computeChecksum=False,
-                                 showGCPs=False,
-                                 showMetadata=False,
-                                 showRAT=False,
-                                 showColorTable=False,
-                                 allMetadata=False,
-                                 extraMDDomains=None)
-
-            # Read this as a dictionary
-            info = json.loads(info_str)
-            desc = info["description"]
-            ds = desc[desc.index("//") + 2: ]  # data set name
-            stats = info["bands"][0]
-            max_threshold = VARIABLE_CHECKS[ds][1]
-            min_threshold = VARIABLE_CHECKS[ds][0]
-
-            # Return just these elements
-            stat_dict = {"file": file,
-                         "data_set": ds,
-                         "min": stats["minimum"],
-                         "max": stats["maximum"],
-                         "mean": stats["mean"],
-                         "std": stats["stdDev"],
-                         "min_threshold": min_threshold,
-                         "max_threshold": max_threshold}
-            stat_dicts.append(stat_dict)
-
-        # To better account for completed data sets, make a data frame
-        gdal_data = pd.DataFrame(stat_dicts)
+    # It might be empty
+    if gdal_data.shape[0] > 0:
         gdal_datasets = list(gdal_data["data_set"].values)
-
     else:
         gdal_datasets = []
 
@@ -139,8 +151,10 @@ def single_info(file):
     hdf_data = pd.DataFrame(stat_dicts)
 
     # Concatenate the two together if needed
-    if len(subds) > 0:
+    if gdal_data.shape[0] > 0:
         summary_df = pd.concat([gdal_data, hdf_data]).reset_index(drop=True)
+    else:
+        summary_df = hdf_data
 
     # Add the scale factors and units
     summary_df["scale_factor"] = summary_df["data_set"].map(scale_factors)
