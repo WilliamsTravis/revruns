@@ -3,7 +3,14 @@
 A CLI to quickly check if HDF files have potentially anomalous values. This
 will check all files with an 'h5' extension in the current directory.
 The checks, so far, only include whether the minimum and maximum values are
-within the ranges defined in the "VARIABLE_CHECKS" object.
+within the ranges defined in the "VARIABLE_CHECKS" object.'
+
+Things to do:
+    1) Check that the files opens to begin with...using either h5py or gdal.
+    2) If a file fails to open, save the error in a field in the data frame.
+    3) Suggest uniform meta data for all of our resource data sets.
+
+
 
 Created on Mon Nov 25 08:52:00 2019
 
@@ -22,6 +29,9 @@ from osgeo import gdal
 from revruns import VARIABLE_CHECKS
 from tqdm import tqdm
 
+# Use gdal to catch corrupted files
+gdal.UseExceptions()
+
 # Help printouts
 DIR_HELP = "The directory from which to read the hdf5 files (Defaults to '.')."
 SAVE_HELP = ("The path to use for the csv output file (defaults to " +
@@ -33,7 +43,11 @@ def gdal_info(file):
     data sets in hdf files.
     """
     # GDAL For multidimensional data sets
-    pointer = gdal.Open(file)
+    try:
+        pointer = gdal.Open(file)
+    except RuntimeError:
+        # Create an error entry for the data frame...?
+        raise
 
     # Get the list of sub data sets in each file
     subds = pointer.GetSubDatasets()
@@ -108,7 +122,7 @@ def single_info(file):
     try:
         gdal_data = gdal_info(file)
     except:
-        print("Broken File: " + file) # For any reason, I'd like to know which file
+        raise
 
     # It might be empty
     if gdal_data.shape[0] > 0:

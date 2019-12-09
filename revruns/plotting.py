@@ -6,6 +6,7 @@ import matplotlib
 matplotlib.get_backend()
 matplotlib.use('Agg')
 
+
 # Trying to use pycharm plotting functionality through a console in eagle
 r = np.random.normal(100, 40, 10000)
 t = r.reshape((100, 100))
