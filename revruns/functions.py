@@ -127,8 +127,6 @@ DEFAULT_WTPO = list(DEFAULT_WTPO)
 WIND_SAM_PARAMS = {
         "adjust:constant": 0.0,
         "capital_cost" : 245000000,
-#	    "en_low_temp_cutoff": "placeholder",  # what are these defaults?
-#        "en_icing_cutoff": "placeholder",
         "fixed_operating_cost" : 7790000,
         "fixed_charge_rate": 0.052,
         "icing_cutoff_temp": 0.0,
@@ -138,8 +136,8 @@ WIND_SAM_PARAMS = {
         "variable_operating_cost": 0,
         "wind_farm_losses_percent": 12.8,
         "wind_farm_wake_model": 0,
-#        "wind_farm_xCoordinates": None, # <------------------------------------ Don't we set these in the points file?
-#        "wind_farm_yCoordinates": None,
+        "wind_farm_xCoordinates": [0], # <------------------------------------- Don't we set these in the points file?
+        "wind_farm_yCoordinates": [0],
         "wind_resource_model_choice": 0,
         "wind_resource_shear": 0.140,
         "wind_resource_turbulence_coeff": 0.10,
@@ -150,7 +148,7 @@ WIND_SAM_PARAMS = {
         "wind_turbine_rotor_diameter": 167.0
 }
 
-# All default SAM model parameters.  # <-------------------------------------------------- Add as more models are discovered
+# All default SAM model parameters.  # <--------------------------------------- Add as more models are discovered
 SAM_PARAMS = {"pv": SOLAR_SAM_PARAMS,
               "wind": WIND_SAM_PARAMS}
 
