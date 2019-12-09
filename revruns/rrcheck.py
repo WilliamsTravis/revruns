@@ -33,10 +33,7 @@ def gdal_info(file):
     data sets in hdf files.
     """
     # GDAL For multidimensional data sets
-    try:
-        pointer = gdal.Open(file)
-    except:
-        print("Broken File: " + file)
+    pointer = gdal.Open(file)
 
     # Get the list of sub data sets in each file
     subds = pointer.GetSubDatasets()
@@ -108,7 +105,10 @@ def single_info(file):
 
     """
     # Get the summary statistics data frame for multidimensional data sets
-    gdal_data = gdal_info(file)
+    try:
+        gdal_data = gdal_info(file)
+    except:
+        print("Broken File: " + file) # For any reason, I'd like to know which file
 
     # It might be empty
     if gdal_data.shape[0] > 0:
