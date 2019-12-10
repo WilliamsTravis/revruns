@@ -13,10 +13,6 @@ print("Setting up reV run 'Windland V2'...\n")
 # Create the configuration generator object
 cnfg = revruns.Config(technology="wind", verbose=True)
 
-# Points from a bounding box around Denver's portion of the Front Range
-bbox = [-105.352679491, 39.4595438351, -104.9022400379, 40.3518303006]
-points = revruns.box_points(bbox)
-
 # Set years explicitly
 years = [y for y in range(2007, 2014)]
 
@@ -33,7 +29,7 @@ cnfg.top_params["set_tag"] = "windland"
 cnfg.top_params["tech"] = "wind"
 cnfg.top_params["walltime"] = 6.0
 cnfg.top_params["years"] = years
-cnfg.points = points
+cnfg.points = "all"
 
 # SAM Config #1  ( This was used for defaults excepting the coordinates )
 cnfg.sam_params["wind_farm_xCoordinates"] = [0, 600, 1200, 1800, 2400, 3000, 3600, 4200, 4800, 5400, 0, 600, 1200, 1800, 2400, 3000, 3600, 4200, 4800, 5400, 0, 600, 1200, 1800, 2400, 3000, 3600, 4200, 4800, 5400, 0, 600, 1200, 1800, 2400, 3000, 3600, 4200, 4800, 5400, 0, 600, 1200, 1800, 2400, 3000, 3600, 4200, 4800, 5400]
