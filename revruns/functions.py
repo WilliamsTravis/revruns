@@ -525,10 +525,13 @@ class Config:
                  top_params=TOP_PARAMS.copy(),
                  verbose=True):
         self.points = "all"
+        self.gids = None
         self.top_params = top_params
         self.sam_params = SAM_PARAMS.copy()[technology]
         self.sam_files = {}
         self.verbose = verbose
+        self._set_years()
+        self._set_points_path()
 
     def config_all(self, excl_pos_lon=False):
         """ Call all needed sub configurations except for sam
@@ -555,20 +558,6 @@ class Config:
         outputs = self.top_params["outputs"]
         econ_outputs = [o for o in outputs if o in ECON_MODULES]
 
-        # If more than one jobs are needed, use batch and pipeline
-        if len(self.sam_files) > 1:
-            self._config_batch()
-            self._config_pipeline()
-            tag = params["set_tag"]
-        else:
-            tag = list(self.sam_files.keys())[0]
-
-        # Create project points/use existing file
-        self._set_points_path(tag, excl_pos_lon)
-
-        # Set the years in case "all" is provided
-        self._set_years()
-
         # If we are using more than one node, collect the outputs
         if params["nodes"] > 1:
             self._config_collect()
@@ -579,12 +568,39 @@ class Config:
             self._config_econ()
             self._config_pipeline()
 
+        # If more than one jobs are needed, use batch and pipeline
+        if len(self.sam_files) > 1:
+            self._config_batch()
+            self._config_pipeline()
+            tag = params["set_tag"]
+        else:
+            tag = list(self.sam_files.keys())[0]
+
         # If we are combining yearly output
         if len(params["years"]) > 1 and params["multi_year"]:
             self._config_multiyear()
 
         # Configure the generation file
         self._config_gen()
+
+        # Create project points
+        if self.gids:
+            point_df = project_points(tag=tag,
+                                      resource=params["resource"],
+                                      gids=self.gids)
+        else:
+            point_df = project_points(tag=tag,
+                                      resource=params["resource"],
+                                      points=self.points)
+
+        # If we are excluding positive longitudes
+        if excl_pos_lon:
+            point_df = point_df[point_df["lon"] < 0]
+
+        # Save project points
+        point_df.to_csv(self.points_path, index=False)
+        if self.verbose:
+            print("POINTS" + " saved to '" + self.points_path + "'.")
 
     def config_sam(self, jobname="job"):
         """Configure the System Advisor Model (SAM) portion of a reV model.
@@ -914,31 +930,10 @@ class Config:
 #        # Return configuration dictionary
 #        return config_dict
 
-    def _set_points_path(self, tag, excl_pos_lon=False):
+    def _set_points_path(self):
         """Set the path name for the points file."""
-
-        # If an existing file was provided, override the point creation
-        if not os.path.exists(self.points):
-            self.points_path = os.path.join(self.top_params["pointdir"],
-                                            "project_points.csv")
-
-
-            point_df = project_points(tag=tag,
-                                      resource=self.top_params["resource"],
-                                      points=self.points)
-
-            # If we are excluding positive longitudes
-            if excl_pos_lon:
-                point_df = point_df[point_df["lon"] < 0]
-
-            # Save project points
-            point_df.to_csv(self.points_path, index=False)
-            if self.verbose:
-                print("POINTS file saved to '" + self.points_path + "'.")
-        else:
-            self.points_path = self.points
-            print("POINTS path set to '" + self.points_path + "'.")
-
+        self.points_path = os.path.join(self.top_params["pointdir"],
+                                        "project_points.csv")
 
     def _set_years(self):
         """Set years attribute to all available if not specified"""
