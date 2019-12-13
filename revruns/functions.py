@@ -1,4 +1,39 @@
 """
+Notes:
+
+    - Collect cannot apparently be run without a pipeline configuration. This means that a run with more than one
+      module will need a pipeline configuration.
+
+
+Steps to Configure (Order is important for steps 3 through 9):
+    1) SAM - This is a json written from a Python dictionary that includes all of the specifications needed for a
+             modeled power generator (solar pv, wind turbine, concentrating solar power, etc.). SAM stands for the
+             Systems Advisor Model and is the starting point for the reV model. It will generate power generation
+             estimates for a point using historical resource data sets. reV will then run at multiple points, or all
+             points in a data set.
+    2) Project Points - These are the grid IDs (GIDs) of the resource data set where the reV model will simulate. This
+                        needs to be saved as a csv with the GIDs in a "gid" column and a key pointing to a SAM
+                        configuration file in a "config" column. You may include whatever else you want in this file,
+                        only those two columns will be read.
+    3) Generation - This module is required for every subsequent module since it uses SAM to generate the initial power
+                    figures. Also, though this isn't totally intuitive, it generates our Levelized Cost of Energy
+                    figures. You may  If you are running just one SAM configuration using a single node and a single
+                    year, this will be all you need to run.
+    4) Collect - If you are running the job on multiple nodes, outputs for each year run will be split into chunks.
+                 To combine these chunks into single yearly files, a collection configuration will be needed.
+    5) Multi-year - If you are running the job for multiple years and want to combine output into a single file, this
+                    module will do that for you, and will need a configuration file. It does not appear as though it
+                    will combine the larger profile data sets into one.
+    6) Aggregation - To reduce the file size and grid resolution to fit outputs into subsequent modules, the aggregation
+                     module will resample to larger grid sizes and requires a configuration file.
+    7) Supply-curve - To generate cost vs generation supply curves across the area of interest, the "supply-curve"
+                      module is used.
+    8) Rep-profiles - To select representative profiles for an area of interest, run the "rep-profiles" module. This
+                      will choose the most appropriate set (single) profile of whatever output is requested.
+    9) Pipeline - This module will run each of the previous modules with a single reV call.
+    10) Batch - If you are running multiple SAM configurations, you may run a "batch" job once. This will run the
+                full pipeline for each SAM configuration or SAM model parameter that you give it.
+
 Created on Wed Dec  4 07:58:42 2019
 
 @author: twillia2
@@ -29,7 +64,6 @@ CONUS_FIPS = ['54', '12', '17', '27', '24', '44', '16', '33', '37', '50', '09',
 
 # For checking if a requested output requires economic treatment.
 ECON_MODULES = ["flip_actual_irr",
-                # "lcoe_fcr",  # <---------------------------------------------------------------------------------------- This might not actually need the econ module
                 "lcoe_nom",
                 "lcoe_real",
                 "ppa_price",
@@ -138,7 +172,7 @@ WIND_SAM_PARAMS = {
         "variable_operating_cost": 0,
         "wind_farm_losses_percent": 12.8,
         "wind_farm_wake_model": 0,
-        "wind_farm_xCoordinates": [0], # <------------------------------------- Don't we set these in the points file?
+        "wind_farm_xCoordinates": [0],
         "wind_farm_yCoordinates": [0],
         "wind_resource_model_choice": 0,
         "wind_resource_shear": 0.140,
@@ -150,7 +184,7 @@ WIND_SAM_PARAMS = {
         "wind_turbine_rotor_diameter": 167.0
 }
 
-# All default SAM model parameters.  # <--------------------------------------- Add as more models are discovered
+# All default SAM model parameters.
 SAM_PARAMS = {"pv": SOLAR_SAM_PARAMS,
               "wind": WIND_SAM_PARAMS}
 
@@ -348,7 +382,7 @@ def get_coordinates(file, savepath):
     data.to_csv(savepath, index=False)
 
 
-def project_points(tag, resource="nsrdb_v3", points=1000):
+def project_points(tag="default", resource="nsrdb_v3", points=1000, gids=None):
     """Generates a required point file for spatial querying in reV.
 
     Parameters:
@@ -404,6 +438,10 @@ def project_points(tag, resource="nsrdb_v3", points=1000):
         point_df = points.copy()
         point_df["gid"] = point_df.index
         point_df["config"] = tag
+
+    # Let's just have a list of GIDs over ride everything for now
+    if gids:
+        point_df = coords.iloc[gids]
 
     # Return data frame
     return point_df
