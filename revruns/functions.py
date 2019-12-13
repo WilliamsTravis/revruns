@@ -54,6 +54,8 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 # For package data
 ROOT = os.path.abspath(os.path.dirname(__file__))
+# import revruns
+# ROOT = revruns.ROOT
 
 # For filtering COUNS
 CONUS_FIPS = ['54', '12', '17', '27', '24', '44', '16', '33', '37', '50', '09',
@@ -426,21 +428,22 @@ def project_points(tag="default", resource="nsrdb_v3", points=1000, gids=None):
                          "to " + data_path(point_path) + ".")
 
     # Sample or full grid?
-    if isinstance(points, int):
-        gridids = np.arange(0, points)
-        point_df = pd.DataFrame({"gid": gridids, "config": tag})
-        point_df = point_df.join(coords)
-    elif isinstance(points, str) and points == "all":
-        gridids = np.arange(0, RESOURCE_DIMS[resource])
-        point_df = pd.DataFrame({"gid": gridids, "config": tag})
-        point_df = point_df.join(coords)
-    else:
-        point_df = points.copy()
-        point_df["gid"] = point_df.index
-        point_df["config"] = tag
+    if gids is None:
+        if isinstance(points, int):
+            gridids = np.arange(0, points)
+            point_df = pd.DataFrame({"gid": gridids, "config": tag})
+            point_df = point_df.join(coords)
+        elif isinstance(points, str) and points == "all":
+            gridids = np.arange(0, RESOURCE_DIMS[resource])
+            point_df = pd.DataFrame({"gid": gridids, "config": tag})
+            point_df = point_df.join(coords)
+        else:
+            point_df = points.copy()
+            point_df["gid"] = point_df.index
+            point_df["config"] = tag
 
     # Let's just have a list of GIDs over ride everything for now
-    if gids:
+    else:
         point_df = coords.iloc[gids]
 
     # Return data frame
