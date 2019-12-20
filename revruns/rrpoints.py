@@ -4,10 +4,23 @@ NREL resource hdf5 file.
 """
 import click
 import os
-from revruns import get_coordinates
 
 file_help = "The hdf5 file from which to extract coordinates."
 save_help = "The target file name for the output coordinate file."
+
+
+def get_coordinates(file, savepath):
+    """Get all of the coordintes and their grid ids from an hdf5 file"""
+    # Get numpy array of coordinates
+    with h5py.File(file, mode="r") as pointer:
+        crds = pointer["coordinates"][:]
+
+    # Create a data frame and save it
+    lats = crds[:, 0]
+    lons = crds[:, 1]
+    data = pd.DataFrame({"lat": lats, "lon": lons})
+    data.to_csv(savepath, index=False)
+
 
 @click.command()
 @click.option("--file", "-f", help=file_help)

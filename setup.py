@@ -13,9 +13,12 @@ setup(
     author="Travis Williams",
     author_email="travis.williams@nrel.gov",
     install_requires=['h5py', 'numpy', 'pandas'],
-    entry_points = {"console_scripts":
-        ["rrcheck = revruns.rrcheck:main",
-         "rrpoints = revruns.rrpoints:main",
-         "rrmax = revruns.rrmax:main",
-         "rrmin = revruns.rrmin:main"]}
+    entry_points={"console_scripts":
+                      ["rrcheck = revruns.rrcheck:main",
+                       "rrpoints = revruns.rrpoints:main",
+                       "rrmax = revruns.rrmax:main",
+                       "rrmin = revruns.rrmin:main",
+                       "rrshape = revruns.rrshape:main",
+                       "rrsetup = revruns.rrsetup:main"]
+                  }
     )

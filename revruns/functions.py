@@ -151,6 +151,208 @@ SOLAR_SAM_PARAMS = {"azimuth": 180,
                     "variable_operating_cost": 0
                     }
 
+
+GEN_TEMPLATE = {
+    "directories": {
+        "logging_directory": "./logs",
+        "output_directory": "./outputs"
+    },
+    "execution_control": {
+        "allocation": "PLACEHOLDER",
+        "feature": "--qos=normal",
+        "memory_utilization_limit": 0.4,
+        "nodes": "PLACEHOLDER",
+        "option": "eagle",
+        "sites_per_worker": "PLACEHOLDER",
+        "walltime": "PLACEHOLDER"
+    },
+    "project_control": {
+        "logging_level": "INFO",
+        "analysis_years": "PLACEHOLDER",
+        "technology": "PLACEHOLDER",
+        "output_request": "PLACEHOLDER"
+    },
+    "project_points": "PLACEHOLDER",
+    "sam_files": {
+        "key": "PLACEHOLDER"
+    },
+    "resource_file": "PLACEHOLDER"
+}
+
+BATCH_TEMPLATE = {
+  "pipeline_config": "./config_pipeline.json",
+  "sets": [
+    {
+      "args": {
+        "PLACEHOLDER": "PLACEHOLDER",
+        "PLACEHOLDER": "PLACEHOLDER"
+      },
+      "files": [
+        "./sam_configs/default.json"
+      ],
+      "set_tag": "set1"
+    }
+  ]
+}
+
+COLLECT_TEMPLATE = {
+    "directories": {
+        "collect_directory": "PIPELINE",
+        "logging_directory": "./logs",
+        "output_directory": "./outputs"
+    },
+    "execution_control": {
+        "allocation": "PLACEHOLDER",
+        "feature": "--qos=normal",
+        "memory": 90,
+        "option": "eagle",
+        "walltime": 2.0
+    },
+    "project_control": {
+        "dsets": "PLACEHOLDER",
+        "file_prefixes": "PIPELINE",
+        "logging_level": "INFO",
+        "parallel": False
+    },
+    "project_points": "PLACEHOLDER"
+}
+
+
+MULTIYEAR_TEMPLATE = {
+  "directories": {
+    "logging_directory": "./logs",
+    "output_directory": "./outputs"
+  },
+  "execution_control": {
+    "allocation": "PLACEHOLDER",
+    "feature": "--qos=normal",
+    "memory": 90,
+    "option": "eagle",
+    "walltime": 2.0
+  },
+  "groups": {
+    "none": {
+      "dsets": "PLACEHOLDER",
+      "source_dir": "./outputs",
+      "source_files": "PIPELINE",
+      "source_prefix": ""
+    }
+  },
+  "project_control": {
+    "logging_control": "INFO"
+  }
+}
+
+AGGREGATION_TEMPLATE = {
+  "cf_dset": "cf_mean-means",
+  "data_layers": {
+    "slope": {
+      "dset": "srtm_slope",
+      "method": "mean"
+    },
+    "model_region": {
+      "dset": "reeds_regions",
+      "method": "mode"
+    }
+  },
+  "directories": {
+    "logging_directories": "./logs",
+    "output_directory": "./outputs"
+  },
+  "excl_dict": {
+    "PLACEHOLDER": {
+      "exclude_values": "PLACEHOLDER"
+    },
+  },
+  "excl_fpath": "/projects/rev/data/exclusions/CONUS_Exclusions.h5",
+  "execution_control": {
+    "allocation": "PLACEHOLDER",
+    "feature": "--qos=normal",
+    "memory": 90,
+    "nodes": 4,
+    "option": "eagle",
+    "walltime": 2.0
+  },
+  "gen_fpath": "PIPELINE",
+  "lcoe_dset": "lcoe_fcr-means",
+  "power_density": "PLACEHOLDER",
+  "res_class_bins": "PLACEHOLDER",
+  "res_class_dset": "PLACEHOLDER",
+  "res_fpath": "PLACHOLDER",
+  "resolution": 64,
+  "tm_dset": "PLACHOLDER"
+}
+
+SUPPLYCURVE_TEMPLATE = {
+  "directories": {
+    "logging_directory": "./logs",
+    "output_directory": "./outputs"
+  },
+  "execution_control": {
+    "allocation": "PLACEHOLDER",
+    "feature": "--qos=normal",
+    "memory": 90,
+    "nodes": 4,
+    "option": "eagle",
+    "walltime": 2.0
+  },
+  "fixed_charge_rate": "PLACEHOLDER",
+  "sc_features": ("/projects/rev/data/transmission/" +
+                  "conus_pv_tline_multipliers.csv"),
+  "sc_points": "PIPELINE",
+  "simple": False,
+  "trans_table": ("/projects/rev/data/transmission/" +
+                  "conus_trans_lines_cache_offsh_064_sj_infsink.csv"),
+  "transmission_costs": {
+    "available_capacity": "PLACEHOLDER",
+    "center_tie_in_cost": "PLACEHOLDER",
+    "line_cost": "PLACEHOLDER",
+    "line_tie_in_cost": "PLACEHOLDER",
+    "sink_tie_in_cost": "PLACEHOLDER",
+    "station_tie_in_cost": "PLACEHOLDER"
+  }
+}
+
+REPPROFILES_TEMPLATE = {
+  "cf_dset": "cf_profile-{}",
+  "directories": {
+    "logging_directory": "./logs",
+    "output_directory": "./outputs"
+  },
+  "err_method": "rmse",
+  "execution_control": {
+    "allocation": "PLACEHOLDER",
+    "feature": "--qos=normal",
+    "memory": 90,
+    "nodes": 4,
+    "option": "eagle",
+    "site_per_worker": 100,
+    "walltime": 2.0
+  },
+  "gen_fpath": "PIPELINE",
+  "n_profiles": 1,
+  "project_control": {
+    "analysis_years": "PLACEHOLDER",
+    "logging_level": "INFO"
+  },
+  "reg_cols": [
+    "model_region",
+    "res_class"
+  ],
+  "rep_method": "meanoid",
+  "rev_summary": "PIPELINE"
+}
+
+TEMPLATES = {
+    "gen": GEN_TEMPLATE,
+    "co": COLLECT_TEMPLATE,
+    "my": MULTIYEAR_TEMPLATE,
+    "ag": AGGREGATION_TEMPLATE,
+    "sc": SUPPLYCURVE_TEMPLATE,
+    "rp": REPPROFILES_TEMPLATE,
+    "ba": BATCH_TEMPLATE
+}
+
 # Default Wind Turbine Powercurve Powerout (until a better way shows up).
 DEFAULT_WTPO = np.zeros(161)
 DEFAULT_WTPO[38: 100] = 4500.0
@@ -371,19 +573,6 @@ def extract_arrays(file):
     return data_sets
 
 
-def get_coordinates(file, savepath):
-    """Get all of the coordintes and their grid ids from an hdf5 file"""
-    # Get numpy array of coordinates
-    with h5py.File(file, mode="r") as pointer:
-        crds = pointer["coordinates"][:]
-
-    # Create a data frame and save it
-    lats = crds[:, 0]
-    lons = crds[:, 1]
-    data = pd.DataFrame({"lat": lats, "lon": lons})
-    data.to_csv(savepath, index=False)
-
-
 def project_points(tag="default", resource="nsrdb_v3", points=1000, gids=None):
     """Generates a required point file for spatial querying in reV.
 
@@ -445,6 +634,8 @@ def project_points(tag="default", resource="nsrdb_v3", points=1000, gids=None):
     # Let's just have a list of GIDs over ride everything for now
     else:
         point_df = coords.iloc[gids]
+        point_df["gid"] = point_df.index
+        point_df["config"] = tag
 
     # Return data frame
     return point_df
@@ -521,6 +712,23 @@ def to_geo(df, lat="lat", lon="lon"):
     return gdf
 
 
+def write_config(config_dict, path, verbose):
+    """ Write a configuration dictionary to a json file."""
+    # what type of configuration is this?
+    module = path.split("_")[1].replace(".json", "").upper()
+
+    # Write json to file
+    with open(path, "w") as file:
+        file.write(json.dumps(config_dict, indent=4))
+    if verbose:
+        print(module + " config file saved to " + path + ".")
+
+    # Check that the json as written correctly
+    check_config(path)
+    if verbose:
+        print(module + " config file opens.")
+
+
 class Config:
     """Sets reV model key values and generates configuration json files."""
     def __init__(self,
@@ -550,6 +758,7 @@ class Config:
 
         # Check that there are specified sam files
         try:
+            assert self.sam_files is not None
             assert len(self.sam_files) > 0
         except AssertionError:
             print("Could not configure GENRATION file, no SAM configuration " +
@@ -586,15 +795,11 @@ class Config:
         # Configure the generation file
         self._config_gen()
 
-        # Create project points
-        if self.gids:
-            point_df = project_points(tag=tag,
-                                      resource=params["resource"],
-                                      gids=self.gids)
-        else:
-            point_df = project_points(tag=tag,
-                                      resource=params["resource"],
-                                      points=self.points)
+        # Create project points - changes
+        point_df = project_points(tag=tag,
+                                  resource=params["resource"],
+                                  points=self.points,
+                                  gids=self.gids)
 
         # If we are excluding positive longitudes
         if excl_pos_lon:
@@ -955,7 +1160,7 @@ class Config:
         with open(path, "w") as file:
             file.write(json.dumps(config_dict, indent=4))
         if self.verbose:
-            print("BATCH config file saved to " + path + ".")
+            print(module + " config file saved to " + path + ".")
 
         # Check that the json as written correctly
         check_config(path)
