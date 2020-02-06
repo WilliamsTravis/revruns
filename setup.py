@@ -19,6 +19,7 @@ setup(
                        "rrmax = revruns.rrmax:main",
                        "rrmin = revruns.rrmin:main",
                        "rrshape = revruns.rrshape:main",
-                       "rrsetup = revruns.rrsetup:main"]
+                       "rrsetup = revruns.rrsetup:main",
+                       "rrbatch_collect = revruns.rrbatch_collect:main"]
                   }
     )

@@ -15,25 +15,24 @@ Created on Tue Dec 17 2019
 import click
 import geofeather as gfr
 import geopandas as gpd
-import json
-import multiprocessing as mp
-import numpy as np
+import h5py
 import os
 import pandas as pd
-import sys
-from glob import glob
 from osgeo import gdal
-from revruns import VARIABLE_CHECKS
 from shapely.geometry import Point
-from tqdm import tqdm
+import fiona
 
 # Use GDAL to catch GDAL exceptions
 gdal.UseExceptions()
 
 # Help printouts
-FILE_HELP = "The csv file from which to create the shape file. (str)"
+FILE_HELP = "The file from which to create the shape file. (str)"
 SAVE_HELP = ("The path to use for the output file. Defaults to current " +
              "directory with the basename of the csv file. (str)")
+LAYER_HELP = ("For hdf5 time series, the time layer to render. Defaults to " +
+              " 0. (int)")
+DATASET_HELP = ("For hdf5 time series, the data set to render. Defaults to " +
+                "'cf_mean' (str)")
 DRIVER_HELP = ("Save as a Geopackage ('gpkg') or ESRI Shapefile ('shp'). " +
               "Defaults to 'gpkg'. (str).")
 FEATHER_HELP = ("Use feather formatted data. This is much quicker but cannot" +
@@ -86,11 +85,7 @@ def csv_to_shape(file, driver="gpkg", savepath=None, feather=False):
     feather = False
     """
     # Select driver
-    try:
-        driver_str = DRIVERS[driver]
-    except KeyError:
-        print("KeyError: Please provide or check the spelling of the driver " +
-              "input.")
+    driver_str = DRIVERS[driver]
 
     # If no save path
     if not savepath:
@@ -108,8 +103,8 @@ def csv_to_shape(file, driver="gpkg", savepath=None, feather=False):
 
     # Create a geometry columns and a geodataframe
     csv["geometry"] = csv.apply(to_point, axis=1)
-    gdf = gpd.GeoDataFrame(csv, geometry="geometry", crs={"init": 4326})
-    gdf.crs = {"init": "epsg:4326"}
+    gdf = gpd.GeoDataFrame(csv, geometry="geometry")
+    gdf.crs = fiona.crs.from_epsg(4326)
 
     # Save file
     if feather:
@@ -121,17 +116,110 @@ def csv_to_shape(file, driver="gpkg", savepath=None, feather=False):
         gdf.to_file(savepath, layer=layer, driver=driver_str)
 
 
+def h5_to_shape(file, driver="gpkg", dataset="cf_mean", layer=0, savepath=None,
+                feather=False):
+    """
+    For now, this will just take a single time period as an index position
+    in the time series.
+
+    Parameters
+    ----------
+    file : TYPE
+        DESCRIPTION.
+    driver : TYPE, optional
+        DESCRIPTION. The default is "gpkg".
+    savepath : TYPE, optional
+        DESCRIPTION. The default is None.
+    feather : TYPE, optional
+        DESCRIPTION. The default is False.
+
+    Returns
+    -------
+    None.
+
+
+    SAMPLES:
+    
+        file = "/projects/rev/new_projects/lopez_wind/outputs/outputs_gen_2009.h5"
+        savepath = "/projects/rev/new_projects/lopez_wind/outputs/outputs_gen_2009_1.gpkg"
+        driver="gpkg"
+        dataset="cf_mean"
+        layer=0
+    """
+    # Select driver
+    driver_str = DRIVERS[driver]
+
+    # If no save path
+    if not savepath:
+        name = os.path.splitext(file)[0]
+        savepath = name + "." + driver
+
+    # Read hdf5 file
+    with h5py.File(file) as ds:
+        meta = pd.DataFrame(ds["meta"][:])
+        array = ds[dataset][:]
+
+    # Standardize the coordinate column names
+    meta = guess_coords(meta)
+    meta[dataset] = array
+
+
+    # Create a geometry columns and a geodataframe
+    meta["geometry"] = meta.apply(to_point, axis=1)
+    gdf = gpd.GeoDataFrame(meta, geometry="geometry")
+    gdf.crs = fiona.crs.from_epsg(4326)
+
+    # We'd need to decode some columns, let's just get the one
+    gdf = gdf[["geometry", dataset]]
+
+    # Save file
+    if feather:
+        # Save as with feather data types. Much quicker, but limited in use
+        savepath = savepath.replace(driver, "feather")
+        gfr.to_geofeather(gdf, savepath)
+    else:
+        # Save to shapefile or geopackage
+        gdf.to_file(savepath, layer=layer, driver=driver_str)
+        
+
 @click.command()
 @click.option("--file", "-f", help=FILE_HELP)
 @click.option("--savepath", "-s", default=None, help=SAVE_HELP)
+@click.option("--dataset", "-ds", required=True, help=LAYER_HELP)
+@click.option("--layer", "-l", default=0, help=LAYER_HELP)
 @click.option("--driver", "-d", default="gpkg", help=DRIVER_HELP)
 @click.option("--feather", is_flag=True, help=FEATHER_HELP)
-def main(file, savepath, driver, feather):
+def main(file, savepath, dataset, layer, driver, feather):
     """ Take a csv output from reV and write a shape file, geopackage, or
     geofeather file.
-    """
-    csv_to_shape(file=file, savepath=savepath, driver=driver, feather=feather)
 
+
+    sample args:
+    file = "/projects/rev/new_projects/sergei_doubleday/final_outputs/5min_2018.h5"
+    savepath = None
+    dataset = "cf_mean"
+    layer = 0
+    driver = "gpkg"
+    feather = False
+    """
+    # Make sure the driver is available
+    try:
+        DRIVERS[driver]
+    except KeyError:
+        print("KeyError: Please provide or check the spelling of the driver " +
+              "input...only 'shp' and 'gpkg' available at the moment.")
+
+    # Two cases, hdf5 or csv
+    ext = os.path.splitext(file)[1]
+    if ext == ".h5":
+        h5_to_shape(file, driver=driver, dataset=dataset, layer=layer,
+                    savepath=savepath, feather=feather)
+    elif ext == ".csv":
+        csv_to_shape(file=file, savepath=savepath, driver=driver,
+                     feather=feather)
+    else:
+        print("Sorry, rrshape can't handle that file type yet.")
+        raise KeyError
 
 if "__name__" == "__main__":
     main()
