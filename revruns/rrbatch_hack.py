@@ -1,78 +1,90 @@
-"""
-Activate a reV environment and run this in a folder with everything a normal
-reV run would require (including the batch configuration) and it should take
-care of the rest.
-"""
+import click
 import json
 import os
 import subprocess as sp
 import time
 from glob import glob
-from tqdm import tqdm
 
-def get_batch_outputs(folder):
-    """ Get a list of the output folders from a batched rev run.
 
-    Parameters
-    ----------
-    folder (str)
-        A folder with all of the configuration files and batched run
-        folders.
+FOLDER_HELP = ("Path to a folder with a set of configuration files for a "
+               "batched reV run. Defaults to current directory. (str)")
 
-    Returns
-    -------
-    list: List of all batched run output folder path strings
+def dryrun():
+    """Run the --dry-run option of batch to create target folders."""
 
-    Sample Argument
-    ---------------
-    folder = "/lustre/eaglefs/projects/rev/new_projects/sergei_doubleday/30min"
-    """
+    # Create all of the batch folders
+    sp.call(["reV",
+             "-c",
+             "config_batch.json",
+             "batch",
+             "--dry-run"])
+
+
+def get_names(folder):
+    """ Get parameters from the config files."""
     with open("config_gen.json", "r") as config_file:
         config_gen = json.load(config_file)
     module = config_gen["project_control"]["technology"]
-    out = config_gen["directories"]["output_directory"].replace("./", "")
-    outputs = glob(module + "_*/" + out + "*")
+    outfolder = config_gen["directories"]["output_directory"].replace("./", "")
 
-    return outputs
-
+    return module, outfolder
 
 
-# Create all of the batch folders
-sp.call(["reV",
-         "-c",
-         "config_batch.json",
-         "batch",
-         "--dry-run"])
+def rename(folder):
+    """Append numbers to output directories."""
 
-# List of the folders
-outputs = glob("pv_*/batchout")
-folders = glob("pv_*")
+    # get empty directories - outputfolders don't exist yet
+    dryrun()
 
-# To have different job names, we need to have different batch names
-# We'll have to use the config entry I think, and just erase the original
-new_outs = [outputs[i] + "_" + "{:02d}".format(i) for i in range(len(outputs))]
+    # Create a new set of number output paths
+    module, outfolder = get_names(folder)
+    batch_folders = glob(module + "_*/")
 
-for i, folder in enumerate(folders):
-    # get the configuration file name
-    config_gen = os.path.join(folder, "config_gen.json")
+    for i, folder in enumerate(batch_folders):
 
-    # Read this as a dictionary
-    with open(config_gen, "r+") as file:
-        config = json.load(file)
+        # get the configuration file name
+        config_gen = os.path.join(folder, "config_gen.json")
+    
+        # Read this as a dictionary
+        with open(config_gen, "r+") as file:
+            config = json.load(file)
+    
+        # replace the output_directory
+        new_output = "./" + outfolder + "_" + "{:02d}".format(i)
+        config["directories"]["output_directory"] = new_output
+    
+        # rewrite configuration file
+        with open(config_gen, "w") as new_file:
+            new_file.write(json.dumps(config, indent=4))
 
-    # replace the output_directory
-    new_output = "./batchout" + "_" + "{:02d}".format(i)
-    config["directories"]["output_directory"] = new_output
+@click.command()
+@click.option("-f", "--folder", default=".", help=FOLDER_HELP)
+def main(folder):
+    """Run the batched reV generation model until the bugs are worked out.
 
-    # rewrite configuration file
-    with open(config_gen, "w") as new_file:
-        new_file.write(json.dumps(config, indent=4))
+    Activate a reV environment and run this in a folder with everything a
+    normal reV run would require (including the batch configuration) and it
+    should take care of the rest.
+    """
+    
+    # Create target batch run folders
+    dryrun()
 
-# Submitting each job separately
-print("Submitting {} jobs.".format(len(folders)))
-for folder in tqdm(folders):
-    sp.call(["reV",
-             "-c",
-             os.path.join(folder, "config_gen.json"),
-             "generation"])
-    time.sleep(5)
+    # Rename configuration output folders
+    rename(folder)
+    
+    # Get the batch folders
+    module, outfolder = get_names(folder)
+    batch_folders = glob(module + "_*/")
+
+    # Submit each job separately
+    print("Submitting {} jobs.".format(len(batch_folders)))
+    for folder in batch_folders:
+        sp.call(["reV",
+                 "-c",
+                 os.path.join(folder, "config_gen.json"),
+                 "generation"])
+        time.sleep(5)
+
+if __name__ == "__main__":
+    main()

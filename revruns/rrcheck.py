@@ -31,10 +31,13 @@ from tqdm import tqdm
 # Use gdal to catch corrupted files
 gdal.UseExceptions()
 
+
 # Help printouts
-DIR_HELP = "The directory from which to read the hdf5 files (Defaults to '.')."
+DIR_HELP = "The directory from which to read the HDF5 files (Defaults to '.')."
 SAVE_HELP = ("The path to use for the csv output file (defaults to " +
              "'./checkvars.csv').")
+EXT_HELP = ("The HDF5 file extension to check. Defaults to 'h5'. (str)")
+
 
 def gdal_info(file):
     """ gdalinfo is able to retrieve summary statistics of multidimensional
@@ -45,6 +48,7 @@ def gdal_info(file):
     try:
         pointer = gdal.Open(file)
         health = "good"
+
         # Get the list of sub data sets in each file
         subds = pointer.GetSubDatasets()
 
@@ -65,7 +69,7 @@ def gdal_info(file):
         # For each of these sub data sets, get an info dictionary
         stat_dicts = []
         for sub in subds:
-
+            
             # Turn off most options to try and speed this up
             info_str = gdal.Info(sub[0],
                                  stats=True,
@@ -90,8 +94,16 @@ def gdal_info(file):
             desc = info["description"]
             ds = desc[desc.index("//") + 2: ]  # data set name
             stats = info["bands"][0]
-            max_threshold = VARIABLE_CHECKS[ds][1]
-            min_threshold = VARIABLE_CHECKS[ds][0]
+
+            # Try for thresholds
+            try:
+                max_threshold = VARIABLE_CHECKS[ds][1]
+            except KeyError:
+                max_threshold = np.nan
+            try:
+                min_threshold = VARIABLE_CHECKS[ds][0]
+            except KeyError:
+                min_threshold = np.nan
 
             # Return just these elements
             stat_dict = {"file": file,
@@ -108,7 +120,8 @@ def gdal_info(file):
         gdal_data = pd.DataFrame(stat_dicts)
 
     else:
-        gdal_data = pd.DataFrame(columns = ["file", "data_set", "min", "max", "mean", "std", "min_threshold",
+        gdal_data = pd.DataFrame(columns = ["file", "data_set", "min", "max",
+                                            "mean", "std", "min_threshold",
                                             "max_threshold"])
 
     return gdal_data, health
@@ -129,9 +142,9 @@ def single_info(file):
 
     # H5py for one-dimensional data sets
     if health == "good":
-        with h5py.File(file) as data_set:
+        with h5py.File(file, "r") as data_set:
             keys = data_set.keys()
-            keys = [k for k in keys if k not in ["meta", "time_index"]]
+            keys = [k for k in keys if k not in ["meta", "time_index", "key_reference"]]
             scale_factors = {k: data_set[k].attrs["scale_factor"] for k in keys}
             units = {k: data_set[k].attrs["units"] for k in keys}
             keys = [k for k in keys if k not in gdal_datasets]
@@ -177,22 +190,6 @@ def single_info(file):
         meta_df["reV_tech"] = meta_df["reV_tech"].apply(
                 lambda x: x.decode("utf-8"))
 
-        # Different meta data between wind and solar, no urban or pop in wind
-        if "wind" in meta_df["reV_tech"].unique():
-            meta_df["county"] = meta_df["county"].apply(lambda x: x.decode("utf-8"))
-            meta_df["country"] = meta_df["country"].apply(lambda x: x.decode("utf-8"))
-            meta_df["locale"] = meta_df["county"] +", " + meta_df["country"]
-            locale = meta_df["locale"][~pd.isnull(meta_df["county"])].iloc[0]
-            summary_df["sample_location"] = locale
-        else:
-            meta_df["urban"] = meta_df["urban"].apply(lambda x: x.decode("utf-8"))
-            meta_df["country"] = meta_df["country"].apply(
-                    lambda x: x.decode("utf-8"))
-            max_pop = meta_df["population"].max()
-            city = meta_df[["urban", "country"]][meta_df["population"] == max_pop]
-            city = ", ".join(city.values[0])
-            summary_df["largest_city"] = city
-
         # Lets also get overall min and max
         group = summary_df.groupby("data_set")
         summary_df["overall_min"] = group["min"].transform("min")
@@ -202,8 +199,9 @@ def single_info(file):
         summary_df["file_health"] = health
 
     else:
-        columns = ['file', 'data_set', 'min', 'max', 'mean', 'std', 'min_threshold', 'max_threshold', 'scale_factor',
-                   'units', 'largest_city', 'overall_min', 'overall_max', 'file_health']
+        columns = ['file', 'data_set', 'min', 'max', 'mean', 'std',
+                   'min_threshold', 'max_threshold', 'scale_factor',
+                   'units', 'overall_min', 'overall_max', 'file_health']
         values = {c: np.nan for c in columns}
         summary_df = pd.DataFrame(values, index=[0])
         summary_df["file"] = file
@@ -216,13 +214,26 @@ def single_info(file):
 @click.command()
 @click.option("--directory", "-d", default=".", help=DIR_HELP)
 @click.option("--savepath", "-p", default="./checkvars.csv", help=SAVE_HELP)
-def main(directory, savepath):
-    """Checks all hdf5 files in a current directory for threshold values in
+@click.option("--extension", "-e", default="h5", help=EXT_HELP)
+def main(directory, savepath, extension):
+    """
+    revruns Check
+
+    Checks all hdf5 files in a current directory for threshold values in
     data sets. This uses GDALINFO and also otputs an XML file with summary
     statistics and attribute information for each hdf5 file.
     """
-    # Expand path
-    directory = os.path.abspath(".")
+
+    # Overwrite existing
+    if os.path.exists(savepath):
+        os.remove(savepath)
+    
+    # Expand paths for the csv
+    directory = os.path.expanduser(directory)
+    directory = os.path.abspath(directory)
+    savepath = os.path.expanduser(savepath)
+    savepath = os.path.abspath(savepath)
+
 
     # Get and open files.
     files = glob(os.path.join(directory, "*h5"))
@@ -233,11 +244,10 @@ def main(directory, savepath):
     # Create a multiprocessin pool
     pool = mp.Pool(ncores - 1)
 
-    # Try to dl in parallel with progress bar - - Attribute Error
+    # Try to dl in parallel with progress bar
     info_dfs = []
-    for info_df in tqdm(pool.imap(single_info, files),
-                        total=len(files), position=0,
-                        file=sys.stdout):
+    for info_df in tqdm(pool.imap(single_info, files), total=len(files),
+                        position=0, file=sys.stdout):
         info_dfs.append(info_df)
 
     # Close pool object

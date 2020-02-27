@@ -4,10 +4,6 @@ It would be good to gbe able to make a quick shape file or geopackage out of
 the csv outputs from rev (i.e., aggregations, supply-curves, and
 representative profiles).
 
-It would also be good to load the data into a data base that we could connect
-to remotely via QGIS or something. That way (until we manage this x11
-forwarding business) we can easily see maps of reV outputs.
-
 Created on Tue Dec 17 2019
 
 @author: twillia2
@@ -27,20 +23,22 @@ gdal.UseExceptions()
 
 # Help printouts
 FILE_HELP = "The file from which to create the shape file. (str)"
-SAVE_HELP = ("The path to use for the output file. Defaults to current " +
+SAVE_HELP = ("The path to use for the output file. Defaults to current "
              "directory with the basename of the csv file. (str)")
-LAYER_HELP = ("For hdf5 time series, the time layer to render. Defaults to " +
+LAYER_HELP = ("For hdf5 time series, the time layer to render. Defaults to "
               " 0. (int)")
-DATASET_HELP = ("For hdf5 time series, the data set to render. Defaults to " +
+DATASET_HELP = ("For hdf5 time series, the data set to render. Defaults to "
                 "'cf_mean' (str)")
-DRIVER_HELP = ("Save as a Geopackage ('gpkg') or ESRI Shapefile ('shp'). " +
+DRIVER_HELP = ("Save as a Geopackage ('gpkg') or ESRI Shapefile ('shp'). "
               "Defaults to 'gpkg'. (str).")
-FEATHER_HELP = ("Use feather formatted data. This is much quicker but cannot" +
+FEATHER_HELP = ("Use feather formatted data. This is much quicker but cannot "
                 "be used with GIS programs. (boolean)")
+CRS_HELP = ("A proj4 string or epsg code associated with the file's "
+            "coordinate reference system. (str | int)" )
 
 # Different possible lat lon column names
 COORD_NAMES = {"lat": ["latitude", "lat", "y"],
-               "lon": ["longitude", "lon", "x"]}
+               "lon": ["longitude", "lon", "long", "x"]}
 
 DRIVERS = {"shp": "ESRI Shapefile",
            "gpkg": "GPKG"}
@@ -185,22 +183,13 @@ def h5_to_shape(file, driver="gpkg", dataset="cf_mean", layer=0, savepath=None,
 @click.command()
 @click.option("--file", "-f", help=FILE_HELP)
 @click.option("--savepath", "-s", default=None, help=SAVE_HELP)
-@click.option("--dataset", "-ds", required=True, help=LAYER_HELP)
+@click.option("--dataset", "-ds", default=None, help=DATASET_HELP)
 @click.option("--layer", "-l", default=0, help=LAYER_HELP)
 @click.option("--driver", "-d", default="gpkg", help=DRIVER_HELP)
 @click.option("--feather", is_flag=True, help=FEATHER_HELP)
 def main(file, savepath, dataset, layer, driver, feather):
-    """ Take a csv output from reV and write a shape file, geopackage, or
-    geofeather file.
-
-
-    sample args:
-    file = "/projects/rev/new_projects/sergei_doubleday/final_outputs/5min_2018.h5"
-    savepath = None
-    dataset = "cf_mean"
-    layer = 0
-    driver = "gpkg"
-    feather = False
+    """ Take a csv or hdf5 output from reV and write a shape file, geopackage,
+    or geofeather file.
     """
     # Make sure the driver is available
     try:

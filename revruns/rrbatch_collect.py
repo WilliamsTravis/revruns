@@ -19,15 +19,15 @@ from glob import glob
 from reV.utilities.utilities import parse_year
 
 
-FOLDER_HELP = ("Path to a folder with a completed set of batched reV runs. " +
+FOLDER_HELP = ("Path to a folder with a completed set of batched reV runs. "
                "Defaults to current directory. (str)")
-DESC_HELP = ("A string representing a description of the data sets. " +
+DESC_HELP = ("A string representing a description of the data sets. "
              "Defaults to None. (str)")
-SHORT_HELP = ("Truncate data set keys to include only variable parameters " +
+SHORT_HELP = ("Truncate data set keys to include only variable parameters "
               "Defaults to False. (boolean)")
-SAVE_HELP = ("The filename of the output HDF5 file. Defaults to the " +
-             "name of the containing folder with the year of the outputs." +
-             "(str)")
+SAVE_HELP = ("The filename of the output HDF5 file. Defaults to the "
+             "name of the containing folder. The year of the output file "
+             "will be appended to this file name before the extension. (str)")
 
 
 def batch_key(key, value):
@@ -130,9 +130,8 @@ def get_outputs():
     """
     with open("config_gen.json", "r") as config_file:
         config_gen = json.load(config_file)
-    module = config_gen["project_control"]["technology"]
-    out = config_gen["directories"]["output_directory"].replace("./", "")
-    outputs = glob(module + "_*/" + out + "*")
+    module = config_gen["technology"]
+    outputs = glob(module + "_*/" + module + "_*h5")
 
     return outputs
 
@@ -224,8 +223,8 @@ def main(folder, name, desc, short_keys, verbose):
 
     sample args:
 
-    folder = '/lustre/eaglefs/projects/rev/new_projects/sergei_doubleday/5min'
-    name = 'test'
+    folder = '/lustre/eaglefs/projects/rev/new_projects/sergei_doubleday/lossless_runs/30min/'
+    name = '30min_lossless'
     short_keys = True
     desc = None
     verbose = False
@@ -240,17 +239,16 @@ def main(folder, name, desc, short_keys, verbose):
 
     # If the user provides an extension get rid of it
     if "." in name:
-        name = name[:name.index(".")]
+        name = os.path.splitext(name)[0]
 
     # Get all of the output folders
     with open("./config_gen.json", "r") as config_file:
         config_gen = json.load(config_file)
-    module = config_gen["project_control"]["technology"]
-    out = config_gen["directories"]["output_directory"].replace("./", "")
-    outputs = glob(module + "_*/" + out + "*")
+    module = config_gen["technology"]
+    outputs = glob(module + "_*/" + module + "_*h5")
 
     # Get all of the years
-    years = config_gen["project_control"]["analysis_years"]
+    years = config_gen["analysis_years"]
 
     # Get the key reference
     batch_config = os.path.join(folder, "config_batch.json")
@@ -263,6 +261,7 @@ def main(folder, name, desc, short_keys, verbose):
     for year in years:
         year = str(year)
         target_file = name + "_" + year + ".h5"
+        year_outputs = [o for o in outputs if year in o]
         if verbose:
             print("Collecting batched reV run outputs to " + target_file)
 
@@ -270,9 +269,10 @@ def main(folder, name, desc, short_keys, verbose):
             os.remove(target_file)
 
         with h5py.File(target_file, "w") as new_file:
+
             # Add in all of the data from each output folder
-            for o in outputs:
-                file = glob(os.path.join(o, "*" + year + ".h5"))[0]
+            for file in year_outputs:
+
                 params = Path(file).parts[0]
                 with h5py.File(file, "r") as old_file:
                     keys = list(old_file.keys())

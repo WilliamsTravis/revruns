@@ -45,7 +45,6 @@ import h5py
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-#import matplotlib.pyplot as plt
 from reV.utilities.exceptions import JSONError
 from shapely.geometry import Point
 
@@ -54,8 +53,6 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 # For package data
 ROOT = os.path.abspath(os.path.dirname(__file__))
-# import revruns
-# ROOT = revruns.ROOT
 
 # For filtering COUNS
 CONUS_FIPS = ['54', '12', '17', '27', '24', '44', '16', '33', '37', '50', '09',
