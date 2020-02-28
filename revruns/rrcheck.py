@@ -30,10 +30,6 @@ from osgeo import gdal
 from revruns import VARIABLE_CHECKS
 from tqdm import tqdm
 
-# Use gdal to catch corrupted files
-gdal.UseExceptions()
-
-
 # Help printouts
 DIR_HELP = "The directory from which to read the HDF5 files (Defaults to '.')."
 SAVE_HELP = ("The path to use for the csv output file (defaults to " +
@@ -91,6 +87,7 @@ def gdal_info(file):
                                  allMetadata=False,
                                  extraMDDomains=None)
 
+
             # Read this as a dictionary
             info = json.loads(info_str)
             desc = info["description"]
@@ -117,6 +114,9 @@ def gdal_info(file):
                          "min_threshold": min_threshold,
                          "max_threshold": max_threshold}
             stat_dicts.append(stat_dict)
+
+        # Remove xml file
+        os.remove(".".join([file, "aux", "xml"]))
 
         # To better account for completed data sets, make a data frame
         gdal_data = pd.DataFrame(stat_dicts)
@@ -226,34 +226,31 @@ def main(directory, savepath, extension):
     statistics and attribute information for each hdf5 file.
     """
 
-    # Overwrite existing
-    if os.path.exists(savepath):
-        os.remove(savepath)
-    
+    # Go to that directory
+    os.chdir(directory)
+
     # Expand paths for the csv
     directory = os.path.expanduser(directory)
     directory = os.path.abspath(directory)
     savepath = os.path.expanduser(savepath)
     savepath = os.path.abspath(savepath)
 
+    # Overwrite existing
+    if os.path.exists(savepath):
+        os.remove(savepath)
 
     # Get and open files.
-    files = glob(os.path.join(directory, "*h5"))
+    files = glob(os.path.join(directory, "*" + extension))
 
     # How many cpus do we have?
     ncores = mp.cpu_count()
 
-    # Create a multiprocessin pool
-    pool = mp.Pool(ncores - 1)
-
     # Try to dl in parallel with progress bar
-    info_dfs = []
-    for info_df in tqdm(pool.imap(single_info, files), total=len(files),
-                        position=0, file=sys.stdout):
-        info_dfs.append(info_df)
-
-    # Close pool object
-    pool.close()
+    with mp.Pool(ncores - 1) as pool:
+        info_dfs = []
+        for info_df in tqdm(pool.imap(single_info, files), total=len(files),
+                            position=0, file=sys.stdout):
+            info_dfs.append(info_df)
 
     # Combine output into single data frame
     info_df = pd.concat(info_dfs)
