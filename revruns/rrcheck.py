@@ -6,11 +6,13 @@ The checks, so far, only include whether the minimum and maximum values are
 within the ranges defined in the "VARIABLE_CHECKS" object.'
 
 Things to do:
-    1) Check that the files opens to begin with...using either h5py or gdal.
-    2) If a file fails to open, save the error in a field in the data frame.
+    
+    1) Add in more threshold values, infer output type, maybe using units
+
     3) Suggest uniform meta data for all of our resource data sets.
     4) Make it work better.
-
+    5) Remove xml files, address "Cannot open {}.xml" problem.
+    
 Created on Mon Nov 25 08:52:00 2019
 
 @author: twillia2
@@ -52,7 +54,7 @@ def gdal_info(file):
         # Get the list of sub data sets in each file
         subds = pointer.GetSubDatasets()
 
-        # If there was only one detectable data set, we'll need to use this instead
+        # If there was only one detectable data set, use this instead
         if len(subds) == 0:
             subds = [(pointer.GetDescription(),)]
             assert "HDF5" in subds[0][0]

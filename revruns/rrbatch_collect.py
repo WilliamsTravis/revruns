@@ -4,6 +4,12 @@
 Postprocessing for batch model outputs. These are heavily nested and need to
 be consolidated some how.
 
+
+Things to do:
+
+    1) Catch cases where a pipeline is not complete. The status log is not
+       consistent at catching this situation btw.
+
 Created on Tue Jan 21 08:38:11 2020
 
 @author: twillia2
@@ -223,8 +229,8 @@ def main(folder, name, desc, short_keys, verbose):
 
     sample args:
 
-    folder = '/lustre/eaglefs/projects/rev/new_projects/sergei_doubleday/lossless_runs/30min/'
-    name = '30min_lossless'
+    folder = '/lustre/eaglefs/projects/rev/new_projects/sergei_doubleday/5min/'
+    name = 'test'
     short_keys = True
     desc = None
     verbose = False
