@@ -38,6 +38,7 @@ Created on Wed Dec  4 07:58:42 2019
 
 @author: twillia2
 """
+
 import json
 import os
 import ssl
@@ -45,6 +46,7 @@ import h5py
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+
 from reV.utilities.exceptions import JSONError
 from shapely.geometry import Point
 
@@ -709,6 +711,49 @@ def to_geo(df, lat="lat", lon="lon"):
     return gdf
 
 
+def to_sarray(df):
+    """Encode data frame values, return a structured array and an array of
+    dtypes. This is needed for storing pandas data frames in the h5 format.
+    """
+
+    for c in df.columns:
+        if isinstance(df[c].iloc[0], bytes):
+                df[c] = df[c].apply(lambda x: x.decode())
+
+    def make_col_type(col, types):
+        
+        coltype = types[col]
+        column = df.loc[:, col]
+        
+        try:
+            if 'numpy.object_' in str(coltype.type):
+                maxlens = column.dropna().str.len()
+                if maxlens.any():
+                    maxlen = maxlens.max().astype(int)
+                    coltype = ('S%s' % maxlen)
+                else:
+                    coltype = 'f2'
+            return column.name, coltype
+        except:
+            print(column.name, coltype, coltype.type, type(column))
+            raise
+
+    v = df.values
+    types = df.dtypes
+    struct_types = [make_col_type(col, types) for col in df.columns]
+    dtypes = np.dtype(struct_types)
+    array = np.zeros(v.shape[0], dtypes)
+    for (i, k) in enumerate(array.dtype.names):
+        try:
+            if dtypes[i].str.startswith('|S'):
+                array[k] = df[k].str.encode('utf-8').astype('S')
+            else:
+                array[k] = v[:, i]
+        except:
+            print(k, v[:, i])
+            raise
+
+    return array, dtypes
 def write_config(config_dict, path, verbose):
     """ Write a configuration dictionary to a json file."""
     # what type of configuration is this?

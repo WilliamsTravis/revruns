@@ -24,7 +24,8 @@ setup(
                        "rrmin = revruns.rrmin:main",
                        "rrpoints = revruns.rrpoints:main",
                        "rrsetup = revruns.rrsetup:main",
-                       "rrshape = revruns.rrshape:main"
+                       "rrshape = revruns.rrshape:main",
+                       "rrgraphs = revruns.rrgraphs:main"
                        ]
                   }
     )

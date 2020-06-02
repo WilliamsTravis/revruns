@@ -8,11 +8,9 @@ Created on Wed Feb 19 12:27:23 2020
 """
 
 import os
-import tempfile
-
 import click
 import h5py
-
+import tempfile
 from reVX.utilities.exclusions_converter import ExclusionsConverter
 
 
@@ -33,13 +31,13 @@ def main(excl_file, add_file, name, desc, verbose):
     """Append a data set to an exlusion file.
     
     Issues:
-
+        
         This is a rather long process.
 
-    excl_file = "/shared-projects/rev/exclusions/ATB_Exclusions.h5"
-    add_file = "/projects/rev/data/conus/friction_surface_102008/friction_surface_conus.tif"
-    desc = "Social resistance/friction index"
-    name = "friction"
+    excl_file = "/shared-projects/rev/projects/weto/task_1/aggregation/10_b_l_current/all_bats/Exclusions.h5"
+    add_file = "/projects/rev/data/conus/wind_deployment_potential/characterizations/wildlife_ranges/listed_sensitive_bats.tif"
+    desc = "All endangered and sensitive bat ranges that we (NREL) know of combined."
+    name = "listed_sensitive_bats"
     verbose = True
     """
 

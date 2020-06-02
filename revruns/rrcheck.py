@@ -17,18 +17,23 @@ Created on Mon Nov 25 08:52:00 2019
 
 @author: twillia2
 """
-import click
-import h5py
+
 import json
 import multiprocessing as mp
-import numpy as np
 import os
-import pandas as pd
 import sys
+
 from glob import glob
+
+import click
+import h5py
+import numpy as np
+import pandas as pd
+
 from osgeo import gdal
 from revruns import VARIABLE_CHECKS
 from tqdm import tqdm
+
 
 # Help printouts
 DIR_HELP = "The directory from which to read the HDF5 files (Defaults to '.')."
@@ -110,9 +115,7 @@ def gdal_info(file):
                          "min": stats["minimum"],
                          "max": stats["maximum"],
                          "mean": stats["mean"],
-                         "std": stats["stdDev"],
-                         "min_threshold": min_threshold,
-                         "max_threshold": max_threshold}
+                         "std": stats["stdDev"]}
             stat_dicts.append(stat_dict)
 
         # Remove xml file
@@ -123,8 +126,7 @@ def gdal_info(file):
 
     else:
         gdal_data = pd.DataFrame(columns = ["file", "data_set", "min", "max",
-                                            "mean", "std", "min_threshold",
-                                            "max_threshold"])
+                                            "mean", "std"])
 
     return gdal_data, health
 
@@ -135,6 +137,8 @@ def single_info(file):
     So, GDAL handles the multi-dimensional data sets fairly quickly, but doesn't
     even detect the singular dimensional data sets. Actually, it doesn't always
     detect the multidimensional data sets!
+
+    file = "/shared-projects/rev/projects/india/forecast/pv/"
     """
     # Get the summary statistics data frame for multidimensional data sets
     gdal_data, health = gdal_info(file)
@@ -146,7 +150,8 @@ def single_info(file):
     if health == "good":
         with h5py.File(file, "r") as data_set:
             keys = data_set.keys()
-            keys = [k for k in keys if k not in ["meta", "time_index", "key_reference"]]
+            keys = [k for k in keys if k not in ["meta", "time_index",
+                                                 "key_reference"]]
             scale_factors = {k: data_set[k].attrs["scale_factor"] for k in keys}
             units = {k: data_set[k].attrs["units"] for k in keys}
             keys = [k for k in keys if k not in gdal_datasets]
@@ -172,9 +177,7 @@ def single_info(file):
                          "min": minv,
                          "max": maxv,
                          "mean": meanv,
-                         "std": stdv,
-                         "min_threshold": min_threshold,
-                         "max_threshold": max_threshold}
+                         "std": stdv}
             stat_dicts.append(stat_dict)
 
         # Make another data frame with the 1-D data set statistics
@@ -202,8 +205,8 @@ def single_info(file):
 
     else:
         columns = ['file', 'data_set', 'min', 'max', 'mean', 'std',
-                   'min_threshold', 'max_threshold', 'scale_factor',
-                   'units', 'overall_min', 'overall_max', 'file_health']
+                   'scale_factor', 'units', 'overall_min', 'overall_max',
+                   'file_health']
         values = {c: np.nan for c in columns}
         summary_df = pd.DataFrame(values, index=[0])
         summary_df["file"] = file
