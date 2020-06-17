@@ -127,34 +127,15 @@ RESOURCE_LABELS = {
                              "Toolkit - Mexico, v1.0.0"),
         }
 
-# Target geographic coordinate system identifiers.  # <------------------------- Check this
+# Target geographic coordinate system identifiers.
 TARGET_CRS = ["+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ",
               {'init': 'epsg:4326'},
               {'type': 'EPSG', 'properties': {'code': 4326}}]
 
-# Default SAM model parameters for pvwattsv5.
-SOLAR_SAM_PARAMS = {"azimuth": 180,
-                    "array_type": 0,
-                    "capital_cost": 39767200,
-                    "clearsky": False,
-                    "compute_module": "pvwattsv5",
-                    "dc_ac_ratio": 1.1,
-                    "fixed_charge_rate": 0.096,
-                    "fixed_operating_cost": 260000,
-                    "gcr": 0.4,
-                    "inv_eff": 96,
-                    "losses": 14.07566,
-                    "module_type": 0,
-                    "system_capacity": 5000,
-                    "tilt": "latitude",
-                    "variable_operating_cost": 0
-                    }
-
-
 GEN_TEMPLATE = {
     "directories": {
         "logging_directory": "./logs",
-        "output_directory": "./outputs"
+        "output_directory": "./"
     },
     "execution_control": {
         "allocation": "PLACEHOLDER",
@@ -165,12 +146,11 @@ GEN_TEMPLATE = {
         "sites_per_worker": "PLACEHOLDER",
         "walltime": "PLACEHOLDER"
     },
-    "project_control": {
-        "logging_level": "INFO",
-        "analysis_years": "PLACEHOLDER",
-        "technology": "PLACEHOLDER",
-        "output_request": "PLACEHOLDER"
-    },
+
+    "logging_level": "INFO",
+    "analysis_years": "PLACEHOLDER",
+    "technology": "PLACEHOLDER",
+    "output_request": "PLACEHOLDER",
     "project_points": "PLACEHOLDER",
     "sam_files": {
         "key": "PLACEHOLDER"
@@ -198,7 +178,7 @@ COLLECT_TEMPLATE = {
     "directories": {
         "collect_directory": "PIPELINE",
         "logging_directory": "./logs",
-        "output_directory": "./outputs"
+        "output_directory": "./"
     },
     "execution_control": {
         "allocation": "PLACEHOLDER",
@@ -207,12 +187,10 @@ COLLECT_TEMPLATE = {
         "option": "eagle",
         "walltime": 2.0
     },
-    "project_control": {
-        "dsets": "PLACEHOLDER",
-        "file_prefixes": "PIPELINE",
-        "logging_level": "INFO",
-        "parallel": False
-    },
+    "dsets": "PLACEHOLDER",
+    "file_prefixes": "PIPELINE",
+    "logging_level": "INFO",
+    "parallel": False,
     "project_points": "PLACEHOLDER"
 }
 
@@ -220,7 +198,7 @@ COLLECT_TEMPLATE = {
 MULTIYEAR_TEMPLATE = {
   "directories": {
     "logging_directory": "./logs",
-    "output_directory": "./outputs"
+    "output_directory": "./"
   },
   "execution_control": {
     "allocation": "PLACEHOLDER",
@@ -237,9 +215,7 @@ MULTIYEAR_TEMPLATE = {
       "source_prefix": ""
     }
   },
-  "project_control": {
-    "logging_control": "INFO"
-  }
+  "logging_control": "INFO"
 }
 
 AGGREGATION_TEMPLATE = {
@@ -256,14 +232,14 @@ AGGREGATION_TEMPLATE = {
   },
   "directories": {
     "logging_directories": "./logs",
-    "output_directory": "./outputs"
+    "output_directory": "./"
   },
   "excl_dict": {
     "PLACEHOLDER": {
       "exclude_values": "PLACEHOLDER"
     },
   },
-  "excl_fpath": "/projects/rev/data/exclusions/CONUS_Exclusions.h5",
+  "excl_fpath": "PLACEHOLDER",
   "execution_control": {
     "allocation": "PLACEHOLDER",
     "feature": "--qos=normal",
@@ -330,10 +306,8 @@ REPPROFILES_TEMPLATE = {
   },
   "gen_fpath": "PIPELINE",
   "n_profiles": 1,
-  "project_control": {
-    "analysis_years": "PLACEHOLDER",
-    "logging_level": "INFO"
-  },
+  "analysis_years": "PLACEHOLDER",
+  "logging_level": "INFO",
   "reg_cols": [
     "model_region",
     "res_class"
@@ -352,66 +326,54 @@ TEMPLATES = {
     "ba": BATCH_TEMPLATE
 }
 
-# Default Wind Turbine Powercurve Powerout (until a better way shows up).
-DEFAULT_WTPO = np.zeros(161)
-DEFAULT_WTPO[38: 100] = 4500.0
-DEFAULT_WTPO[13: 38] = [122.675, 169.234, 222.943, 284.313, 353.853, 432.076,
-                        519.492, 616.610, 723.943, 842.001, 971.294, 1112.330,
-                        1265.630, 1431.690, 1611.040, 1804.170, 2011.600,
-                        2233.840, 2471.400, 2724.790, 2994.530, 3281.120,
-                        3585.070, 3906.900, 4247.120]
-DEFAULT_WTPO = list(DEFAULT_WTPO)
-
-# Default SAM model parameters for wind.  # <---------------------------------- Check that these are indeed the defaults.
-WIND_SAM_PARAMS = {
-        "adjust:constant": 0.0,
-        "capital_cost" : 245000000,
-        "fixed_operating_cost" : 7790000,
-        "fixed_charge_rate": 0.052,
-        "icing_cutoff_temp": 0.0,
-        "icing_cutoff_rh": 95.0,
-        "low_temp_cutoff": -10,
-        "system_capacity": 200000,
-        "variable_operating_cost": 0,
-        "wind_farm_losses_percent": 12.8,
-        "wind_farm_wake_model": 0,
-        "wind_farm_xCoordinates": [0],
-        "wind_farm_yCoordinates": [0],
-        "wind_resource_model_choice": 0,
-        "wind_resource_shear": 0.140,
-        "wind_resource_turbulence_coeff": 0.10,
-        "wind_turbine_cutin": 0.0,
-        "wind_turbine_hub_ht": 100.0,
-        "wind_turbine_powercurve_powerout": DEFAULT_WTPO,
-        "wind_turbine_powercurve_windspeeds": list(np.arange(0, 40.25, 0.25)),
-        "wind_turbine_rotor_diameter": 167.0
+# Default SAM model parameters
+SOLAR_SAM_PARAMS = {
+    "azimuth": "PLACEHOLDER",
+    "array_type": "PLACEHOLDER",
+    "capital_cost": "PLACEHOLDER",
+    "clearsky": "PLACEHOLDER",
+    "compute_module": "PLACEHOLDER",
+    "dc_ac_ratio": "PLACEHOLDER",
+    "fixed_charge_rate": "PLACEHOLDER",
+    "fixed_operating_cost": "PLACEHOLDER",
+    "gcr": "PLACEHOLDER",
+    "inv_eff": "PLACEHOLDER",
+    "losses": "PLACEHOLDER",
+    "module_type": "PLACEHOLDER",
+    "system_capacity": "PLACEHOLDER",
+    "tilt": "PLACEHOLDER",
+    "variable_operating_cost": "PLACEHOLDER"
 }
 
-# All default SAM model parameters.
-SAM_PARAMS = {"pv": SOLAR_SAM_PARAMS,
-              "wind": WIND_SAM_PARAMS}
+WIND_SAM_PARAMS = {
+        "adjust:constant": "PLACEHOLDER",
+        "capital_cost" : "PLACEHOLDER",
+        "fixed_operating_cost" : "PLACEHOLDER",
+        "fixed_charge_rate": "PLACEHOLDER",
+        "icing_cutoff_temp": "PLACEHOLDER",
+        "icing_cutoff_rh": "PLACEHOLDER",
+        "low_temp_cutoff": "PLACEHOLDER",
+        "system_capacity": "PLACEHOLDER",
+        "variable_operating_cost": "PLACEHOLDER",
+        "wind_farm_losses_percent": "PLACEHOLDER",
+        "wind_farm_wake_model": "PLACEHOLDER",
+        "wind_farm_xCoordinates": "PLACEHOLDER",
+        "wind_farm_yCoordinates": "PLACEHOLDER",
+        "wind_resource_model_choice": "PLACEHOLDER",
+        "wind_resource_shear":"PLACEHOLDER",
+        "wind_resource_turbulence_coeff": "PLACEHOLDER",
+        "wind_turbine_cutin": "PLACEHOLDER",
+        "wind_turbine_hub_ht": "PLACEHOLDER",
+        "wind_turbine_powercurve_powerout": "PLACEHOLDER",
+        "wind_turbine_powercurve_windspeeds": "PLACEHOLDER",
+        "wind_turbine_rotor_diameter": "PLACEHOLDER"
+}
 
-# Default 'Top Level' parameters, i.e. those that are shared between runs.
-TOP_PARAMS = {"allocation": "rev",
-              "feature": "--qos=normal",
-              "keep_chunks": False,
-              "logdir": "./logs",
-              "loglevel": "INFO",
-              "memory": 90,
-              "memory_utilization_limit": 0.4,
-              "multi_year": False,
-              "nodes": 1,
-              "option": "eagle",
-              "outdir": "./",
-              "outputs": "cf_mean",
-              "parallel": False,
-              "pointdir": "./project_points",
-              "resource": "nsrdb_v3",
-              "sites_per_worker": 100,
-              "tech": "pv",
-              "walltime": 0.5,
-              "years": "all"}
-
+SAM_TEMPLATES = {
+    "pvwattsv5": SOLAR_SAM_PARAMS,
+    "pvwattsv7": SOLAR_SAM_PARAMS,
+    "wind": WIND_SAM_PARAMS
+}
 
 # Functions.
 def data_path(path):
@@ -456,96 +418,6 @@ def check_config(config_file):
         msg = ('JSON Error:\n{}\nCannot read json file: '
                '"{}"'.format(error, config_file))
         raise JSONError(msg)
-
-
-#def compare_profiles(datasets,
-#                     dataset="cf_profile",
-#                     units="$\mathregular{m^{-2}}$",
-#                     title="Output Profiles",
-#                     cmap="viridis",
-#                     savefolder=None,
-#                     dpi=300):
-#    """Compare profiles from different reV generation models
-#
-#    Parameters:
-#        outputs (list): A list of reV output profile numpy arrays.
-#
-#    Returns:
-#        (png): An image comparing output profiles over time.
-#    """
-#    # Get the profiles from the datasets
-#    profiles = {key: datasets[key][dataset] for key in datasets}
-#
-#    # Get the time values from one of the data sets
-#    keys = list(datasets.keys())
-#    time = datasets[keys[0]]["time_index"]
-#    nstep = int(len(time) / 15)
-#    time_ticks = np.arange(0, len(time), nstep)
-#    time_labels = pd.to_datetime(time[1::nstep]).strftime("%b %d %H:%M")
-#
-#    # Get grouping features
-#    groups = list(profiles.keys())
-#    for i, grp in enumerate(groups):
-#        elements = grp.split("_")
-#        module = elements[0].upper()
-#        group_feature = elements[1].capitalize()
-#        year = elements[2]
-#        elements = [module, group_feature, year]
-#        group = " ".join(elements)
-#        groups[i] = group
-#
-#    # Get the datasets
-#    outputs = [profiles[key] for key in profiles.keys()]
-#
-#    # Get some information about the outputs
-#    noutputs = len(outputs)
-#
-#    # Transpose outputs so they're horizontal
-#    outputs = [out.T for out in outputs]
-#
-#    # Figure level graph elements
-#    fig, axes = plt.subplots(noutputs, 1, figsize=(20, 4))
-#    fig.suptitle(title, y=1.15, x=.425, fontsize=20)
-#    fig.tight_layout()
-#    fig.text(0.425, 0.001, 'Date', ha='center', va='center', fontsize=15)
-#    fig.text(0.00, .6, 'Site #', ha='center', va='center', fontsize=15,
-#             rotation='vertical')
-#
-#    # We need a common color map
-#    maxes = [np.max(out) for out in outputs]
-#    if np.diff(maxes) == 0:
-#        maxes[0] = maxes[0] - 1
-#    color_template = outputs[int(np.where(maxes == max(maxes))[0])]
-#    ctim = axes[0].imshow(color_template, cmap=cmap)
-#    clim = ctim.properties()['clim']
-#
-#    # For each axis plot and format
-#    for i, axis in enumerate(axes):
-#        axis.imshow(outputs[i], cmap=cmap, clim=clim)
-#        axis.set_aspect('auto')
-#        axis.set_title(groups[i], fontsize=15)
-#        axis.set_xticks([])
-#
-#    # Set date axis on the last one?
-#    axes[i].set_xticks(time_ticks)
-#    axes[i].set_xticklabels(time_labels)
-#    fig.autofmt_xdate(rotation=-35, ha="left")
-#
-#    # Set the colorbar
-#    cbr = fig.colorbar(ctim, ax=axes.ravel().tolist(), shrink=.9,
-#                       pad=0.02)
-#    cbr.ax.set_ylabel(units, fontsize=15, rotation=270, labelpad=15)
-#
-#    # Also save to file
-#    if savefolder:
-#        if not os.path.exists(savefolder):
-#            os.makedirs(savefolder)
-#        file = "_".join([module.lower(), dataset, year]) + ".png"
-#        path = os.path.join(savefolder, file)
-#        fig.savefig(path, bbox_inches="tight", dpi=dpi)
-#        plt.close(fig)
-
-
 
 def extract_arrays(file):
     """Get all output data sets from an HDF5 file.
@@ -754,6 +626,8 @@ def to_sarray(df):
             raise
 
     return array, dtypes
+
+
 def write_config(config_dict, path, verbose):
     """ Write a configuration dictionary to a json file."""
     # what type of configuration is this?
@@ -769,442 +643,3 @@ def write_config(config_dict, path, verbose):
     check_config(path)
     if verbose:
         print(module + " config file opens.")
-
-
-class Config:
-    """Sets reV model key values and generates configuration json files."""
-    def __init__(self,
-                 technology="pv",
-                 top_params=TOP_PARAMS.copy(),
-                 verbose=True):
-        self.points = "all"
-        self.gids = None
-        self.top_params = top_params
-        self.sam_params = SAM_PARAMS.copy()[technology]
-        self.sam_files = {}
-        self.verbose = verbose
-        self._set_years()
-        self._set_points_path()
-
-    def config_all(self, excl_pos_lon=False):
-        """ Call all needed sub configurations except for sam
-
-        Parameter:
-            excl_pos_lon (boolean): Exclude (potentially problematic) positive
-                                    longitudes. This is temporarily here until
-                                    a better way is found, since it is the
-                                    easiest place to access.
-        Returns:
-            JSON cofiguration files for reV.
-        """
-
-        # Check that there are specified sam files
-        try:
-            assert self.sam_files is not None
-            assert len(self.sam_files) > 0
-        except AssertionError:
-            print("Could not configure GENRATION file, no SAM configuration " +
-                  "files detected.\n")
-            raise
-
-        # Separate parameters for space
-        params = self.top_params
-        outputs = self.top_params["outputs"]
-        econ_outputs = [o for o in outputs if o in ECON_MODULES]
-
-        # If we are using more than one node, collect the outputs
-        if params["nodes"] > 1:
-            self._config_collect()
-            self._config_pipeline()
-
-        # If we are modeling certain economic modules, use pipeline and econ
-        if any(econ_outputs):
-            self._config_econ()
-            self._config_pipeline()
-
-        # If more than one jobs are needed, use batch and pipeline
-        if len(self.sam_files) > 1:
-            self._config_batch()
-            self._config_pipeline()
-            tag = params["set_tag"]
-        else:
-            tag = list(self.sam_files.keys())[0]
-
-        # If we are combining yearly output
-        if len(params["years"]) > 1 and params["multi_year"]:
-            self._config_multiyear()
-
-        # Configure the generation file
-        self._config_gen()
-
-        # Create project points - changes
-        point_df = project_points(tag=tag,
-                                  resource=params["resource"],
-                                  points=self.points,
-                                  gids=self.gids)
-
-        # If we are excluding positive longitudes
-        if excl_pos_lon:
-            point_df = point_df[point_df["lon"] < 0]
-
-        # Save project points
-        point_df.to_csv(self.points_path, index=False)
-        if self.verbose:
-            print("POINTS" + " saved to '" + self.points_path + "'.")
-
-    def config_sam(self, jobname="job"):
-        """Configure the System Advisor Model (SAM) portion of a reV model.
-
-        Parameters:
-            jobname (str): Job name assigned to SAM configuration.
-            resource (str): Energy resource data set key. Set to None for
-                            options.
-            points (int | str | list): Sample points to generate. Set to an
-                                       integer, n, to use the first n grid IDs,
-                                       set to a list of points to use those
-                                       points, or set to the string "all" to
-                                       use all available points in the chosen
-                                       resource data set.
-
-        Returns:
-            dict: A dictionary of default and user specified SAM parameters.
-            file: A local json file
-        """
-
-        # Make sure there is a sam config folder
-        if not os.path.exists("./sam_configs"):
-            os.mkdir("./sam_configs")
-
-        # Separate parameters for space
-        config_dict = self.sam_params
-
-        # Create file name using jobname and store this for gen_config
-        config_path = os.path.join(".", "sam_configs", jobname + ".json")
-        self.sam_files[jobname] = config_path
-
-        # Save file
-        with open(config_path, "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
-        if self.verbose:
-            print("SAM job " + jobname + " config file saved to '" +
-                  config_path + "'.")
-
-        # Check that the json as written correctly
-        check_config(config_path)
-        if self.verbose:
-            print("SAM job " + jobname + " config file opens.")
-
-        # Return configuration dictionary
-        return config_dict
-
-#    def _config_aggregation(self):
-#        """If aggregating... """
-#
-#        # Separate parameters for space
-#        params = self.top_params
-#
-#        # Create configuration dictionary
-#        config_dict = {}
-#
-#        # Write json to file
-#        self._write_config(config_dict, "./config_aggregation.json")
-#
-#        # Return configuration dictionary
-#        return config_dict
-
-
-    def _config_batch(self):
-        """If running mutliple technologies, this configures a batch run.
-
-        Note:
-            This can apparently be done using either multipe sam config files,
-            or multiple arguments. I think, to start, I'll just use multiple
-            sam config files. That will let us configure more unique setups
-            to compare and, once this is done, won't require extra steps.
-
-            Batching the arguments themselves will result in all combinations,
-            which might not always be desired.
-        """
-
-        # Separate parameters for space
-        params = self.top_params
-
-        # Create separate files for each job name
-        tag = params["set_tag"]
-        sam_dicts = [{tag: file} for _, file in self.sam_files.items()]
-
-        # Create the configuration dictionary
-        config_dict = {
-            "pipeline_config": "./config_pipeline.json",
-            "sets": [
-                {
-                    "args": {
-                        "sam_files": sam_dicts
-                    },
-                    "files": ["./config_gen.json"],
-                    "set_tag": params["set_tag"]
-                }
-            ]
-        }
-
-        # Write json to file
-        self._write_config(config_dict, "./config_batch.json")
-
-        # Return configuration dictionary
-        return config_dict
-
-    def _config_collect(self):
-        """If there are more than one node we need to combine outputs"""
-
-        # Separate parameters for space
-        params = self.top_params
-
-        # Create the dictionary from the current set of parameters
-        config_dict = {
-            "directories": {
-                "collect_directory": "PIPELINE", # <--------------------------- Is this auto generated?
-                "logging_directory": params["logdir"],
-                "output_directory": params["outdir"]
-            },
-            "execution_control": {
-                "allocation": params["allocation"],
-                "feature": params["feature"],
-                "memory": params["memory"],
-                "option": params["option"],
-                "walltime": params["walltime"]
-            },
-            "project_control": {
-                "dsets": params["outputs"],
-                "file_prefixes": "PIPELINE", # <------------------------------- I guess they're all called PIPELINE_something?
-                "keep_chunks": params["keep_chunks"],
-                "logging_level": params["loglevel"],
-                "parallel": params["parallel"]
-            },
-            "project_points": self.points_path
-        }
-
-        # Save to json using jobname for file name
-        self._write_config(config_dict, "./config_collect.json")
-
-        # Return configuration dictionary
-        return config_dict
-
-    def _config_econ(self):
-        """Create a econ config file."""
-
-        # Separate parameters for space
-        params = self.top_params
-
-        # Get only the econ outputs
-        outputs = self.top_params["outputs"]
-        econ_outputs = [o for o in outputs if o in ECON_MODULES]
-
-        # Create the dictionary from the current set of parameters
-        config_dict = {
-            "cf_file": "PIPELINE",
-            "directories": {
-                "logging_directory": params["logdir"],
-                "output_directory": params["outdir"]
-                },
-            "execution_control": {
-                "allocation": params["allocation"],
-                "feature": params["feature"],
-                "nodes": params["nodes"],
-                "option": params["option"],
-                "sites_per_worker": params["sites_per_worker"],
-                "walltime": params["walltime"]
-                },
-            "project_control": {
-                "analysis_years": params["years"],
-                "logging_level": params["loglevel"],
-                "name": "econ",  # <------------------------------------------- How important is it to set this one?
-                "output_request": econ_outputs
-                },
-            "project_points": "./project_points/project_points.csv",
-            "sam_files": self.sam_files  # <--------------------------------- The example keeps the econ sam config separate from the gen config...is that necessary?
-            }
-
-        # Save to json using jobname for file name
-        self._write_config(config_dict, "./config_econ.json")
-
-        # Return configuration dictionary
-        return config_dict
-
-    def _config_gen(self):
-        """create a generation config file."""
-
-        # Separate parameters for space
-        params = self.top_params
-
-        # If there are more than one jobs, use batch and pipeline
-        if len(self.sam_files) > 1:
-            sam_files = "PLACEHOLDER"
-        else:
-            sam_files = self.sam_files
-
-        # Create the dictionary from the current set of parameters
-        config_dict = {
-            "directories": {
-                "logging_directory": params["logdir"],
-                "output_directory": params["outdir"]
-            },
-            "execution_control": {
-                "allocation": params["allocation"],
-                "feature": params["feature"],
-                "memory_utilization_limit": params["memory_utilization_limit"],
-                "nodes": params["nodes"],
-                "option": params["option"],
-                "sites_per_worker": params["sites_per_worker"],
-                "walltime": params["walltime"]
-            },
-            "project_control": {
-                "logging_level": params["loglevel"],
-                "analysis_years": params["years"],
-                "technology": params["tech"],
-                "output_request": params["outputs"]
-            },
-            "project_points": self.points_path,
-            "sam_files": sam_files,
-            "resource_file": RESOURCE_DATASETS[self.top_params['resource']]
-        }
-
-        # Save to json using jobname for file name
-        self._write_config(config_dict, "./config_gen.json")
-
-        # Return configuration dictionary
-        return config_dict
-
-    def _config_multiyear(self):
-        """ If we want to get multiyear figures we need this."""
-
-        # Separate parameters for space
-        params = self.top_params
-
-        # Create the configuration dictionary
-        config_dict = {
-            "directories": {
-                "logging_directory": params["logdir"],
-                "output_directory":  params["outdir"]
-            },
-            "execution_control": {
-                "allocation":  params["allocation"],
-                "feature": params["allocation"],
-                "memory": params["memory"],
-                "option": params["option"],
-                "walltime": params["walltime"]
-            },
-            "groups": {
-                "none": {
-                    "dsets": params["outputs"],
-                    "source_dir": params["outdir"],
-                    "source_files": "PIPELINE",
-                    "source_prefix": ""
-                }
-              },
-              "project_control": {
-                "logging_level": params["loglevel"]
-              }
-        }
-
-        # Save to json using jobname for file name
-        self._write_config(config_dict, "./config_multi-year.json")
-
-        # Return configuration dictionary
-        return config_dict
-
-    def _config_pipeline(self):
-        """ If we are trying to run multiple modules at once we need this."""
-
-        # Separate parameters for space
-        params = self.top_params
-
-        # Create the configuration dictionary
-        config_dict = {
-            "logging": {
-                "log_file": None,
-                "log_level": params["loglevel"]
-            },
-            "pipeline": [
-                {
-                    "generation": "./config_gen.json"
-                }
-            ]
-        }
-
-        # If there are econ modules
-        outputs = self.top_params["outputs"]
-        econ_outputs = [o in ECON_MODULES for o in outputs]
-        if any(econ_outputs):
-            config_dict["pipeline"].append({"econ": "./config_econ.json"})
-
-        # If there are multiple nodes, collect. Is this run in order?
-        if self.top_params["nodes"] > 1:
-            config_dict["pipeline"].append(
-                    {"collect": "./config_collect.json"})
-
-        # If multiyear is on
-        if self.top_params["multi_year"] and len(self.top_params["years"]) > 1:
-            config_dict["pipeline"].append(
-                    {"multi-year": "./config_multi-year.json"})
-
-        # Write json to file
-        self._write_config(config_dict, "./config_pipeline.json")
-
-#    def _config_rep_profiles(self):
-#        """If generating representative profiles... """
-#
-#        # Separate parameters for space
-#        params = self.top_params
-#
-#        # Create configuration dictionary
-#        config_dict = {}
-#
-#        # Write json to file
-#        self._write_config(config_dict, "./config_rep-profiles.json")
-#
-#        # Return configuration dictionary
-#        return config_dict
-
-#    def _config_supply_curve(self):
-#        """If generating supply curves... """
-#
-#        # Separate parameters for space
-#        params = self.top_params
-#
-#        # Create configuration dictionary
-#        config_dict = {}
-#
-#        # Write json to file
-#        self._write_config(config_dict, "./config_supply-curve.json")
-#
-#        # Return configuration dictionary
-#        return config_dict
-
-    def _set_points_path(self):
-        """Set the path name for the points file."""
-        self.points_path = os.path.join(self.top_params["pointdir"],
-                                        "project_points.csv")
-
-    def _set_years(self):
-        """Set years attribute to all available if not specified"""
-        if self.top_params["years"] == "all":
-            if "nsrdb" in self.top_params["resource"]:
-                self.years = range(1998, 2019)
-            else:
-                self.years = range(2007, 2014)
-
-    def _write_config(self, config_dict, path):
-        """ Write a configuration dictionary to a json file."""
-        # what type of configuration is this?
-        module = path.split("_")[1].replace(".json", "").upper()
-
-        # Write json to file
-        with open(path, "w") as file:
-            file.write(json.dumps(config_dict, indent=4))
-        if self.verbose:
-            print(module + " config file saved to " + path + ".")
-
-        # Check that the json as written correctly
-        check_config(path)
-        if self.verbose:
-            print(module + " config file opens.")

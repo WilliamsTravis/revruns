@@ -36,7 +36,7 @@ DRIVER_HELP = ("Save as a Geopackage ('gpkg') or ESRI Shapefile ('shp'). "
               "Defaults to 'gpkg'. (str).")
 CRS_HELP = ("A proj4 string or epsg code associated with the file's "
             "coordinate reference system. (str | int)" )
-OMISSIONS =  ["coordinates" ,"time_index", "meta"]
+OMISSIONS =  ["coordinates" ,"time_index", "meta", "latitude", "longitude"]
 
 # Different possible lat lon column names
 COORD_NAMES = {"lat": ["latitude", "lat", "y"],
@@ -147,9 +147,8 @@ def h5_to_shape(file, driver="gpkg", dataset=None, layer=0, savepath=None,
     Sample Arguments
     ----------------
     
-    file = "/shared-projects/rev/projects/heco/data/resource/wtk_hawaii_2014.h5"
-    savepath = None
-    
+    file = "/shared-projects/rev/projects/heco/data/resource/comparisons/differences.h5"
+    savepath = "/shared-projects/rev/projects/heco/data/resource/comparisons/mean_windspeed_differences.gpkg"
     driver = "gpkg"
     dataset = None
     layer = 0
@@ -167,24 +166,41 @@ def h5_to_shape(file, driver="gpkg", dataset=None, layer=0, savepath=None,
     # Read hdf5 file
     arrays = {}
     with h5py.File(file, "r") as ds:
-        meta = pd.DataFrame(ds["meta"][:])
+        keys = list(ds.keys())
+        if "meta" in keys:
+            meta = pd.DataFrame(ds["meta"][:])
+
+        # else:
+        #     coord_check = any([lat in keys for lat in COORD_NAMES["lat"]])
+        #     if coord_check:
+        #         latcol = [lat for lat in COORD_NAMES["lat"] if lat in keys ][0]
+        #         loncol = [lon for lon in COORD_NAMES["lon"] if lon in keys ][0]
+        #         lats = pd.DataFrame(ds[latcol][:])
+        #         lons = pd.DataFrame(ds[loncol][:])
+        #         meta = lons.join(lats)
+        else:
+            raise KeyError("Meta data not found.")
+
+
         if dataset:
             scale = ds[dataset].attrs["scale_factor"]
-            arrays[dataset] = ds[dataset][:] / scale
+            arrays[dataset] = ds[dataset][:] #/ scale
         else:
             datasets = [k for k in ds.keys() if k not in OMISSIONS]
             print("Rendering " + str(len(datasets)) + " datasets: \n  " + 
                   "\n  ".join(datasets))
             for k in tqdm(datasets, position=0):
-                scale = ds[k].attrs["scale_factor"]
-                arrays[k] = ds[k][:] / scale
-
+                # scale = ds[k].attrs["scale_factor"]
+                arrays[k] = ds[k][:] #/ scale
 
     # Standardize the coordinate column names
     meta = guess_coords(meta)
     meta = decode_cols(meta)
     for dataset, array in arrays.items():
-        meta[dataset] = array[layer]
+        if len(array.shape) > 1:
+            meta[dataset] = array[layer]
+        else:
+            meta[dataset] = array
 
     # Create a geometry columns and a geodataframe
     meta["geometry"] = meta.apply(to_point, axis=1)
@@ -193,6 +209,7 @@ def h5_to_shape(file, driver="gpkg", dataset=None, layer=0, savepath=None,
 
     # We'd need to decode some columns, let's just get the datasets
     gdf = gdf[["geometry", *arrays.keys()]]
+    # gdf = gdf[["geometry", "offshore", *arrays.keys()]]
 
     # Save file
     gdf.to_file(savepath, driver=driver_str)
