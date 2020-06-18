@@ -11,7 +11,7 @@ setup(
                  "Potential Model (reV)."),
     author="Travis Williams",
     author_email="travis.williams@nrel.gov",
-    package_data={"revruns": ["data/*.csv", "data/*.xlsx"]},
+    package_data={"revruns": ["data/*txt", "data/*.csv", "data/*.xlsx"]},
     entry_points={"console_scripts":
                       [
                        "rrbatch_collect = revruns.rrbatch_collect:main",

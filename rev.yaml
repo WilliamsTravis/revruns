@@ -2,6 +2,7 @@ name: testrev
 channels:
   - nrel
 dependencies: # These don't appear to work yet, but this is ready for when they do!
+  - python=3.7
   - nrel-rev
   - nrel-pysam
   - nrel-rex

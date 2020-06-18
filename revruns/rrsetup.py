@@ -5,6 +5,7 @@ Run this to setup configuration files from a standard template.
 
 import os
 import pkgutil
+import shutil
 
 import click
 import numpy as np
@@ -103,20 +104,11 @@ def write_template(dst=None):
     if not dst:
         dst = "./rev_inputs.xlsx"
 
-    # Get each sheet data
+    # Get package data path
     dpath = os.path.join(ROOT, "data", "rev_inputs.xlsx")
-    sheets = get_sheet(dpath)
-    sheets = {s: get_sheet(dpath, s) for s in sheets}
-    
-    # Create a writer
-    writer = pd.ExcelWriter(dst, engine='xlsxwriter')
 
-    # write each
-    for s, df in sheets.items():
-        df.to_excel(writer, sheet_name=s)
-
-    # Close the Pandas Excel writer and output the Excel file.
-    writer.save()
+    # Just copy it over
+    shutil.copy(dpath, dst)
 
 
 class Paths:
@@ -197,8 +189,7 @@ def main(file, template, template_dir):
 
     # Write new template if asked
     if template:
-        write_template(template_dir)  # <-------------------------------------- how to write the text ox with instructions?
-        print(os.path.join(ROOT, "data", "rev_inputs.xlsx"))
+        write_template(template_dir)
 
 if __name__ == "__main__":
     main()

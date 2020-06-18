@@ -1,0 +1,45 @@
+Instructions:
+
+The rev input excel sheet allows the user to configure reV to run multiple System Advisor Models with different sets of spatial exclusions, and
+in different combinations (scenarios). Sample entries have been provided for guidance. To use, copy the file and replace the example entries with
+desired settings. 
+
+Tab #1: Sam Configurations
+
+This tab will be used to generate configurations for the System Advisor Model.
+
+system_name -  User-defined system name.
+compute_module - The compute module associated with the desired technology model.
+parameter - The name of a compute module parameter.
+value -  The desired value of the parameter.
+units - The units associated with the  parameter (optional).
+description - A description of the parameter (optional).
+
+
+Tab #2: Power Curves
+
+This tab specifies power out by wind speed for wind turbine systems. The first column is a constant set of wind speed bins, the next columns corresponds to the power curves of systems defined in tab #1. 
+
+
+Tab #3 Exclusion Files
+
+This tab will be used to associate exclusion GeoTiff files with names and values. The name associated with each exclusion value will be used in the scenario tabs. Values can either be provided as a comma separated list of values in the data set to exclude, or as the "%" symbol to use the values in the data set as percent-exclusions (i.e. 0.50 = 50% excluded)
+
+
+Tab #4: Characterization Files
+
+This tab will be used to associate characterization GeoTiff files with names and values.  Characterizations are used in the aggregation step to summarize some spatial dataset with the resulting aggregated area or "wind farm".  The name associated with each characterization value will be used in the scenario tabs. The summarization method describes the function applied to the set of values within each wind farm to get the summary and currenty supports these option:
+
+"sum" = Sum of all values.
+"mean" = Mean of all values.
+"category" = A json dictionary of value, count pairs. 
+
+
+Tab #5: Scenarios
+
+This tab allows the user to specify multiple scenarios based on different combinations of the elements set in the previous tabs.
+
+scenario_name – A name to assign to each scenario. Will be used to generate scenario directory names. 
+system_name – The name for a desired technology system specified in tab #1.
+exclusion_name – The name of a desired exclusion file specified in tab #3.
+characterization_name – The name of a desired characterization file specified in tab #4. 
