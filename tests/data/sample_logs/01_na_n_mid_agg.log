@@ -1,0 +1,83 @@
+INFO - 2020-05-28 15:03:56,008 [cli_sc_aggregation.py:54] : Running reV supply curve aggregation from config file: "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/config_aggregation.json"
+INFO - 2020-05-28 15:03:56,008 [cli_sc_aggregation.py:55] : Target output directory: "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/"
+INFO - 2020-05-28 15:03:56,008 [cli_sc_aggregation.py:56] : Target logging directory: "./logs/"
+INFO - 2020-05-28 15:03:57,522 [cli_sc_aggregation.py:399] : Running reV SC aggregation on SLURM with node name "01_na_n_mid_agg"
+INFO - 2020-05-28 15:03:57,593 [cli_sc_aggregation.py:417] : Kicked off reV SC aggregation job "01_na_n_mid_agg" (SLURM jobid #3275897).
+INFO - 2020-05-28 15:05:32,372 [sc_aggregation.py:604] : Running supply curve point aggregation for points 33 through 100266 at a resolution of 128 on None cores in 75 chunks.
+INFO - 2020-05-28 15:07:05,903 [sc_aggregation.py:638] : Parallel aggregation futures collected: 1 out of 75
+INFO - 2020-05-28 15:07:07,682 [sc_aggregation.py:638] : Parallel aggregation futures collected: 2 out of 75
+INFO - 2020-05-28 15:07:07,750 [sc_aggregation.py:638] : Parallel aggregation futures collected: 3 out of 75
+INFO - 2020-05-28 15:07:08,101 [sc_aggregation.py:638] : Parallel aggregation futures collected: 4 out of 75
+INFO - 2020-05-28 15:07:08,166 [sc_aggregation.py:638] : Parallel aggregation futures collected: 5 out of 75
+INFO - 2020-05-28 15:07:08,274 [sc_aggregation.py:638] : Parallel aggregation futures collected: 6 out of 75
+INFO - 2020-05-28 15:07:08,292 [sc_aggregation.py:638] : Parallel aggregation futures collected: 7 out of 75
+INFO - 2020-05-28 15:07:09,513 [sc_aggregation.py:638] : Parallel aggregation futures collected: 8 out of 75
+INFO - 2020-05-28 15:07:10,428 [sc_aggregation.py:638] : Parallel aggregation futures collected: 9 out of 75
+INFO - 2020-05-28 15:07:11,062 [sc_aggregation.py:638] : Parallel aggregation futures collected: 10 out of 75
+INFO - 2020-05-28 15:07:11,123 [sc_aggregation.py:638] : Parallel aggregation futures collected: 11 out of 75
+INFO - 2020-05-28 15:07:14,847 [sc_aggregation.py:638] : Parallel aggregation futures collected: 12 out of 75
+INFO - 2020-05-28 15:07:16,825 [sc_aggregation.py:638] : Parallel aggregation futures collected: 13 out of 75
+INFO - 2020-05-28 15:07:16,983 [sc_aggregation.py:638] : Parallel aggregation futures collected: 14 out of 75
+INFO - 2020-05-28 15:07:16,992 [sc_aggregation.py:638] : Parallel aggregation futures collected: 15 out of 75
+INFO - 2020-05-28 15:07:18,411 [sc_aggregation.py:638] : Parallel aggregation futures collected: 16 out of 75
+INFO - 2020-05-28 15:07:18,635 [sc_aggregation.py:638] : Parallel aggregation futures collected: 17 out of 75
+INFO - 2020-05-28 15:07:18,791 [sc_aggregation.py:638] : Parallel aggregation futures collected: 18 out of 75
+INFO - 2020-05-28 15:07:19,228 [sc_aggregation.py:638] : Parallel aggregation futures collected: 19 out of 75
+INFO - 2020-05-28 15:07:19,886 [sc_aggregation.py:638] : Parallel aggregation futures collected: 20 out of 75
+INFO - 2020-05-28 15:07:19,999 [sc_aggregation.py:638] : Parallel aggregation futures collected: 21 out of 75
+INFO - 2020-05-28 15:07:20,098 [sc_aggregation.py:638] : Parallel aggregation futures collected: 22 out of 75
+INFO - 2020-05-28 15:07:20,170 [sc_aggregation.py:638] : Parallel aggregation futures collected: 23 out of 75
+INFO - 2020-05-28 15:07:20,192 [sc_aggregation.py:638] : Parallel aggregation futures collected: 24 out of 75
+INFO - 2020-05-28 15:07:20,336 [sc_aggregation.py:638] : Parallel aggregation futures collected: 25 out of 75
+INFO - 2020-05-28 15:07:20,652 [sc_aggregation.py:638] : Parallel aggregation futures collected: 26 out of 75
+INFO - 2020-05-28 15:07:20,754 [sc_aggregation.py:638] : Parallel aggregation futures collected: 27 out of 75
+INFO - 2020-05-28 15:07:20,981 [sc_aggregation.py:638] : Parallel aggregation futures collected: 28 out of 75
+INFO - 2020-05-28 15:07:21,080 [sc_aggregation.py:638] : Parallel aggregation futures collected: 29 out of 75
+INFO - 2020-05-28 15:07:21,443 [sc_aggregation.py:638] : Parallel aggregation futures collected: 30 out of 75
+INFO - 2020-05-28 15:07:22,544 [sc_aggregation.py:638] : Parallel aggregation futures collected: 31 out of 75
+INFO - 2020-05-28 15:07:22,935 [sc_aggregation.py:638] : Parallel aggregation futures collected: 32 out of 75
+INFO - 2020-05-28 15:07:23,557 [sc_aggregation.py:638] : Parallel aggregation futures collected: 33 out of 75
+INFO - 2020-05-28 15:07:23,664 [sc_aggregation.py:638] : Parallel aggregation futures collected: 34 out of 75
+INFO - 2020-05-28 15:07:24,979 [sc_aggregation.py:638] : Parallel aggregation futures collected: 35 out of 75
+INFO - 2020-05-28 15:07:25,340 [sc_aggregation.py:638] : Parallel aggregation futures collected: 36 out of 75
+INFO - 2020-05-28 15:08:37,730 [sc_aggregation.py:638] : Parallel aggregation futures collected: 37 out of 75
+INFO - 2020-05-28 15:08:38,397 [sc_aggregation.py:638] : Parallel aggregation futures collected: 38 out of 75
+INFO - 2020-05-28 15:08:38,950 [sc_aggregation.py:638] : Parallel aggregation futures collected: 39 out of 75
+INFO - 2020-05-28 15:08:39,656 [sc_aggregation.py:638] : Parallel aggregation futures collected: 40 out of 75
+INFO - 2020-05-28 15:08:40,525 [sc_aggregation.py:638] : Parallel aggregation futures collected: 41 out of 75
+INFO - 2020-05-28 15:08:41,103 [sc_aggregation.py:638] : Parallel aggregation futures collected: 42 out of 75
+INFO - 2020-05-28 15:08:41,639 [sc_aggregation.py:638] : Parallel aggregation futures collected: 43 out of 75
+INFO - 2020-05-28 15:08:41,659 [sc_aggregation.py:638] : Parallel aggregation futures collected: 44 out of 75
+INFO - 2020-05-28 15:08:42,972 [sc_aggregation.py:638] : Parallel aggregation futures collected: 45 out of 75
+INFO - 2020-05-28 15:08:43,264 [sc_aggregation.py:638] : Parallel aggregation futures collected: 46 out of 75
+INFO - 2020-05-28 15:08:43,466 [sc_aggregation.py:638] : Parallel aggregation futures collected: 47 out of 75
+INFO - 2020-05-28 15:08:44,718 [sc_aggregation.py:638] : Parallel aggregation futures collected: 48 out of 75
+INFO - 2020-05-28 15:08:45,291 [sc_aggregation.py:638] : Parallel aggregation futures collected: 49 out of 75
+INFO - 2020-05-28 15:08:45,644 [sc_aggregation.py:638] : Parallel aggregation futures collected: 50 out of 75
+INFO - 2020-05-28 15:08:45,719 [sc_aggregation.py:638] : Parallel aggregation futures collected: 51 out of 75
+INFO - 2020-05-28 15:08:46,560 [sc_aggregation.py:638] : Parallel aggregation futures collected: 52 out of 75
+INFO - 2020-05-28 15:08:47,131 [sc_aggregation.py:638] : Parallel aggregation futures collected: 53 out of 75
+INFO - 2020-05-28 15:08:47,528 [sc_aggregation.py:638] : Parallel aggregation futures collected: 54 out of 75
+INFO - 2020-05-28 15:08:47,792 [sc_aggregation.py:638] : Parallel aggregation futures collected: 55 out of 75
+INFO - 2020-05-28 15:08:48,225 [sc_aggregation.py:638] : Parallel aggregation futures collected: 56 out of 75
+INFO - 2020-05-28 15:08:48,347 [sc_aggregation.py:638] : Parallel aggregation futures collected: 57 out of 75
+INFO - 2020-05-28 15:08:49,575 [sc_aggregation.py:638] : Parallel aggregation futures collected: 58 out of 75
+INFO - 2020-05-28 15:08:49,964 [sc_aggregation.py:638] : Parallel aggregation futures collected: 59 out of 75
+INFO - 2020-05-28 15:08:50,288 [sc_aggregation.py:638] : Parallel aggregation futures collected: 60 out of 75
+INFO - 2020-05-28 15:08:50,892 [sc_aggregation.py:638] : Parallel aggregation futures collected: 61 out of 75
+INFO - 2020-05-28 15:08:53,142 [sc_aggregation.py:638] : Parallel aggregation futures collected: 62 out of 75
+INFO - 2020-05-28 15:08:56,963 [sc_aggregation.py:638] : Parallel aggregation futures collected: 63 out of 75
+INFO - 2020-05-28 15:08:58,331 [sc_aggregation.py:638] : Parallel aggregation futures collected: 64 out of 75
+INFO - 2020-05-28 15:08:58,631 [sc_aggregation.py:638] : Parallel aggregation futures collected: 65 out of 75
+INFO - 2020-05-28 15:09:00,904 [sc_aggregation.py:638] : Parallel aggregation futures collected: 66 out of 75
+INFO - 2020-05-28 15:09:03,451 [sc_aggregation.py:638] : Parallel aggregation futures collected: 67 out of 75
+INFO - 2020-05-28 15:09:05,905 [sc_aggregation.py:638] : Parallel aggregation futures collected: 68 out of 75
+INFO - 2020-05-28 15:09:06,014 [sc_aggregation.py:638] : Parallel aggregation futures collected: 69 out of 75
+INFO - 2020-05-28 15:09:09,894 [sc_aggregation.py:638] : Parallel aggregation futures collected: 70 out of 75
+INFO - 2020-05-28 15:09:10,265 [sc_aggregation.py:638] : Parallel aggregation futures collected: 71 out of 75
+INFO - 2020-05-28 15:09:13,547 [sc_aggregation.py:638] : Parallel aggregation futures collected: 72 out of 75
+INFO - 2020-05-28 15:10:29,220 [sc_aggregation.py:638] : Parallel aggregation futures collected: 73 out of 75
+INFO - 2020-05-28 15:10:30,047 [sc_aggregation.py:638] : Parallel aggregation futures collected: 74 out of 75
+INFO - 2020-05-28 15:10:38,069 [sc_aggregation.py:638] : Parallel aggregation futures collected: 75 out of 75
+INFO - 2020-05-28 15:10:46,548 [sc_aggregation.py:788] : Aggregating the following columns for offshore wind sites based on NN onshore sites: ['cnty_fips']
+INFO - 2020-05-28 15:10:49,556 [cli_sc_aggregation.py:264] : Supply curve aggregation complete. Time elapsed: 5.97 min. Target output dir: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/

@@ -1,0 +1,43 @@
+INFO - 2020-05-28 15:29:52,742 [cli_rep_profiles.py:51] : Running reV representative profiles from config file: "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/config_rep-profiles.json"
+INFO - 2020-05-28 15:29:52,743 [cli_rep_profiles.py:52] : Target output directory: "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/"
+INFO - 2020-05-28 15:29:52,743 [cli_rep_profiles.py:53] : Target logging directory: "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/logs"
+INFO - 2020-05-28 15:29:52,745 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-28 15:29:52,746 [cli_rep_profiles.py:301] : Running reV SC rep profiles on SLURM with node name "01_na_n_mid_rep_profiles_2007"
+INFO - 2020-05-28 15:29:52,832 [cli_rep_profiles.py:319] : Kicked off reV rep profiles job "01_na_n_mid_rep_profiles_2007" (SLURM jobid #3277662).
+INFO - 2020-05-28 15:29:52,834 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-28 15:29:52,835 [cli_rep_profiles.py:301] : Running reV SC rep profiles on SLURM with node name "01_na_n_mid_rep_profiles_2008"
+INFO - 2020-05-28 15:29:52,874 [cli_rep_profiles.py:319] : Kicked off reV rep profiles job "01_na_n_mid_rep_profiles_2008" (SLURM jobid #3277663).
+INFO - 2020-05-28 15:29:52,876 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-28 15:29:52,877 [cli_rep_profiles.py:301] : Running reV SC rep profiles on SLURM with node name "01_na_n_mid_rep_profiles_2009"
+INFO - 2020-05-28 15:29:52,919 [cli_rep_profiles.py:319] : Kicked off reV rep profiles job "01_na_n_mid_rep_profiles_2009" (SLURM jobid #3277664).
+INFO - 2020-05-28 15:29:52,921 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-28 15:29:52,922 [cli_rep_profiles.py:301] : Running reV SC rep profiles on SLURM with node name "01_na_n_mid_rep_profiles_2010"
+INFO - 2020-05-28 15:29:52,961 [cli_rep_profiles.py:319] : Kicked off reV rep profiles job "01_na_n_mid_rep_profiles_2010" (SLURM jobid #3277665).
+INFO - 2020-05-28 15:29:52,963 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-28 15:29:52,964 [cli_rep_profiles.py:301] : Running reV SC rep profiles on SLURM with node name "01_na_n_mid_rep_profiles_2011"
+INFO - 2020-05-28 15:29:53,002 [cli_rep_profiles.py:319] : Kicked off reV rep profiles job "01_na_n_mid_rep_profiles_2011" (SLURM jobid #3277666).
+INFO - 2020-05-28 15:29:53,004 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-28 15:29:53,005 [cli_rep_profiles.py:301] : Running reV SC rep profiles on SLURM with node name "01_na_n_mid_rep_profiles_2012"
+INFO - 2020-05-28 15:29:53,044 [cli_rep_profiles.py:319] : Kicked off reV rep profiles job "01_na_n_mid_rep_profiles_2012" (SLURM jobid #3277667).
+INFO - 2020-05-28 15:29:53,045 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-28 15:29:53,046 [cli_rep_profiles.py:301] : Running reV SC rep profiles on SLURM with node name "01_na_n_mid_rep_profiles_2013"
+INFO - 2020-05-28 15:29:53,106 [cli_rep_profiles.py:319] : Kicked off reV rep profiles job "01_na_n_mid_rep_profiles_2013" (SLURM jobid #3277668).
+INFO - 2020-05-29 11:45:49,526 [cli_rep_profiles.py:51] : Running reV representative profiles from config file: "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/config_rep-profiles.json"
+INFO - 2020-05-29 11:45:49,540 [cli_rep_profiles.py:52] : Target output directory: "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/"
+INFO - 2020-05-29 11:45:49,541 [cli_rep_profiles.py:53] : Target logging directory: "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/logs"
+INFO - 2020-05-29 11:45:49,544 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-29 11:45:50,661 [cli_rep_profiles.py:319] : Job "01_na_n_mid_rep_profiles_2007" is successful in status json found in "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/", not re-running.
+INFO - 2020-05-29 11:45:50,663 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-29 11:45:50,693 [cli_rep_profiles.py:319] : Job "01_na_n_mid_rep_profiles_2008" is successful in status json found in "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/", not re-running.
+INFO - 2020-05-29 11:45:50,695 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-29 11:45:50,714 [cli_rep_profiles.py:319] : Job "01_na_n_mid_rep_profiles_2009" is successful in status json found in "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/", not re-running.
+INFO - 2020-05-29 11:45:50,716 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-29 11:45:50,735 [cli_rep_profiles.py:301] : Running reV SC rep profiles on SLURM with node name "01_na_n_mid_rep_profiles_2010"
+INFO - 2020-05-29 11:45:50,838 [cli_rep_profiles.py:319] : Kicked off reV rep profiles job "01_na_n_mid_rep_profiles_2010" (SLURM jobid #3289759).
+INFO - 2020-05-29 11:45:50,839 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-29 11:45:50,865 [cli_rep_profiles.py:301] : Running reV SC rep profiles on SLURM with node name "01_na_n_mid_rep_profiles_2011"
+INFO - 2020-05-29 11:45:50,950 [cli_rep_profiles.py:319] : Kicked off reV rep profiles job "01_na_n_mid_rep_profiles_2011" (SLURM jobid #3289760).
+INFO - 2020-05-29 11:45:50,952 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-29 11:45:50,978 [cli_rep_profiles.py:319] : Job "01_na_n_mid_rep_profiles_2012" is successful in status json found in "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/", not re-running.
+INFO - 2020-05-29 11:45:50,980 [rep_profiles_config.py:107] : Rep profiles using the following pipeline input for rev_summary: /lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv
+INFO - 2020-05-29 11:45:51,000 [cli_rep_profiles.py:319] : Job "01_na_n_mid_rep_profiles_2013" is successful in status json found in "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/", not re-running.
