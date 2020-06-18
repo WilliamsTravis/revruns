@@ -42,8 +42,9 @@ Created on Wed Dec  4 07:58:42 2019
 import json
 import os
 import ssl
-import h5py
+
 import geopandas as gpd
+import h5py
 import numpy as np
 import pandas as pd
 
@@ -375,36 +376,6 @@ SAM_TEMPLATES = {
     "wind": WIND_SAM_PARAMS
 }
 
-# Functions.
-def data_path(path):
-    """Path to local package data directory"""
-    return os.path.join(ROOT, 'data', path)
-
-
-def box_points(bbox, crd_path=data_path("nsrdb_v3_coords.csv")):
-    """Filter grid ids by geographical bounding box
-
-    Parameters:
-        bbox (list): A list containing the geographic coordinates of the
-                     desired bounding box in this order:
-                         [min lon, min lat, max lon, max lat]
-        crd_path (str): The local path to the desired resource coordinate
-                        list.
-
-    Returns:
-        pandas.core.frame.DataFrame: A data frame of grid IDs and coordinates.
-    """
-    # Resource coordinate data frame from get_coordinates
-    grid = pd.read_csv(crd_path)
-
-    # Filter the data frame for points within the bounding box
-    crds = grid[(grid["lon"] > bbox[0]) &
-                (grid["lat"] > bbox[1]) &
-                (grid["lon"] < bbox[2]) &
-                (grid["lat"] < bbox[3])]
-
-    return crds
-
 
 def check_config(config_file):
     """Check that a json file loads without error.
@@ -419,167 +390,12 @@ def check_config(config_file):
                '"{}"'.format(error, config_file))
         raise JSONError(msg)
 
-def extract_arrays(file):
-    """Get all output data sets from an HDF5 file.
 
-    Parameters:
-        files (list): An HDF file path
-
-    Output :
-        (list): A dictionary of data sets as numpy arrays.
-    """
-    # Open file
-    pointer = h5py.File(file, mode="r")
-
-    # Get keys?
-    keys = pointer.keys()
-
-    # Get the three data sets
-    data_sets = {key: pointer[key][:] for key in keys}
-
-    # Decode the time index
-    time = [t.decode("UTF-8") for t in data_sets["time_index"]]
-    data_sets["time_index"] = time
-
-    return data_sets
-
-
-def project_points(tag="default", resource="nsrdb_v3", points=1000, gids=None):
-    """Generates a required point file for spatial querying in reV.
-
-    Parameters:
-        jobname (str): Job name assigned to SAM configuration.
-        resource (str): Energy resource data set key. Set to None for options.
-        points (int | str | list): Sample points to generate. Set to an
-                                   integer, n, to use the first n grid IDs,
-                                   set to a list of points to use those points,
-                                   or set to the string "all" to use all
-                                   available points in the chosen resource
-                                   data set.
-        coords (list): A list of geographic coordinates to be converted to grid
-                       IDs. (not yet implemented, but leaving this reminder)
-
-    Returns:
-        pandas.core.frame.DataFrame: A data frame of grid IDs and SAM config
-                                     keys (job name).
-    """
-    # Create a project_points folder if it doesn't exist
-    if not os.path.exists("project_points"):
-        os.mkdir("project_points")
-
-    # Print out options
-    if not resource:
-        print("Available resource datasets: ")
-        for key, var in RESOURCE_LABELS.items():
-            print("   '" + key + "': " + str(var))
-        raise ValueError("'resource' argument required. Please provide the " +
-                         "key to one of the above options as the value for " +
-                         "config.top_params['resource'].")
-
-    # Get the coordinates for the resource data set.
-    point_path = resource + "_coords.csv"
-    try:
-        coords = pd.read_csv(data_path(point_path))
-    except:
-        raise ValueError("Sorry, working on this. Please use the CLI " +
-                         "'rrpoints' on " +
-                         RESOURCE_DATASETS[resource].format(2018) +
-                         " (or any other year) and save the output file " +
-                         "to " + data_path(point_path) + ".")
-
-    # Sample or full grid?
-    if gids is None:
-        if isinstance(points, int):
-            gridids = np.arange(0, points)
-            point_df = pd.DataFrame({"gid": gridids, "config": tag})
-            point_df = point_df.join(coords)
-        elif isinstance(points, str) and points == "all":
-            gridids = np.arange(0, RESOURCE_DIMS[resource])
-            point_df = pd.DataFrame({"gid": gridids, "config": tag})
-            point_df = point_df.join(coords)
-        else:
-            point_df = points.copy()
-            point_df["gid"] = point_df.index
-            point_df["config"] = tag
-
-    # Let's just have a list of GIDs over ride everything for now
-    else:
-        point_df = coords.iloc[gids]
-        point_df["gid"] = point_df.index
-        point_df["config"] = tag
-
-    # Return data frame
-    return point_df
-
-
-def conus_points(resource):
-    """It takes so long to get all the CONUS points, so until I've fixed
-    shape_points, I'm going to store these in the data folder.
-    """
-
-    # If it isn't saved yet, retrieve and save
-    if not os.path.exists(data_path(resource + "_conus_coords.csv")):
-        shp = gpd.read_file("https://www2.census.gov/geo/tiger/TIGER2017/" +
-                            "STATE/tl_2017_us_state.zip")
-        shp = shp[shp["STATEFP"].isin(CONUS_FIPS)]
-        points = shape_points(shp, resource)
-        points.to_csv(data_path(resource + "_conus_coords.csv"), index = False)
-    else:
-        points = pd.read_csv(data_path(resource + "_conus_coords.csv"))
-
-    return points
-
-
-def shape_points(shp, resource="nsrdb_v3"):
-    """Find the grid ids for a specified resource grid within a shapefile
-
-    Parameters:
-        shp_path (str): A local path to a shape file or remote url to a zipped
-                        folder containing a shapefile.
-        crd_path (str): The local path to the desired resource coordinate
-                        list.
-
-    Returns:
-        gids (list): A list of grid IDs.
-
-    Notes:
-        This could be done much faster.
-    """
-    # Read in shapefile with geopandas - remote urls allowed
-    if isinstance(shp, str):
-        shp = gpd.read_file(shp)
-
-    # Check that the shapefile isn't projected, or else reproject it
-    shp_crs = shp.crs
-    if shp_crs not in TARGET_CRS:
-        shp = shp.to_crs({'init': 'epsg:4326'})
-
-    # Get the coordinates associated with the resource
-    crd_file = resource + "_coords.csv"
-    crd_path = data_path(crd_file)
-
-    # The resource data sets are large, subset by bounding box first
-    bbox = shp.geometry.total_bounds
-    grid = box_points(bbox, crd_path)
-
-    # Are there too many points to make a spatial object?
-    gdf = to_geo(grid)
-
-    # Use sjoin and filter out empty results
-    points = gpd.sjoin(gdf, shp, how="left")
-    points = points[~pd.isna(points["index_right"])]
-
-    # We only need the coordinates here.
-    points = points[["lat", "lon"]]
-
-    return points
-
-
-def to_geo(df, lat="lat", lon="lon"):
+def to_geo(df, lat="latitude", lon="longitude"):
     """ Convert a Pandas data frame to a geopandas geodata frame """
+
     df["geometry"] = df[[lon, lat]].apply(lambda x: Point(tuple(x)), axis=1)
-    gdf = gpd.GeoDataFrame(df, crs={'init': 'epsg:4326'},
-                           geometry=df["geometry"])
+    gdf = gpd.GeoDataFrame(df, crs='epsg:4326', geometry="geometry")
     return gdf
 
 
@@ -628,18 +444,883 @@ def to_sarray(df):
     return array, dtypes
 
 
-def write_config(config_dict, path, verbose):
+def write_config(config_dict, path):
     """ Write a configuration dictionary to a json file."""
+
     # what type of configuration is this?
     module = path.split("_")[1].replace(".json", "").upper()
 
     # Write json to file
     with open(path, "w") as file:
         file.write(json.dumps(config_dict, indent=4))
-    if verbose:
-        print(module + " config file saved to " + path + ".")
 
     # Check that the json as written correctly
     check_config(path)
-    if verbose:
-        print(module + " config file opens.")
+
+
+# Configuration Functions
+def points(paths):
+    """Create project points.
+
+    Parameters
+    ----------
+    paths : revruns
+    .functions.Paths
+        A 'Paths' class object that generates path locations for all ATB reV
+        model elements.
+
+    Returns
+    -------
+    None.
+    """
+
+    # Use one of the WTK files
+    wtk_sample = "/datasets/WIND/conus/v1.0.0/wtk_conus_2013.h5"
+
+    # Check if it exists
+    if not os.path.exists(paths.points_path):
+        with h5py.File(wtk_sample, "r") as file:
+            meta = pd.DataFrame(file["meta"][:])
+
+        # Set gid and config
+        meta["config"] = ""
+        meta["config"][meta["offshore"] == 1] = "offshore"
+        meta["config"][meta["offshore"] == 0] = "onshore"
+        meta["gid"] = meta.index
+
+        # Use just the gids and config columns
+        pp = meta[["gid", "config"]]
+
+        # Save along the chosen path :)
+        pp.to_csv(paths.points_path, index=False)
+
+
+def sam(paths):
+    """Use the master atb sheet to build SAM configurations.
+
+    Parameters
+    ----------
+    paths : atb_setup.functions.Paths
+        A 'Paths' class object that generates path locations for all ATB reV
+        model elements.
+
+    Returns
+    -------
+    None.
+    """
+
+    # Get all the tech tables
+    tables = paths.tech_tables
+
+    # Get the data tables
+    onshore_constants = tables["onshore_constants"]
+    offshore_constants = tables["offshore_constants"]
+    onshore_curves = tables["onshore_curves"]
+    offshore_curves = tables["offshore_curves"]
+
+    # Onshore
+    for scenario in paths.tech_scenarios:
+        # break
+        # Get constant values
+        constants = dict(zip(onshore_constants["parameter"],
+                             onshore_constants[scenario]))
+
+        capital_cost = constants[TRANSLATIONS["capital_cost"]]
+        fixed_operating_cost = constants[TRANSLATIONS["fixed_operating_cost"]]
+        fixed_charge_rate = constants[TRANSLATIONS["fixed_charge_rate"]]
+        system_capacity = constants[TRANSLATIONS["system_capacity"]]
+        wind_turbine_hub_ht = constants[TRANSLATIONS["wind_turbine_hub_ht"]]
+        rotor_diameter = constants[TRANSLATIONS["wind_turbine_rotor_diameter"]]
+        losses_percent = constants[TRANSLATIONS["wind_farm_losses_percent"]]
+
+        # Curves
+        onshore_curves = onshore_curves[onshore_curves["wind_speed"] < 25.25]
+        windspeeds = onshore_curves["wind_speed"].tolist()
+        powerouts = onshore_curves[scenario].tolist()
+
+        # Create Configuration
+        config = {}
+        config["adjust:constant"] = 0.0
+        config["capital_cost"] = capital_cost
+        config["fixed_operating_cost"] = fixed_operating_cost
+        config["fixed_charge_rate"] = fixed_charge_rate
+        config["system_capacity"] = system_capacity * 1000  # <---------------- unit conversion
+        config["wind_farm_xCoordinates"] = [0]
+        config["wind_farm_yCoordinates"] = [0]
+        config["wind_farm_losses_percent"] = losses_percent * 100  # <--------- unit conversion
+        config["wind_farm_wake_model"] = 0
+        config["wind_resource_model_choice"] = 0
+        config["wind_resource_shear"] = 0.14
+        config["wind_resource_turbulence_coeff"] = 0.1
+        config["wind_turbine_cutin"] = 0.0
+        config["wind_turbine_hub_ht"] = wind_turbine_hub_ht
+        config["wind_turbine_rotor_diameter"] = rotor_diameter
+        config["variable_operating_cost"] = 0
+        config["wind_turbine_powercurve_powerout"] = powerouts
+        config["wind_turbine_powercurve_windspeeds"] = windspeeds
+
+        # Write to file
+        file_path = paths.sam_paths["land"][scenario]
+        with open(file_path, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+    # Offshore - only mid case for now but making all of them for later
+    for scenario in paths.tech_scenarios:
+
+        # Get constant values
+        constants = dict(zip(offshore_constants["parameter"],
+                             offshore_constants[scenario]))
+
+        system_capacity = constants[TRANSLATIONS["system_capacity"]]
+        wind_turbine_hub_ht = constants[TRANSLATIONS["wind_turbine_hub_ht"]]
+        rotor_diameter = constants[TRANSLATIONS["wind_turbine_rotor_diameter"]]
+        losses_percent = constants[TRANSLATIONS["wind_farm_losses_percent"]]
+
+        # Curves
+        windspeeds = offshore_curves["wind_speed"].dropna().tolist()
+        powerouts = offshore_curves[scenario].dropna().tolist()
+
+        # Create config
+        config = {}
+
+        config["adjust:constant"] = 0.0
+        config["sub_tech"] = "PLACEHOLDER"
+        config["system_capacity"] = system_capacity * 1000  # <---------------- Watch out for units
+        config["wind_farm_losses_percent"] = 0
+        config["wind_farm_wake_model"] = 0.0
+        config["wind_farm_xCoordinates"] = [0]
+        config["wind_farm_yCoordinates"] = [0]
+        config["wind_resource_model_choice"] = 0.0
+        config["wind_resource_shear"] = 0.14
+        config["wind_resource_turbulence_coeff"] = 0.1
+        config["wind_turbine_cutin"] = 0.0
+        config["wind_turbine_rotor_diameter"] = rotor_diameter
+        config["wind_turbine_hub_ht"] = wind_turbine_hub_ht
+        config["wind_turbine_powercurve_powerout"] = powerouts
+        config["wind_turbine_powercurve_windspeeds"] = windspeeds
+        config["variable_operating_cost"] = 0.0
+        config["capital_cost"] = 99999  # <------------------------------------ Placeholder
+        config["fixed_charge_rate"] = 0.099999  # <---------------------------- Placeholder
+        config["fixed_operating_cost"] = 99999  # <---------------------------- Placeholder
+
+        # Write file
+        file_path = paths.sam_paths["offshore"][scenario]
+        with open(file_path, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+def generation(paths):
+    """Use the master atb sheet to build generation configuration jsons.
+
+    Parameters
+    ----------
+    paths : atb_setup.functions.Paths
+        A 'Paths' class object that generates path locations for all ATB reV
+        model elements.
+
+    Returns
+    -------
+    None.
+    """
+
+    # What varies? Sam configurations only right?
+    for scenario in paths.tech_scenarios:
+        sam_files = {
+            "onshore": paths.sam_paths["land"][scenario],
+            "offshore": paths.sam_paths["offshore"]["mid"]  # <---------------- Fixed at mid case for 2020 runs
+        }
+        config = {}
+        config["directories"] = {
+            "log_directory": "./logs",
+            "output_directory": "./outputs"
+        }
+        config["execution_control"] = {
+            "allocation": ALLOCATION,
+            "option": OPTION,
+            "feature": FEATURE,
+            "memory_utilization_limit": 0.4,
+            "nodes": 20,
+            "sites_per_worker": 100,
+            "walltime": 2.0
+        }
+        config["log_level"] = "INFO"
+        config["analysis_years"] = [
+            2007,
+            2008,
+            2009,
+            2010,
+            2011,
+            2012,
+            2013
+        ]
+        config["technology"] = "windpower"
+        config["output_request"] = [
+            "cf_profile",
+            "cf_mean",
+            "lcoe_fcr",
+            "ws_mean"
+        ]
+        config["project_points"] = paths.points_path
+        config["sam_files"] = sam_files
+        config["resource_file"] = "/datasets/WIND/conus/v1.0.0/wtk_conus_{}.h5"
+
+
+
+        # Write to file
+        file = paths.gen_paths[scenario]
+        with open(file, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+
+def bats(paths):
+    """Write bat curtailment configurations, add generation configs, and update
+    aggregation configs where necessary. Must be run after every other config
+    module is complete (i.e. after pipeline)."""
+
+    # Write curtailment configs
+    for key, path in paths.bat_paths["sam"].items():
+        with open(path, "w") as config_file:
+            config_file.write(json.dumps(BAT_CONFIGS[key], indent=4))
+
+    # Create new generation pipelines based on the mid case
+    mid_gen = paths.gen_paths["mid"]
+    mid_folder = os.path.dirname(mid_gen)
+    for key, gen_path in paths.bat_paths["gen"].items():
+
+        # Create new directory
+        bat_dir = os.path.dirname(gen_path)
+        os.makedirs(bat_dir, exist_ok=True)
+
+        # Copy over jsons from the mid case gen folder
+        original_configs = glob(os.path.join(mid_folder, "*json"))
+        new_configs = [os.path.join(bat_dir, os.path.basename(c)) for
+                       c in original_configs]
+        for i, file in enumerate(original_configs):
+            new_file = new_configs[i]
+            shutil.copy(file, new_file)
+
+        # open the old gen file
+        with open(gen_path, "r") as file:
+            gen_config = json.load(file)
+
+        # Change this bit
+        gen_config["curtailment"] = paths.bat_paths["sam"][key]
+
+        # Write it back again
+        with open(gen_path, "w") as file:
+            file.write(json.dumps(gen_config, indent=4))
+
+        # Open the old pipeline file
+        pipe_path = gen_path.replace("config_gen.json", "config_pipeline.json")
+        with open(pipe_path) as file:
+            pipe_config = json.load(file)
+
+        # Change these bits
+        for entry in pipe_config["pipeline"]:
+            key = list(entry.keys())[0]
+            value = entry[key]
+            old_dir = os.path.dirname(value)
+            new_val = value.replace(old_dir, bat_dir)
+            entry[key] = new_val
+
+        # Write it back again
+        with open(pipe_path, "w") as file:
+            file.write(json.dumps(pipe_config, indent=4))
+
+    # Find the aggregations that need new generations
+    agg_paths = paths.aggregation_paths
+    agg_descs = paths.agg_scenario_descriptions
+    to_update = {}
+    for scenario, path in agg_paths.items():
+        desc = agg_descs[scenario]
+        if "Bat Curtailment" in desc:
+            if "Smart" in desc:
+                to_update["smart"] = path
+            elif "Blanket" in desc:
+                to_update["blanket"] = path
+
+    # Update these
+    for key, agg_path in to_update.items():
+
+        # New gen path
+        bat_dir = os.path.dirname(paths.bat_paths["gen"][key])
+        gen_fpath = os.path.join(bat_dir, "outputs", "outputs_multi-year.h5")
+
+        # open the old file
+        with open(agg_path, "r") as file:
+            agg_config = json.load(file)
+
+        # Change this bit
+        agg_config["gen_fpath"] = gen_fpath
+
+        # Write it back again
+        with open(agg_path, "w") as file:
+            file.write(json.dumps(agg_config, indent=4))
+
+        # Open the rep_profiles path and do the same
+        rep_path = agg_path.replace("config_aggregation", "config_rep-profiles")
+        with open(rep_path, "r") as file:
+            rep_config = json.load(file)
+        rep_config["gen_fpath"] = gen_fpath
+        with open(rep_path, "w") as file:
+            file.write(json.dumps(rep_config, indent=4))
+
+
+def offshore(paths):
+    """Use the master atb sheet to build offshore configuration jsons.
+
+    Parameters
+    ----------
+    paths : atb_setup.functions.Paths
+        A 'Paths' class object that generates path locations for all ATB reV
+        model elements.
+
+    Returns
+    -------
+    None.
+    """
+
+    for scenario in paths.tech_scenarios:
+        config = {}
+        sam_files = {
+            "onshore": paths.sam_paths["land"][scenario],
+            "offshore": paths.sam_paths["offshore"]["mid"]  # <---------------- Fixed at mid case for 2020 runs
+        }
+        config["directories"] = {
+            "log_directory": "./logs",
+            "output_directory": "./outputs"
+        }
+        config["execution_control"] = {
+            "allocation": ALLOCATION,
+            "feature": FEATURE,
+            "option": OPTION,
+            "walltime": 1.0
+        }
+        config["log_level"] = "INFO"
+        config["gen_fpath"] = "PIPELINE"
+        config["offshore_fpath"] = ORCA_FPATH
+        config["project_points"] = paths.points_path
+        config["sam_files"] = sam_files
+
+        # Write to file
+        file = paths.offshore_paths[scenario]
+        with open(file, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+def econ(paths):
+    """Use the master atb sheet to build econ cofiguration jsons.
+
+    Parameters
+    ----------
+    paths : atb_setup.functions.Paths
+        A 'Paths' class object that generates path locations for all ATB reV
+        model elements.
+
+    Returns
+    -------
+    None.
+    """
+
+    for scenario in paths.tech_scenarios:
+
+        # Scenario specific paths
+        sam_files = {
+            "onshore": paths.sam_paths["land"][scenario],
+            "offshore": paths.sam_paths["offshore"]["mid"]  # <---------------- Fixed at mid case for 2020 runs
+        }
+        site_data_path = paths.site_data_paths[scenario]
+
+        # Build the configuration dictionary
+        config = {}
+        config["analysis_years"] = [
+            2007,
+            2008,
+            2009,
+            2010,
+            2011,
+            2012,
+            2013
+        ]
+        config["append"] = True
+        config["cf_file"] = "PIPELINE"
+        config["directories"] = {
+            "log_directory": "./logs",
+            "output_directory": "./outputs"
+            }
+        config["execution_control"] = {
+            "allocation": ALLOCATION,
+            "option": OPTION,
+            "feature": FEATURE,
+            "memory_utilization_limit": 0.4,
+            "nodes": 20,
+            "sites_per_worker": 100,
+            "walltime": 3.0
+        }
+        config["log_level"] = "INFO"
+        config["output_request"] = ["lcoe_fcr"]
+        config["project_points"] = paths.points_path
+        config["sam_files"] = sam_files
+        config["site_data"] = site_data_path
+        config["technology"] = "windpower"
+
+        # Write to file
+        file = paths.econ_paths[scenario]
+        with open(file, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+def collect(paths):
+    """Use the master atb sheet to build collect configuration jsons.
+
+    Parameters
+    ----------
+    paths : atb_setup.functions.Paths
+        A 'Paths' class object that generates path locations for all ATB reV
+        model elements.
+
+    Returns
+    -------
+    None.
+    """
+
+    for scenario in paths.tech_scenarios:
+        config = {}
+        config["directories"] = {
+            "collect_directory": "PIPELINE",
+            "log_directory": "./logs",
+            "output_directory": "./outputs"
+        }
+        config["execution_control"] = {
+            "allocation": ALLOCATION,
+            "feature": FEATURE,
+            "option": OPTION,
+            "walltime": 1.0,
+            "memory": 96,
+        }
+        config["dsets"] = [
+            "cf_profile",
+            "cf_mean",
+            "lcoe_fcr",
+            "ws_mean"
+        ]
+        config["file_prefixes"] = "PIPELINE"
+        config["log_level"] = "INFO"
+        config["parallel"] = False
+        config["project_points"] = None
+
+        # Write to file
+        file = paths.collect_paths[scenario]
+        with open(file, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+
+def multi_year(paths):
+    """Use the master atb sheet to build multi-year configuration jsons.
+
+    Parameters
+    ----------
+    paths : atb_setup.functions.Paths
+        A 'Paths' class object that generates path locations for all ATB reV
+        model elements.
+
+    Returns
+    -------
+    None.
+    """
+
+    for scenario in paths.tech_scenarios:
+        config = {}
+
+        config["directories"] = {
+            "log_directory": "./logs",
+            "output_directory": "./outputs"
+        }
+        config["execution_control"] = {
+            "allocation": ALLOCATION,
+            "feature": FEATURE,
+            "option": OPTION,
+            "memory": 192,
+            "walltime": 1.0
+        }
+        config["groups"] = {
+            "none": {
+                "dsets": [
+                    "cf_profile",
+                    "cf_mean",
+                    "lcoe_fcr",
+                    "ws_mean"
+                ],
+                "source_dir": "./outputs",
+                "source_files": "PIPELINE",
+                "source_prefix": ""
+            }
+        }
+        config["log_control"] = "INFO"
+
+        # Write to file
+        file = paths.multiyear_paths[scenario]
+        with open(file, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+
+
+def aggregation(paths):
+    """Use the master atb sheet to build aggregation configuration jsons.
+
+    Parameters
+    ----------
+    paths : atb_setup.functions.Paths
+        A 'Paths' class object that generates path locations for all ATB reV
+        model elements.
+
+    Returns
+    -------
+    None.
+    """
+
+    # Get the master tables for this module
+    agg_table = paths.agg_table
+    char_table = paths.character_table
+    char_table = char_table[["method", "dataset", "tif_name"]].dropna()
+
+    for scenario in paths.agg_scenarios:
+
+        # Find the appropriate generation outputs folder
+        tech_scenario = scenario.split("_")[-1]
+        gen_dir = os.path.dirname(paths.gen_paths[tech_scenario])
+        gen_file = os.path.join(gen_dir, "outputs", "outputs_multi-year.h5")
+
+        # Create the configuration
+        config = {}
+        config["directories"] = {
+            "log_directories": "./logs",
+            "output_directory": "./"
+        }
+        config["cf_dset"] = "cf_mean-means"
+        config["excl_fpath"] = EXCLUSIONS
+        config["execution_control"] = {
+            "allocation": ALLOCATION,
+            "feature":  FEATURE,
+            "option": OPTION,
+            "memory": 90,
+            "nodes": 10,
+            "walltime": 1.0
+        }
+        config["gen_fpath"] = gen_file
+        config["lcoe_dset"] = "lcoe_fcr-means"
+        config["res_class_dset"] = "ws_mean-means"
+        config["res_fpath"] = "/datasets/WIND/conus/v1.0.0/wtk_conus_{}.h5"
+        config["resolution"] = AG_RESOLUTION
+        config["tm_dset"] = "techmap_wtk"
+
+        # Characterization datasets
+        config["data_layers"] = {}
+        for _, row in char_table.iterrows():
+            if ".tif" in row["tif_name"]:
+                dset = row["dataset"]
+                method = row["method"]
+                config["data_layers"][dset] = {
+                    "dset": dset,
+                    "method": method
+                }
+
+        # Exclusion datasets
+        scenario_table = agg_table[["dataset", scenario, "excl_values"]]
+        scenario_table = scenario_table.dropna().drop_duplicates()
+        config["excl_dict"] = {}
+        for _, row in scenario_table.iterrows():
+
+            dset = row["dataset"]
+            if row[scenario]:
+                value = row["excl_values"]
+                if isinstance(value, (int, float)):
+                    config["excl_dict"][dset] = {
+                        "exclude_values": [value]
+                    }
+                if value == "%":
+                    config["excl_dict"][dset] = {
+                        "use_as_weights": 1
+                        }
+
+            # Add in albers
+            config["excl_dict"]["albers"] = {
+                "include_values": [1]
+                }
+
+            # For legacy, add in naris wind
+            if "_l_" in scenario:
+                config["excl_dict"]["naris_wind"] = {
+                    "use_as_weights": 1
+                    }
+
+        # Power density
+        tech_scen = scenario.split("_")[-1]
+        table = paths.tech_tables["onshore_constants"]
+        label = TRANSLATIONS["power_density"]
+        power_density = table[tech_scen][table["parameter"] == label].values[0]
+        config["power_density"] = power_density
+        config["res_class_bins"] = None
+
+        # Write to file
+        file = paths.aggregation_paths[scenario]
+        with open(file, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+
+def supply_curve(paths):
+    """Use the master atb sheet to build supply-curve configuration jsons.
+
+    Parameters
+    ----------
+    paths : atb_setup.functions.Paths
+        A 'Paths' class object that generates path locations for all ATB reV
+        model elements.
+
+    Returns
+    -------
+    None.
+    """
+
+    # Get the technology tables
+    itable = paths.tech_tables["interconnections"]
+    ostable = paths.tech_tables["onshore_constants"]
+
+    # Get transmission costs
+    stic_str = TRANSLATIONS["station_tie_in_cost"]
+    ltic_str = TRANSLATIONS["line_tie_in_cost"]
+    lc_str = TRANSLATIONS["line_cost"]
+    stic = itable["cost"][itable["parameter"] == stic_str].iloc[0]
+    ltic = itable["cost"][itable["parameter"] == ltic_str].iloc[0]
+    lc = itable["cost"][itable["parameter"] == lc_str].iloc[0]
+
+    for ag_scenario in paths.agg_scenarios:
+
+        # We need both scenarios
+        tech_scnerio = ag_scenario.split("_")[-1]
+
+        # Get fixed charge rate
+        fcr_str = "Fixed Charge Rate"
+        fcr = ostable[tech_scnerio][ostable["parameter"] == fcr_str].iloc[0]
+
+        # Build configuration dictionary
+        config = {}
+
+        # Conistent elements
+        config["directories"] = {
+            "log_directories": "./logs",
+            "output_directory": "./"
+        }
+        config["execution_control"] = {
+            "allocation": ALLOCATION,
+            "feature": FEATURE,
+            "option": OPTION,
+            "memory": 190,
+            "nodes": 10,
+            "walltime": 1.0
+        }
+        config["sc_features"] = SC_MULTIPLIERS
+        config["sc_points"] = "PIPELINE"
+        config["simple"] = False
+        config["trans_table"] = SC_TRANSMISSION
+        config["fixed_charge_rate"] = fcr
+        config["transmission_costs"] = {
+            "line_cost": lc,
+            "line_tie_in_cost": ltic,
+            "station_tie_in_cost": stic,
+            "available_capacity": 1.0,
+            "center_tie_in_cost": 0,
+            "sink_tie_in_cost": 14000
+        }
+
+        # Write to file
+        file = paths.sc_paths[ag_scenario]
+        with open(file, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+
+def rep_profiles(paths):
+    """Use the master atb sheet to build rep_profiles configuration jsons.
+
+    Parameters
+    ----------
+    paths : atb_setup.functions.Paths
+        A 'Paths' class object that generates path locations for all ATB reV
+        model elements.
+
+    Returns
+    -------
+    None.
+    """
+
+    for ag_scenario in paths.agg_scenarios:
+
+        # Find the appropriate generation outputs folder
+        tech_scenario = ag_scenario.split("_")[-1]
+        gen_dir = os.path.dirname(paths.gen_paths[tech_scenario])
+        gen_file = os.path.join(gen_dir, "outputs", "outputs_multi-year.h5")
+
+        # Build configuration dictionary
+        config = {}
+        config["cf_dset"] = "cf_profile-{}"
+        config["directories"] = {
+            "log_directory": "./logs",
+            "output_directory": "./"
+        }
+        config["err_method"] = "rmse"
+        config["execution_control"] = {
+            "allocation": ALLOCATION,
+            "feature": FEATURE,
+            "option": OPTION,
+            "memory": 196,
+            "nodes": 10,
+            "site_per_worker": 100,
+            "walltime": 4.0
+        }
+        config["gen_fpath"] = gen_file
+        config["n_profiles"] = NPROFILES
+        config["analysis_years"] = [
+            2007,
+            2008,
+            2009,
+            2010,
+            2011,
+            2012,
+            2013
+        ]
+        config["log_level"] = "INFO"
+        config["reg_cols"] = ["sc_gid"]
+        config["rep_method"] = "meanoid"
+        config["rev_summary"] = "PIPELINE"
+
+        # Write to file
+        file = paths.rp_paths[ag_scenario]
+        with open(file, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+
+def pipeline(paths):
+    """Use the master atb sheet to build pipeline configuration jsons.
+
+    Parameters
+    ----------
+    paths : atb_setup.functions.Paths
+        A 'Paths' class object that generates path locations for all ATB reV
+        model elements.
+
+    Returns
+    -------
+    None.
+    """
+
+    # Generation
+    for scenario in paths.tech_scenarios:
+
+        config = {}
+
+        config["logging"] = {
+            "log_file": None,
+            "log_level": "INFO"
+        }
+        config["pipeline"] = [
+            {
+                "generation": paths.gen_paths[scenario]
+            },
+            {
+                "econ": paths.econ_paths[scenario]
+            },
+            {
+                "offshore": paths.offshore_paths[scenario]
+            },
+            {
+                "collect": paths.collect_paths[scenario]
+            },
+            {
+                "multi-year": paths.multiyear_paths[scenario]
+            }
+        ]
+
+        # write to file
+        file = paths.pipeline_paths["gen"][scenario]
+        with open(file, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+
+    # Aggregation
+    for scenario in paths.agg_scenarios:
+
+        config = {}
+
+        config["logging"] = {
+            "log_file": None,
+            "log_level": "INFO"
+        }
+        config["pipeline"] = [
+            {
+                "supply-curve-aggregation": paths.aggregation_paths[scenario]
+            },
+            {
+                "supply-curve": paths.sc_paths[scenario]
+            },
+            {
+                "rep-profiles": paths.rp_paths[scenario]
+            }
+        ]
+
+        # write to file
+        file = paths.pipeline_paths["aggregation"][scenario]
+        with open(file, "w") as config_file:
+            config_file.write(json.dumps(config, indent=4))
+
+
+# Class methods
+class Data_Path:
+    """Data_Path joins a root directory path to data file paths."""
+
+    def __init__(self, data_path):
+        """Initialize Data_Path."""
+
+        self.data_path = data_path
+        self._expand_check()
+
+    def __repr__(self):
+
+        items = ["=".join([str(k), str(v)]) for k, v in self.__dict__.items()]
+        arguments = " ".join(items)
+        msg = "".join(["<Data_Path " + arguments + ">"])
+        return msg
+
+    def join(self, *args):
+        """Join a file path to the root directory path"""
+
+        return os.path.join(self.data_path, *args)
+
+    def contents(self, *args):
+        """List all content in the data_path or in sub directories."""
+
+        items = glob(self.join(*args, "*"))
+
+        return items
+
+    def folders(self, *args):
+        """List folders in the data_path or in sub directories."""
+
+        items = self.contents(*args)
+        folders = [i for i in items if os.path.isdir(i)]
+
+        return folders
+
+    def files(self, *args):
+        """List files in the data_path or in sub directories."""
+
+        items = self.contents(*args)
+        folders = [i for i in items if os.path.isfile(i)]
+        print(self.join(*args))
+
+        return folders
+
+    def _expand_check(self):
+
+        # Expand the user path if a tilda is present in the root folder path.
+        if "~" in self.data_path:
+            self.data_path = os.path.expanduser(self.data_path)
+
+        # Make sure path exists
+        os.makedirs(self.data_path, exist_ok=True)

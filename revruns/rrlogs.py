@@ -9,6 +9,7 @@ Created on Wed Jun 17 9:00:00 2020
 
 import json
 import os
+import warnings
 
 from glob import glob
 
@@ -16,7 +17,13 @@ import click
 import pandas as pd
 
 from colorama import Fore, Style
+from pandas.core.common import SettingWithCopyWarning
 
+
+warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
+pd.set_option('display.max_rows', 500)
+pd.set_option('display.max_columns', 10)
+pd.set_option('display.width', 1000)
 
 
 FOLDER_HELP = ("Path to a folder with a completed set of batched reV runs. "
@@ -28,15 +35,18 @@ CHECK_HELP = ("The type of check to perform. Option include 'failure' (print "
             "which jobs failed), 'success' (print which jobs finished), and "
             "'pending' (print which jobs have neither of the other two "
             "statuses). Defaults to failure.")
-ERROR_HELP = ("A job ID. This will print the error log of a job.")
-OUT_HELP = ("A job ID. This will print the standard output log of a job.")
+ERROR_HELP = ("A job ID. This will print the first 20 lines of the error log "
+              "of a job.")
+OUT_HELP = ("A job ID. This will print the first 20 lines of the standard "
+            "output log of a job.")
 MODULE_NAMES = {
     "gen": "generation",
     "collect": "collect",
     "multi-year": "multi-year",
     "aggregation": "supply-curve-aggregation",
     "supply-curve": "supply-curve",
-    "rep-profiles": "rep-profiles"
+    "rep-profiles": "rep-profiles",
+    "qaqc": "qa-qc"
 }
 CONFIG_DICT = {
     "gen": "config_gen.json",
@@ -44,9 +54,11 @@ CONFIG_DICT = {
     "multi-year": "config_multi-year.json",
     "aggregation": "config_aggregation.son",
     "supply-curve": "config_supply-curve.json",
-    "rep-profiles": "config_rep-profiles.json"
+    "rep-profiles": "config_rep-profiles.json",
+    "qaqc": "config_qaqc.json"
 }
-
+FAILURE_STRINGS = ["failure", "fail", "failed", "f", "fails"]
+SUCCESS_STRINGS = ["successful", "success", "s"]
 
 def find_logs(folder):
     """Find the log folders based on configs present in folder. Assumes  # <--- Create a set of dummy jsons to see if this works
@@ -63,26 +75,20 @@ def find_logs(folder):
     # If that didn't work check the config files
     config_files = glob(os.path.join(folder, "*.json"))
     logdir = None
-    try:
-        for file in config_files:
-            if not logdir:
-                
-                # The file might not open
-                try:
-                    config = json.load(open(file, "r"))
-                except:
-                    pass
-    
-                # The directory might be named differently
-                try:
-                    logdir = config["directories"]["log_directory"]
-                except KeyError:
-                    logdir = config["directories"]["logging_directory"]
-                finally:
-                    pass
-    except:
-        print("Could not find log directory")
-        raise
+    for file in config_files:
+        if not logdir:
+            
+            # The file might not open
+            try:
+                config = json.load(open(file, "r"))
+            except:
+                pass
+
+            # The directory might be named differently
+            try:
+                logdir = config["directories"]["log_directory"]
+            except KeyError:
+                logdir = config["directories"]["logging_directory"]
 
     # Expand log directory
     if logdir[0] == ".":
@@ -150,6 +156,10 @@ def find_status(folder):
 def module_status_dataframe(status, module="gen"):
     """Convert the status entry for a module to a dataframe."""
 
+    # Target columns
+    tcols = ["job_id", "hardware", "fout", "dirout", "job_status", "finput",
+             "runtime"]
+
     # Get the module key
     mkey = MODULE_NAMES[module]
 
@@ -161,6 +171,17 @@ def module_status_dataframe(status, module="gen"):
 
     # The rest is another dictionary for each sub job
     del mstatus["pipeline_index"]
+
+    # If incomplete:
+    if not mstatus:
+        for col in tcols:
+            if col == "job_status":
+                mstatus[col] = "unsubmitted"
+            else:
+                mstatus[col] = None
+        mstatus = {mkey: mstatus} 
+
+    # Create data frame
     mdf = pd.DataFrame(mstatus).T
     mdf["pipeline_index"] = mindex
 
@@ -195,6 +216,25 @@ def status_dataframe(folder, module=None):
     return df
 
 
+def color_print(df):
+    """Print each line of a data frame in red for failures and green for
+    success."""
+
+
+    def color_string(string):
+        if string == "failed":
+            string = Fore.RED + string + Style.RESET_ALL
+        elif string == "successful":
+            string = Fore.GREEN + string + Style.RESET_ALL
+        else:
+            string = Fore.YELLOW + string + Style.RESET_ALL
+        return string
+
+    df["job_status"] = df["job_status"].apply(color_string)
+
+    print(df.to_string(index=False))
+
+
 def success(folder, module):
     """Print status of each job for a module run."""
 
@@ -207,61 +247,81 @@ def success(folder, module):
 @click.option("--out", "-o", default=None, help=OUT_HELP)
 def main(folder, module, check, error, out):
     """
-    revruns Batch Logs
+    revruns - logs
 
-    Check logs for a reV module in a run directory. Assumes certain standard  # <--- add a blip about naming conventions.
-    naming conventions.
+    Check log files of a reV run directory. Assumes certain standard
+    naming conventions:
 
-    folder = "~/github/revruns/tests/data"
-    module = "aggregation"
-    error = 3275897
-    out = 3275897
+    Configuration File names:
+    ------------
+    "gen": "config_gen.json",
+    "collect": "config_collect.json",
+    "multi-year": "config_multi-year.json",
+    "aggregation": "config_aggregation.son",
+    "supply-curve": "config_supply-curve.json",
+    "rep-profiles": "config_rep-profiles.json"
     """
 
     # Expand folder path
     folder = os.path.expanduser(folder)
     folder = os.path.abspath(folder)
 
-    # Open the gen config file to determine batch names
-    logdir = find_logs(folder)
+    # Find the logging directoy
+    try:
+        logdir = find_logs(folder)
+    except:
+        print(Fore.YELLOW + "Could not find log directory" +
+              Style.RESET_ALL)
+        return
 
     # Convert module status to data frame
     status_df = status_dataframe(folder, module)
     status_df["job_name"] = status_df.index
-    print_df = status_df[['job_id', 'job_status', 'pipeline_index', 'runtime']]
+    print_df = status_df[['job_id', 'job_name', 'job_status', 'pipeline_index',
+                          'runtime']]
 
     # Now return the requested return type
     if check:
-        if check == "failure":
+        if check in FAILURE_STRINGS:
             print_df = print_df[print_df["job_status"] == "failed"]
-        elif check == "success":
+        elif check in SUCCESS_STRINGS:
             print_df = print_df[print_df["job_status"] == "successful"]
-        elif check == "pending":
-            print_df = print_df[~print_df.isin(["successful", "failed"])]
+        else:
+            print_df = print_df[
+                ~print_df["job_status"].isin( ["successful", "failed"])
+            ]
 
     if not error and not out:
-        print(print_df)
+        color_print(print_df)
 
     if error:
         errors = glob(os.path.join(logdir, "stdout", "*e"))
-        elog = [e for e in errors if str(error) in e][0]
+        try:
+            elog = [e for e in errors if str(error) in e][0]
+        except IndexError:
+            print("Error log for job ID " + str(error) + " not found.")
+            return
         with open(elog, "r") as file:
             elines = file.readlines()
             if len(elines) > 20:
                 print("  \n   ...   \n")
             for e in elines[-20:]:
                 print(e)
-            print(Fore.RED + "\n error file: " + elog + Style.RESET_ALL) 
+            print(Fore.RED + "error file: " + elog + Style.RESET_ALL) 
     if out:
         outs = glob(os.path.join(logdir, "stdout", "*o"))
-        olog = [o for o in outs if str(out) in o][0]
+        try:
+            olog = [o for o in outs if str(out) in o][0]
+        except IndexError:
+            print("STDOUT log for job ID " + str(out) + " not found.")
+            return
         with open(olog, "r") as file:
             olines = file.readlines()
             if len(olines) > 20:
                 print("  \n   ...   \n")
             for o in olines[-20:]:
                 print(o)
-            print(Fore.GREEN + "\n stdout file: " + olog + Style.RESET_ALL) 
+            print(Fore.GREEN + "stdout file: " + olog + Style.RESET_ALL) 
 
     # # Not done after here...
     # with open(CONFIG_DICT["gen"], "r") as file:

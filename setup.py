@@ -4,14 +4,14 @@ from setuptools import setup
 
 setup(
     name='revruns',
-    version='0.0.1',
+    version='0.0.2',
     packages=['revruns'],
     description=("Functions and CLIs that to help to configure, run, "
 		         "and check outputs for NREL's Renewable Energy Technical "
                  "Potential Model (reV)."),
     author="Travis Williams",
     author_email="travis.williams@nrel.gov",
-    install_requires=['h5py', 'numpy', 'pandas'],
+    package_data={"revruns": ["data/*.csv", "data/*.xlsx"]},
     entry_points={"console_scripts":
                       [
                        "rrbatch_collect = revruns.rrbatch_collect:main",
