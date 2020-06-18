@@ -1,0 +1,129 @@
+{
+    "supply-curve-aggregation": {
+        "pipeline_index": 0,
+        "01_na_n_mid_agg": {
+            "job_id": "3275897",
+            "hardware": "eagle",
+            "fout": "01_na_n_mid_agg.csv",
+            "dirout": "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/",
+            "job_status": "successful",
+            "finput": [
+                "/projects/rev/data/exclusions/ATB_Exclusions.h5",
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/generation/3_2030_midcost_medinnov/outputs/outputs_multi-year.h5",
+                "/datasets/WIND/conus/v1.0.0/wtk_conus_2007.h5"
+            ],
+            "runtime": 5.9737556378046675
+        }
+    },
+    "supply-curve": {
+        "pipeline_index": 1,
+        "01_na_n_mid_sc": {
+            "job_id": "3275932",
+            "hardware": "eagle",
+            "fout": "01_na_n_mid_sc.csv",
+            "dirout": "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/",
+            "job_status": "successful",
+            "finput": [
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_agg.csv",
+                "/projects/rev/data/transmission/land_offshore_allconns_128.csv",
+                "/projects/rev/data/transmission/conus_128_tline_multipliers.csv",
+                {
+                    "available_capacity": 1.0,
+                    "center_tie_in_cost": 0,
+                    "line_cost": 3667,
+                    "line_tie_in_cost": 14000,
+                    "sink_tie_in_cost": 14000,
+                    "station_tie_in_cost": 0
+                }
+            ],
+            "runtime": 8.50551374355952
+        }
+    },
+    "rep-profiles": {
+        "pipeline_index": 2,
+        "01_na_n_mid_rep_profiles_2007": {
+            "job_id": "3277662",
+            "hardware": "eagle",
+            "fout": "01_na_n_mid_rep_profiles_2007.h5",
+            "dirout": "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/",
+            "job_status": "successful",
+            "finput": [
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/generation/3_2030_midcost_medinnov/outputs/outputs_multi-year.h5",
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv"
+            ],
+            "runtime": 43.81561632156372
+        },
+        "01_na_n_mid_rep_profiles_2008": {
+            "job_id": "3277663",
+            "hardware": "eagle",
+            "fout": "01_na_n_mid_rep_profiles_2008.h5",
+            "dirout": "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/",
+            "job_status": "successful",
+            "finput": [
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/generation/3_2030_midcost_medinnov/outputs/outputs_multi-year.h5",
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv"
+            ],
+            "runtime": 59.50416179100672
+        },
+        "01_na_n_mid_rep_profiles_2009": {
+            "job_id": "3277664",
+            "hardware": "eagle",
+            "fout": "01_na_n_mid_rep_profiles_2009.h5",
+            "dirout": "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/",
+            "job_status": "successful",
+            "finput": [
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/generation/3_2030_midcost_medinnov/outputs/outputs_multi-year.h5",
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv"
+            ],
+            "runtime": 38.79078360398611
+        },
+        "01_na_n_mid_rep_profiles_2012": {
+            "job_id": "3277667",
+            "hardware": "eagle",
+            "fout": "01_na_n_mid_rep_profiles_2012.h5",
+            "dirout": "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/",
+            "job_status": "successful",
+            "finput": [
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/generation/3_2030_midcost_medinnov/outputs/outputs_multi-year.h5",
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv"
+            ],
+            "runtime": 45.346553393205006
+        },
+        "01_na_n_mid_rep_profiles_2013": {
+            "job_id": "3277668",
+            "hardware": "eagle",
+            "fout": "01_na_n_mid_rep_profiles_2013.h5",
+            "dirout": "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/",
+            "job_status": "successful",
+            "finput": [
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/generation/3_2030_midcost_medinnov/outputs/outputs_multi-year.h5",
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv"
+            ],
+            "runtime": 56.96545169353485
+        },
+        "01_na_n_mid_rep_profiles_2010": {
+            "job_id": "3289759",
+            "hardware": "eagle",
+            "fout": "01_na_n_mid_rep_profiles_2010.h5",
+            "dirout": "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/",
+            "job_status": "successful",
+            "finput": [
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/generation/3_2030_midcost_medinnov/outputs/outputs_multi-year.h5",
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv"
+            ],
+            "runtime": 42.152197961012526
+        },
+        "01_na_n_mid_rep_profiles_2011": {
+            "job_id": "3289760",
+            "hardware": "eagle",
+            "fout": "01_na_n_mid_rep_profiles_2011.h5",
+            "dirout": "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/",
+            "job_status": "successful",
+            "finput": [
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/generation/3_2030_midcost_medinnov/outputs/outputs_multi-year.h5",
+                "/lustre/eaglefs/shared-projects/rev/projects/weto/task_1/aggregation/01_na_n_mid/01_na_n_mid_sc.csv"
+            ],
+            "runtime": 43.56784654458364
+        }
+    }
+}
