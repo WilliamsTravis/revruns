@@ -444,7 +444,7 @@ def to_sarray(df):
     return array, dtypes
 
 
-def write_config(config_dict, path):
+def write_config(config_dict, path, verbose=False):
     """ Write a configuration dictionary to a json file."""
 
     # what type of configuration is this?
