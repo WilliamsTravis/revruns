@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Interacting with reV output logs.
@@ -22,8 +21,15 @@ from colorama import Fore, Style
 
 FOLDER_HELP = ("Path to a folder with a completed set of batched reV runs. "
                "Defaults to current directory. (str)")
-MODULE_HELP = ("The reV module logs to check: generation, collect, "
-               "multi-year, aggregation, supply-curve, or rep-profiles")
+MODULE_HELP = ("The reV module logs to check. Defaults to all modules: gen, "
+               "collect, multi-year, aggregation, supply-curve, or "
+               "rep-profiles")
+CHECK_HELP = ("The type of check to perform. Option include 'failure' (print "
+            "which jobs failed), 'success' (print which jobs finished), and "
+            "'pending' (print which jobs have neither of the other two "
+            "statuses). Defaults to failure.")
+ERROR_HELP = ("A job ID. This will print the error log of a job.")
+OUT_HELP = ("A job ID. This will print the standard output log of a job.")
 MODULE_NAMES = {
     "gen": "generation",
     "collect": "collect",
@@ -46,7 +52,15 @@ def find_logs(folder):
     """Find the log folders based on configs present in folder. Assumes  # <--- Create a set of dummy jsons to see if this works
     only one log directory per folder."""
 
-    # Check each json till you find it
+
+    # if there is a log directory directly in this folder use that
+    contents = glob(os.path.join(folder, "*"))
+    possibles = [c for c in contents if "log" in c]
+    if len(possibles) == 1:
+        logdir = os.path.join(folder, possibles[0])
+        return logdir
+
+    # If that didn't work check the config files
     config_files = glob(os.path.join(folder, "*.json"))
     logdir = None
     try:
@@ -67,9 +81,9 @@ def find_logs(folder):
                 finally:
                     pass
     except:
-        print("Could not find 'log_directory' or 'logging_directory'")
+        print("Could not find log directory")
         raise
-    
+
     # Expand log directory
     if logdir[0] == ".":
         logdir = logdir[2:]  # "it will have a / as well
@@ -77,7 +91,6 @@ def find_logs(folder):
     logdir = os.path.expanduser(logdir)
 
     return logdir
-
 
 
 def find_outputs(folder):
@@ -119,11 +132,13 @@ def find_status(folder):
     """Find the job status json."""
 
     # Find output directory
-    outdir = find_outputs(folder)
-
-    # Assuming there aren't two files that end in "_status.json"
-    files = glob(os.path.join(outdir, "*.json"))
-    file = [f for f in files if "_status.json" in f][0]
+    try:
+        files = glob(os.path.join(folder, "*.json"))
+        file = [f for f in files if "_status.json" in f][0]
+    except:
+        outdir = find_outputs(folder)
+        files = glob(os.path.join(outdir, "*.json"))
+        file = [f for f in files if "_status.json" in f][0]
 
     # Return the dictionary
     with open(file, "r") as f:
@@ -161,7 +176,11 @@ def status_dataframe(folder, module=None):
 
     # If just one module
     if module:
-        df = module_status_dataframe(status, module)
+        try:
+            df = module_status_dataframe(status, module)
+        except KeyError:
+            print(module + " not found in status file.\n")
+            raise
 
     # Else, create a single data frame with everything
     else:
@@ -171,7 +190,7 @@ def status_dataframe(folder, module=None):
         for m in modules:
             m = names_modules[m]
             dfs.append(module_status_dataframe(status, m))
-        df = pd.concat(dfs)
+        df = pd.concat(dfs, sort=False)
 
     return df
 
@@ -183,16 +202,18 @@ def success(folder, module):
 @click.command()
 @click.option("--folder", "-f", default=".", help=FOLDER_HELP)
 @click.option("--module", "-m", default=None, help=MODULE_HELP)
-@click.option("--output", "-o", default="failure")
-def main(folder, module):
+@click.option("--check", "-c", default=None, help=CHECK_HELP)
+@click.option("--error", "-e", default=None, help=ERROR_HELP)
+@click.option("--out", "-o", default=None, help=OUT_HELP)
+def main(folder, module, check, error, out):
     """
     revruns Batch Logs
 
     Check logs for a reV module in a run directory. Assumes certain standard  # <--- add a blip about naming conventions.
     naming conventions.
 
-    folder = "/shared-projects/rev/projects/iraq/rev/solar/generation/tracking"
-    module = "gen"
+    folder = "~/github/revruns/tests/data"
+    module = "aggregation"
     """
 
     # Expand folder path
@@ -204,11 +225,19 @@ def main(folder, module):
 
     # Convert module status to data frame
     status_df = status_dataframe(folder, module)
+    status_df["job_name"] = status_df.index
+    print_df = status_df[['job_id', 'job_status', 'pipeline_index', 'runtime']]
 
     # Now return the requested return type
-    if output == "failure" or output =="fail" or output == "f":
-        rdf = status_df[status_df["job_status"] == "failed"]
+    if check:
+        if check == "failure":
+            print_df = print_df[print_df["job_status"] == "failed"]
+        elif check == "success":
+            print_df = print_df[print_df["job_status"] == "successful"]
+        elif check == "pending":
+            print_df = print_df[~print_df.isin(["successful", "failed"])]
 
+    print(print_df)
 
     # # Not done after here...
     # with open(CONFIG_DICT["gen"], "r") as file:
