@@ -20,15 +20,16 @@ setup(
                        "rrcheck = revruns.rrcheck:main",
                        "rrerun = revruns.rrerun:main",
                        "rrexclusion = revruns.rrexclusion:main",
+                       "rrgraphs = revruns.rrgraphs:main",
                        "rrgeoref = revruns.rrgeoref:main",
                        "rrgeotiff = revruns.rrgeotiff:main",   
+                       "rrlogs = revruns.rrlogs:main",
                        "rrmax = revruns.rrmax:main",
                        "rrmin = revruns.rrmin:main",
                        "rrpoints = revruns.rrpoints:main",
                        "rrshape = revruns.rrshape:main",
-                       "rrtemplates = revruns.rrtemplates:main",
-                       "rrgraphs = revruns.rrgraphs:main",
-                       "rrlogs = revruns.rrlogs:main"
+                       "rrsetup = revruns.rrsetup:main",
+                       "rrtemplates = revruns.rrtemplates:main"
                        ]
                   }
     )

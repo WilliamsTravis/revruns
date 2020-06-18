@@ -186,7 +186,7 @@ COLLECT_TEMPLATE = {
         "feature": "--qos=normal",
         "memory": 90,
         "option": "eagle",
-        "walltime": 2.0
+        "walltime": 1.0
     },
     "dsets": "PLACEHOLDER",
     "file_prefixes": "PIPELINE",
@@ -206,7 +206,7 @@ MULTIYEAR_TEMPLATE = {
     "feature": "--qos=normal",
     "memory": 90,
     "option": "eagle",
-    "walltime": 2.0
+    "walltime": 1.0
   },
   "groups": {
     "none": {
@@ -247,7 +247,7 @@ AGGREGATION_TEMPLATE = {
     "memory": 90,
     "nodes": 4,
     "option": "eagle",
-    "walltime": 2.0
+    "walltime": 1.0
   },
   "gen_fpath": "PIPELINE",
   "lcoe_dset": "lcoe_fcr-means",
@@ -270,7 +270,7 @@ SUPPLYCURVE_TEMPLATE = {
     "memory": 90,
     "nodes": 4,
     "option": "eagle",
-    "walltime": 2.0
+    "walltime": 1.0
   },
   "fixed_charge_rate": "PLACEHOLDER",
   "sc_features": ("/projects/rev/data/transmission/" +
@@ -299,11 +299,11 @@ REPPROFILES_TEMPLATE = {
   "execution_control": {
     "allocation": "PLACEHOLDER",
     "feature": "--qos=normal",
-    "memory": 90,
-    "nodes": 4,
+    "memory": 196,
+    "nodes": 10,
     "option": "eagle",
     "site_per_worker": 100,
-    "walltime": 2.0
+    "walltime": 3.0
   },
   "gen_fpath": "PIPELINE",
   "n_profiles": 1,

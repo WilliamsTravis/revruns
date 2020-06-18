@@ -10,11 +10,18 @@ import click
 import numpy as np
 import pandas as pd
 
-from revruns import RESOURCE_DATASETS, TEMPLATES, SAM_TEMPLATES, write_config
+from revruns import ROOT, RESOURCE_DATASETS, TEMPLATES, SAM_TEMPLATES
+from revruns import  write_config
 from xlrd import XLRDError
 
 
 # Help printouts
+FILE_HELP = ("A standard rev input excel file from which to generation "
+             "configurations. A new template input file can be generation "
+             "using the '--template' or '-t' flag. (string)")
+TEMPLATE_HELP = "Generate a new template rev input excel sheet. (boolean)"
+TDIR_HELP = ("Save path if writing new rev input template. Defaults to "
+             "./rev_inputs.xlsx. (string)")
 DATA = pkgutil.get_data("revruns", "data/rev_inputs.xlsx")
 MODULE_CONFIG_PATHS = {
     "generation": "config_generation.json",
@@ -97,8 +104,9 @@ def write_template(dst=None):
         dst = "./rev_inputs.xlsx"
 
     # Get each sheet data
-    sheets = get_sheet(DATA)
-    sheets = {s: get_sheet(DATA, s) for s in sheets}
+    dpath = os.path.join(ROOT, "data", "rev_inputs.xlsx")
+    sheets = get_sheet(dpath)
+    sheets = {s: get_sheet(dpath, s) for s in sheets}
     
     # Create a writer
     writer = pd.ExcelWriter(dst, engine='xlsxwriter')
@@ -111,7 +119,7 @@ def write_template(dst=None):
     writer.save()
 
 
-class Inputs:
+class Paths:
 
     def __init__(self, master, proj_dir):
         """Initiate Paths object.
@@ -130,27 +138,8 @@ class Inputs:
         mpath = self.__dict__["master"]
         ppath = self.__dict__["proj_dir"]
         msg = "master=" + mpath + "  proj_dir=" + ppath
-        msg = "<Inputs " + msg + ">"
-        return msg
-
-    def build(self):
-        """Build configurations with inputs available from the master sheet."""
-
-        # Build module configs
-        
-        
-        
-        
-        
-        write_configs
-
-        # Build SAM configs
-
-        # Build project points
-
-
-        
-
+        msg = "<Paths " + msg + ">"
+        return msg      
 
     def _expand_proj_dir(self, proj_dir):
 
@@ -158,7 +147,6 @@ class Inputs:
         proj_dir = os.path.expanduser(proj_dir)
         self.proj_dir = os.path.abspath(proj_dir)
 
-    # Generation
     def _set_path(self, paths, spath, module):
 
         # Assign a configuration file path to each module iteration
@@ -201,105 +189,17 @@ class Inputs:
             setattr(self, s, df)
 
 
+@click.command()
+@click.option("--file", "-f", default=None, help=FILE_HELP)
+@click.option("--template", "-t", is_flag=True, help=TEMPLATE_HELP)
+@click.option("--template_dir", "-d", default=None, help=TDIR_HELP)
+def main(file, template, template_dir):
 
+    # Write new template if asked
+    if template:
+        write_template(template_dir)  # <-------------------------------------- how to write the text ox with instructions?
+        print(os.path.join(ROOT, "data", "rev_inputs.xlsx"))
 
-# PIPELINE_TEMPLATE =  {
-#     "logging": {
-#         "log_level": "INFO"
-#     },
-#     "pipeline": []
-# }
-
-# @click.command()
-# @click.option("--generation", "-gen", is_flag=True, help=AGGREGATION_HELP)
-# @click.option("--collect", "-co", is_flag=True, help=COLLECT_HELP)
-# @click.option("--multiyear", "-my", is_flag=True, help=MULTIYEAR_HELP)
-# @click.option("--aggregation", "-ag", is_flag=True, help=AGGREGATION_HELP)
-# @click.option("--supplycurve", "-sc", is_flag=True, help=SUPPLYCURVE_HELP)
-# @click.option("--repprofiles", "-rp", is_flag=True, help=REPPROFILES_HELP)
-# @click.option("--batch", "-ba", is_flag=True, help=BATCH_HELP)
-# @click.option("--tech", "-t", default="pvwattsv5", help=GEN_HELP)
-# @click.option("--full", "-f", is_flag=True, help=FULL_HELP)
-# @click.option("--allocation", "-alloc", default="PLACEHOLDER", help=ALLOC_HELP)
-# @click.option("--output_dir", "-outdir", default="./", help=OUTDIR_HELP)
-# @click.option("--log_dir", "-logdir", default="./logs", help=LOGDIR_HELP)
-# @click.option("--verbose", "-v", is_flag=True)
-# def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
-#          batch, tech, full, allocation, output_dir, log_dir,
-#          verbose):
-#     """Write template configuration json files for each reV module specified.
-#     Additionaly options will set up template sam_files and default project
-#     point files. Files will be written to your current directory.
-
-#     In the output configuration jsons the term 'PLACEHOLDER' is SET for values
-#     that require user inputs. Other inputs have defaults that may or may not 
-#     be appropriate. To use all available points for the specified generator,
-#     provide the '--all-points' or '-ap' flag. To use all available years for a
-#     specified generator, provide the '--all-years' or '-ay' flag.
-
-#     Sample Arguments
-#     ----------------
-#         generation = False
-#         collect = False
-#         multiyear = False
-#         aggregation = True
-#         supplycurve = True
-#         repprofiles = True
-#         batch = False
-#         tech = "pvwattsv5"
-#         allpoints = True
-#         allyears = True
-#         full = False
-#         verbose = True
-#     """
-
-#     # Get requested modules as strings
-#     strings = np.array(["gen", "co", "my", "ag", "sc", "rp", "ba"])
-#     requested = np.array([generation, collect, multiyear, aggregation,
-#                           supplycurve, repprofiles, batch])
-
-#     # Convert module selections from booleans to key strings
-#     if full:
-#         modules = strings
-#     else:
-#         modules = strings[requested]
-
-#     # Retrieve the template objects
-#     templates = {m: TEMPLATES[m] for m in modules}
-
-#     # Assign all years (easier to subtract than add), and add allocation
-#     years = DEFAULT_YEARS[tech]
-#     for m in templates.keys():
-#         if "analysis_years" in templates[m]:
-#             templates[m]["analysis_years"] = years
-#         if "execution_control" in templates[m]:
-#             templates[m]["execution_control"]["allocation"] = allocation
-#         if "directories" in templates[m]:
-#             templates[m]["directories"]["output_directory"] = output_dir
-#             templates[m]["directories"]["log_directories"] = log_dir
-
-#     # Assign all points if specified  <---------------------------------------- Not done.
-#     os.makedirs("./project_points", exist_ok=True)
-
-#     # Write sam template:
-#     os.makedirs("./sam_configs", exist_ok=True)
-#     sam_template = SAM_TEMPLATES[tech]
-
-#     # Write json file for each template
-#     for m in templates.keys():
-#         config = templates[m]
-#         path = DEFAULT_PATHS[m]
-#         write_config(config, path, verbose)
-
-#     # If there are more than one module, write pipeline configuration
-#     if len(modules) > 1:
-#         pipeline = PIPELINE_TEMPLATE.copy()
-#         for m in modules:
-#             dict = {MODULE_NAMES[m]: DEFAULT_PATHS[m]}
-#             pipeline["pipeline"].append(dict)
-#         write_config(pipeline, "./config_pipeline.json", verbose)
-
-
-# if "__name__" == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()
 

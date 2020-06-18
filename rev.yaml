@@ -1,4 +1,4 @@
-name: rev
+name: testrev
 channels:
   - nrel
 dependencies: # These don't appear to work yet, but this is ready for when they do!
@@ -9,3 +9,5 @@ dependencies: # These don't appear to work yet, but this is ready for when they 
   - pip
   - pip:
     - colorama
+    - xlrd
+    - xlsxwriter
