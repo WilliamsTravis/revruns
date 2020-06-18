@@ -214,6 +214,8 @@ def main(folder, module, check, error, out):
 
     folder = "~/github/revruns/tests/data"
     module = "aggregation"
+    error = 3275897
+    out = 3275897
     """
 
     # Expand folder path
@@ -237,7 +239,29 @@ def main(folder, module, check, error, out):
         elif check == "pending":
             print_df = print_df[~print_df.isin(["successful", "failed"])]
 
-    print(print_df)
+    if not error and not out:
+        print(print_df)
+
+    if error:
+        errors = glob(os.path.join(logdir, "stdout", "*e"))
+        elog = [e for e in errors if str(error) in e][0]
+        with open(elog, "r") as file:
+            elines = file.readlines()
+            if len(elines) > 20:
+                print("  \n   ...   \n")
+            for e in elines[-20:]:
+                print(e)
+            print(Fore.RED + "\n error file: " + elog + Style.RESET_ALL) 
+    if out:
+        outs = glob(os.path.join(logdir, "stdout", "*o"))
+        olog = [o for o in outs if str(out) in o][0]
+        with open(olog, "r") as file:
+            olines = file.readlines()
+            if len(olines) > 20:
+                print("  \n   ...   \n")
+            for o in olines[-20:]:
+                print(o)
+            print(Fore.GREEN + "\n stdout file: " + olog + Style.RESET_ALL) 
 
     # # Not done after here...
     # with open(CONFIG_DICT["gen"], "r") as file:
