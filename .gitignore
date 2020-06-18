@@ -10,6 +10,3 @@ samples/
 PKG-INFO
 __pycache__/
 **/*.pyc
-**/*.csv
-**/*.h5
-**/*json
