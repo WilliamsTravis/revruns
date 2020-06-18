@@ -27,7 +27,8 @@ setup(
                        "rrpoints = revruns.rrpoints:main",
                        "rrshape = revruns.rrshape:main",
                        "rrtemplates = revruns.rrtemplates:main",
-                       "rrgraphs = revruns.rrgraphs:main"
+                       "rrgraphs = revruns.rrgraphs:main",
+                       "rrlogs = revruns.rrlogs:main"
                        ]
                   }
     )

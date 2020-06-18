@@ -1,0 +1,11 @@
+name: rev
+channels:
+  - nrel
+dependencies: # These don't appear to work yet, but this is ready for when they do!
+  - nrel-rev
+  - nrel-pysam
+  - nrel-rex
+  - nrel-revx
+  - pip
+  - pip:
+    - colorama
