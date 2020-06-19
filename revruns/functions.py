@@ -96,35 +96,36 @@ RESOURCE_DIMS = {
 # The Eagle HPC path to each resource data set. Brackets indicate years.
 RESOURCE_DATASETS = {
         "nsrdb_v3": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
-        "wind_conus_v1": "/datasets/WIND/conus/v1.0.0/wtk_conus_{}.h5",
-        "wind_canada_v1": "/datasets/WIND/canada/v1.0.0/wtk_canada_{}.h5",
-        "wind_canada_v1bc": "/datasets/WIND/canada/v1.0.0bc/wtk_canada_{}.h5",
-        "wind_mexico_v1": "/datasets/WIND/mexico/v1.0.0/wtk_mexico_{}.h5",
-        "wind_conus_v1_1": "/datasets/WIND/conus/v1.1.0/wtk_conus_{}.h5",
-        "wind_canada_v1_1": "/datasets/WIND/canada/v1.1.0/wtk_canada_{}.h5",
-        "wind_canada_v1_1bc": ("/datasets/WIND/canada/v1.1.0bc/" +
-                               "wtk_canada_{}.h5"),
-        "wind_mexico_v1_1": "/datasets/WIND/mexico/v1.0.0/wtk_mexico_{}.h5"
+        "wtk_conus_v1": "/datasets/WIND/conus/v1.0.0/wtk_conus_{}.h5",
+        "wtk_canada_v1": "/datasets/WIND/canada/v1.0.0/wtk_canada_{}.h5",
+        "wtk_canada_v1bc": "/datasets/WIND/canada/v1.0.0bc/wtk_canada_{}.h5",
+        "wtk_mexico_v1": "/datasets/WIND/mexico/v1.0.0/wtk_mexico_{}.h5",
+        "wtk_conus_v1_1": "/datasets/WIND/conus/v1.1.0/wtk_conus_{}.h5",
+        "wtk_canada_v1_1": "/datasets/WIND/canada/v1.1.0/wtk_canada_{}.h5",
+        "wtk_canada_v1_1bc": ("/datasets/WIND/canada/v1.1.0bc/" +
+                                "wtk_canada_{}.h5"),
+        "wtk_mexico_v1_1": "/datasets/WIND/mexico/v1.0.0/wtk_mexico_{}.h5"
         }
+
 
 # The title of each resource data set.
 RESOURCE_LABELS = {
         "nsrdb_v3": "National Solar Radiation Database - v3.0.1",
-        "wind_conus_v1": ("Wind Integration National Dataset (WIND) " +
+        "wtk_conus_v1": ("Wind Integration National Dataset (WIND) " +
                           "Toolkit - CONUS, v1.0.0"),
-        "wind_canada_v1": ("Wind Integration National Dataset (WIND) " +
+        "wtk_canada_v1": ("Wind Integration National Dataset (WIND) " +
                            "Toolkit - Canada, v1.0.0"),
-        "wind_canada_v1bc": ("Wind Integration National Dataset (WIND) " +
+        "wtk_canada_v1bc": ("Wind Integration National Dataset (WIND) " +
                              "Toolkit - Canada, v1.1.0"),
-        "wind_mexico_v1": ("Wind Integration National Dataset (WIND) " +
+        "wtk_mexico_v1": ("Wind Integration National Dataset (WIND) " +
                            "Toolkit - Mexico, v1.0.0"),
-        "wind_conus_v1_1":("Wind Integration National Dataset (WIND) " +
+        "wtk_conus_v1_1":("Wind Integration National Dataset (WIND) " +
                            "Toolkit - CONUS, v1.1.0"),
-        "wind_canada_v1_1": ("Wind Integration National Dataset (WIND) " +
+        "wtk_canada_v1_1": ("Wind Integration National Dataset (WIND) " +
                              "Toolkit - Canada, v1.1.0"),
-        "wind_canada_v1_1bc": ("Wind Integration National Dataset (WIND) " +
+        "wtk_canada_v1_1bc": ("Wind Integration National Dataset (WIND) " +
                                "Toolkit - Canada, v1.1.0bc"),
-        "wind_mexico_v1_1": ("Wind Integration National Dataset (WIND) " +
+        "wtk_mexico_v1_1": ("Wind Integration National Dataset (WIND) " +
                              "Toolkit - Mexico, v1.0.0"),
         }
 
@@ -142,10 +143,10 @@ GEN_TEMPLATE = {
         "allocation": "PLACEHOLDER",
         "feature": "--qos=normal",
         "memory_utilization_limit": 0.4,
-        "nodes": "PLACEHOLDER",
+        "nodes": 10,
         "option": "eagle",
-        "sites_per_worker": "PLACEHOLDER",
-        "walltime": "PLACEHOLDER"
+        "sites_per_worker": 100,
+        "walltime": 1.0
     },
 
     "logging_level": "INFO",
@@ -204,14 +205,14 @@ MULTIYEAR_TEMPLATE = {
   "execution_control": {
     "allocation": "PLACEHOLDER",
     "feature": "--qos=normal",
-    "memory": 90,
+    "memory": 192,
     "option": "eagle",
     "walltime": 1.0
   },
   "groups": {
     "none": {
       "dsets": "PLACEHOLDER",
-      "source_dir": "./outputs",
+      "source_dir": "./",
       "source_files": "PIPELINE",
       "source_prefix": ""
     }
@@ -347,7 +348,7 @@ SOLAR_SAM_PARAMS = {
 }
 
 WIND_SAM_PARAMS = {
-        "adjust:constant": "PLACEHOLDER",
+        "adjust:constant": 0,
         "capital_cost" : "PLACEHOLDER",
         "fixed_operating_cost" : "PLACEHOLDER",
         "fixed_charge_rate": "PLACEHOLDER",
@@ -358,8 +359,8 @@ WIND_SAM_PARAMS = {
         "variable_operating_cost": "PLACEHOLDER",
         "wind_farm_losses_percent": "PLACEHOLDER",
         "wind_farm_wake_model": "PLACEHOLDER",
-        "wind_farm_xCoordinates": "PLACEHOLDER",
-        "wind_farm_yCoordinates": "PLACEHOLDER",
+        "wind_farm_xCoordinates": [0],
+        "wind_farm_yCoordinates": [0],
         "wind_resource_model_choice": "PLACEHOLDER",
         "wind_resource_shear":"PLACEHOLDER",
         "wind_resource_turbulence_coeff": "PLACEHOLDER",
@@ -373,7 +374,7 @@ WIND_SAM_PARAMS = {
 SAM_TEMPLATES = {
     "pvwattsv5": SOLAR_SAM_PARAMS,
     "pvwattsv7": SOLAR_SAM_PARAMS,
-    "wind": WIND_SAM_PARAMS
+    "windpower": WIND_SAM_PARAMS
 }
 
 

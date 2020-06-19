@@ -137,7 +137,7 @@ def write_template(dst=None):
     if not os.path.exists(dst):
         shutil.copy(dpath, dst)
     else:
-        print(Fore.YELLOW + dst + " exists. Choose a different name for "
+        print(Fore.YELLOW + dst + " exists. Choose a different path for "
               "the template." + Style.RESET_ALL)
 
 
@@ -146,14 +146,18 @@ class Paths:
     def __init__(self, master, proj_dir):
         """Initiate Paths object.
 
+        proj_dir = "~/github/revruns/tests"
+        master = "~/github/revruns/revruns/data/rev_inputs.xlsx"
+
         proj_dir = "/shared-projects/rev/projects/southern_co/scratch"
-        master_sheet = "/shared-projects/rev/projects/southern_co/scratch/rev_inputs.xlsx"
+        master = "/shared-projects/rev/projects/southern_co/scratch/rev_inputs.xlsx"
         """
 
         self.module_paths = MODULE_CONFIG_PATHS
         self._expand_paths(master, proj_dir)
         self._sheets()
         self._set_paths()
+        self._set_sam()
 
     def __repr__(self):
         mpath = self.__dict__["master"]
@@ -192,7 +196,7 @@ class Paths:
             paths[m] = {}
 
         # Scenarios
-        scens = self.scenarios["scenario_name"].unique()
+        scens = self.scenarios["scenario_name"].dropna().unique()
         for scen in scens:
             spath = os.path.join(self.proj_dir, scen)
             os.makedirs(spath, exist_ok=True)
@@ -207,8 +211,13 @@ class Paths:
     def _set_sam(self):
         """Set the sam paths separately."""
 
-
-
+        scens = self.scenarios
+        names = scens["system_name"].dropna().unique()
+        self.paths["sam"] = {}
+        for n in names:
+            path =  os.path.join(self.proj_dir, "sam_configs", n + ".json")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            self.paths["sam"][n] = path
 
     def _sheets(self):
         
@@ -225,7 +234,12 @@ class Paths:
 
 class Setup(Paths):
     def __init__(self, master, proj_dir):
-        super().__init__(master, proj_dir)
+        """
+        proj_dir = "~/github/revruns/tests"
+        master = "~/github/revruns/revruns/data/rev_inputs.xlsx"
+        self = Setup(master, proj_dir)
+        """
+        super().__init__(master, proj_dir)       
 
     def __repr__(self):
         mpath = self.__dict__["master"]
@@ -234,21 +248,137 @@ class Setup(Paths):
         msg = "<Setup " + msg + ">"
         return msg    
 
-    
-
     def generation(self):
         """Create all generation configurations."""
 
-        # Get paths dictionary
-        paths = self.paths
+        # Get the needed data frames
+        scendf = self.scenarios
+        sysdf = self.system_configs
+        projdf = self.project_control
+        projdf = projdf.applymap(lambda x: x.replace(" ", ""))
 
         # Get scenarios
-        for scen, spath in paths["scenarios"].items():
-            print(scen, spath)
-            path = paths["generation"][scen])
-            
-            config = "Get theses parameters from self.project_control maybe"
-            write_config(config, path)
+        for name, spath in self.paths["scenarios"].items():
+
+            # Find the system name
+            system = scendf["system_name"][scendf["scenario_name"] == name]
+            system = system.iloc[0]
+
+            # Create a system config dictionary
+            sdf = sysdf[sysdf["system_name"] == system]
+            sysdct = dict(zip(sdf["parameter"], sdf["value"]))
+
+            # Create a proj control dictionary
+            projdct = dict(zip(projdf["parameter"], projdf[name]))
+
+            # Get configuration elements
+            sam_files = self.paths["sam"][system]
+            resource_files = RESOURCE_DATASETS[projdct["resource"]]
+            output_request = projdct["output_request"].split(",")
+            years = self.years[name].dropna().astype(int).to_list()
+            tech = sysdct["compute_module"]
+    
+            # Replace template placholders
+            config = TEMPLATES["gen"].copy()
+            config["execution_control"]["allocation"] = projdct["allocation"]
+            config["analysis_years"] = years
+            config["output_request"] = output_request
+            config["technology"] = tech
+            config["sam_files"] = {system: sam_files}
+            config["resource_file"] = resource_files
+
+            # This is the target path
+            save = self.paths["generation"][name]
+            write_config(config, save)
+
+    def collect(self):
+        """Create all collect configurations."""
+
+        # Get the needed data frames
+        projdf = self.project_control
+        projdf = projdf.applymap(lambda x: x.replace(" ", ""))
+
+        # Get scenarios
+        for name, spath in self.paths["scenarios"].items():
+
+            # Create a proj control dictionary
+            projdct = dict(zip(projdf["parameter"], projdf[name]))
+            output_request = projdct["output_request"].split(",")
+
+            # Replace template placholders
+            config = TEMPLATES["co"].copy()
+            config["execution_control"]["allocation"] = projdct["allocation"]
+            config["dsets"] = output_request
+
+            # This is the target path
+            save = self.paths["collect"][name]
+            write_config(config, save)
+
+    def multi_year(self):
+        """Create all collect configurations."""
+
+        # Get the needed data frames
+        projdf = self.project_control
+        projdf = projdf.applymap(lambda x: x.replace(" ", ""))
+
+        # Get scenarios
+        for name, spath in self.paths["scenarios"].items():
+
+            # Create a proj control dictionary
+            projdct = dict(zip(projdf["parameter"], projdf[name]))
+            output_request = projdct["output_request"].split(",")
+
+            # Replace template placholders
+            config = TEMPLATES["my"].copy()
+            config["execution_control"]["allocation"] = projdct["allocation"]
+            config["groups"]["none"]["dsets"] = output_request
+
+            # This is the target path
+            save = self.paths["multi-year"][name]
+            write_config(config, save)
+
+    def pipeline(self):
+        """Create a different pipeline for generation and aggregation modules.
+        """
+
+
+    def sam(self):
+        """Create all SAM configurations."""
+        
+        systems = self.system_configs
+        for name in systems["system_name"].dropna().unique():
+
+            # Reshape this
+            sdf = systems[systems["system_name"] == name]
+            sdct = dict(zip(sdf["parameter"], sdf["value"]))
+
+            # The template depends on the module
+            module = sdct["compute_module"]
+            template = SAM_TEMPLATES[module].copy()
+            for par, val in sdct.items():
+                template[par] = val
+
+            # If this is windspeed it needs a power curve
+            if "wind_turbine_powercurve_powerout" in sdct:
+                ws = self.power_curves["wind_speed"].to_list()
+                pc = self.power_curves[name].to_list()
+                template["wind_turbine_powercurve_windspeeds"] = ws
+                template["wind_turbine_powercurve_powerout"] = pc
+
+            # Not sure if "PLACEHOLDER" could break something
+            config = {p: v for p, v in template.items() if v != "PLACEHOLDER"}
+
+            # Save
+            save = self.paths["sam"][name]
+            write_config(config, save)
+
+    def build(self):
+        """Run all submodules and build configurations."""
+
+        self.sam()
+        self.generation()
+        self.collect()
+        self.multi_year()
 
 
 def setup_project(master, proj_dir):
@@ -264,7 +394,7 @@ def setup_project(master, proj_dir):
     setup = Setup(master, proj_dir)
 
     # Build everything
-    setup.build_all()
+    setup.build()
     
 
 
@@ -289,9 +419,9 @@ def main(file, project_dir, template):
 
     # If a template file is provided set everything up
     if file:
-        print(Fore.GREEN + " setting up project in " + project_dir + " ..." + 
+        setup_project(file, project_dir)
+        print(Fore.GREEN + "Project set up in " + project_dir + "." + 
               Style.RESET_ALL)
-        # setup_project(file, project_dir)
 
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()
