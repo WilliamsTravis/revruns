@@ -7,7 +7,7 @@ setup(
     version='0.0.2',
     packages=['revruns'],
     description=("Functions and CLIs that to help to configure, run, "
-		         "and check outputs for NREL's Renewable Energy Technical "
+	         "and check outputs for NREL's Renewable Energy Technical "
                  "Potential Model (reV)."),
     author="Travis Williams",
     author_email="travis.williams@nrel.gov",
