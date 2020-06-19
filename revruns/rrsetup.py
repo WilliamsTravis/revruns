@@ -108,7 +108,10 @@ def write_template(dst=None):
     dpath = os.path.join(ROOT, "data", "rev_inputs.xlsx")
 
     # Just copy it over
-    shutil.copy(dpath, dst)
+    if not os.path.exists(dst):
+        shutil.copy(dpath, dst)
+    else:
+        print(dst + " exists. Choose a different name for the template.")
 
 
 class Paths:
