@@ -1,20 +1,17 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Reconfigure a reV run to rerun from a specified points in the pipeline, instead
-of manually rewriting the logs. 
-
-Created on Wed Feb 19 13:07:33 2020
-
-@author: twillia2
+"""Reconfigure a reV run to rerun from a specified point in the pipeline,
+instead of manually rewriting the logs. 
 """
 
-import click
-from glob import glob
 import json
 import os
 import subprocess as sp
 import time
+
+from glob import glob
+
+import click
+
 
 FOLDER_HELP = ("A folder containing configurations, point data, and results "
                "from a sucessful reV run. Defaults to current directory. "

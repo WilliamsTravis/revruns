@@ -1,21 +1,15 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""Check all batch run logs for success.
 """
-Checking all batch run logs for success.
-
-To Do:
-    - use the gen_config to determime which module logs to check.
-
-Created on Wed Feb 19 07:52:30 2020
-
-@author: twillia2
-"""
-from glob import glob
-from colorama import Fore, Style
 
 import json
 import os
+
+from glob import glob
+
 import click
+
+from colorama import Fore, Style
 
 
 FOLDER_HELP = ("Path to a folder with a completed set of batched reV runs. "

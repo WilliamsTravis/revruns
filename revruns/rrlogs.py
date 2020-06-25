@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Interacting with reV output logs.
-
-Created on Wed Jun 17 9:00:00 2020
-
-@author: twillia2
+"""Check with reV status, output, and error logs.
 """
 
 import json
@@ -18,6 +13,7 @@ import pandas as pd
 
 from colorama import Fore, Style
 from pandas.core.common import SettingWithCopyWarning
+from tabulate import tabulate
 
 
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
@@ -42,6 +38,8 @@ OUT_HELP = ("A job ID. This will print the first 20 lines of the standard "
 MODULE_NAMES = {
     "gen": "generation",
     "collect": "collect",
+    "econ": "econ",
+    "offshore": "offshore",
     "multi-year": "multi-year",
     "aggregation": "supply-curve-aggregation",
     "supply-curve": "supply-curve",
@@ -51,6 +49,8 @@ MODULE_NAMES = {
 CONFIG_DICT = {
     "gen": "config_gen.json",
     "collect": "config_collect.json",
+    "econ": "config_econ.json",
+    "offshore": "config_offshore.json",
     "multi-year": "config_multi-year.json",
     "aggregation": "config_aggregation.son",
     "supply-curve": "config_supply-curve.json",
@@ -150,6 +150,29 @@ def find_status(folder):
     with open(file, "r") as f:
         status = json.load(f)
 
+    # Fix artifacts
+    status = fix_status(status)
+
+    return status
+
+
+def fix_status(status):
+    """Using different versions of reV can result in problematic artifacts."""
+
+    # Aggregation vs Supply-Curve-Aggregation
+    if "aggregation" in status and "supply-curve-aggregation" in status:
+        ag = status["aggregation"]
+        scag = status["supply-curve-aggregation"]
+    
+        if len(scag) > len(ag):
+            del status["aggregation"]
+        else:
+            status["supply-curve-aggregation"] = status["aggregation"]
+            del status["aggregation"]
+    elif "aggregation" in status:
+            status["supply-curve-aggregation"] = status["aggregation"]
+            del status["aggregation"]
+
     return status
 
 
@@ -232,7 +255,9 @@ def color_print(df):
 
     df["job_status"] = df["job_status"].apply(color_string)
 
-    print(df.to_string(index=False))
+#    print(df.to_string(index=False))
+    print(tabulate(df, showindex=False, headers=df.columns,
+                   tablefmt="simple"))
 
 
 def success(folder, module):
@@ -252,14 +277,16 @@ def main(folder, module, check, error, out):
     Check log files of a reV run directory. Assumes certain standard
     naming conventions:
 
-    Configuration File names:
-    ------------
-    "gen": "config_gen.json",
-    "collect": "config_collect.json",
-    "multi-year": "config_multi-year.json",
-    "aggregation": "config_aggregation.son",
-    "supply-curve": "config_supply-curve.json",
-    "rep-profiles": "config_rep-profiles.json"
+    Configuration File names: \n
+    "gen": "config_gen.json" \n
+    "econ": "config_econ.json" \n
+    "offshore": "config_offshore.json" \n
+    "collect": "config_collect.json" \n 
+    "multi-year": "config_multi-year.json", \n
+    "aggregation": "config_aggregation.son", \n
+    "supply-curve": "config_supply-curve.json", \n
+    "rep-profiles": "config_rep-profiles.json" \n
+    "qaqc": "config_qaqc.json"
     """
 
     # Expand folder path
@@ -307,7 +334,7 @@ def main(folder, module, check, error, out):
                 print("  \n   ...   \n")
             for e in elines[-20:]:
                 print(e)
-            print(Fore.RED + "error file: " + elog + Style.RESET_ALL) 
+            print(Fore.YELLOW + "error file: " + elog + Style.RESET_ALL) 
     if out:
         outs = glob(os.path.join(logdir, "stdout", "*o"))
         try:
@@ -321,70 +348,7 @@ def main(folder, module, check, error, out):
                 print("  \n   ...   \n")
             for o in olines[-20:]:
                 print(o)
-            print(Fore.GREEN + "stdout file: " + olog + Style.RESET_ALL) 
-
-    # # Not done after here...
-    # with open(CONFIG_DICT["gen"], "r") as file:
-    #     config = json.load(file)
-    # tech = config["technology"]
-    # module_name = MODULE_DICT[module]
-
-    # # List all batch folders and check that they exist
-    # batches = glob("{}_*".format(tech))
-    # try:
-    #     assert batches
-    # except AssertionError:
-    #     print(Fore.RED + "No batch runs found." + Style.RESET_ALL)
-    #     return
-
-    # # Check for "non-successes"
-    # failures = 0
-    # for batch in batches:
-    #     stat_file = "{0}/{0}_status.json".format(batch)
-
-    #     # Check that the file 
-    #     try:
-    #         with open(stat_file, "r") as file:
-    #             log = json.load(file)
-    #             genstat = log[module_name]
-    #             runkeys = [k for k in genstat.keys() if batch in k]
-                
-    #             try:
-    #                 assert runkeys
-    #             except AssertionError:
-    #                 print(Fore.RED + "No status found for " + batch +
-    #                       Style.RESET_ALL)
-    #                 failures += 1
-
-    #             for k in runkeys:
-    #                 try:
-    #                     status = genstat[k]["job_status"]
-    #                     assert status == "successful"  # <--------------------- A job_status for the last module of a pipeline might not update to successful, even if it is.
-    #                 except AssertionError:
-    #                     failures += 1
-    #                     if status == "submitted":
-    #                         print("Job '" + k + "' may or may not be fine. " +
-    #                               "Status: " + Fore.YELLOW + status)
-    #                     else:
-    #                         print("Job status '" + k + "': " + Fore.RED +
-    #                               status + ".")
-    #                     print(Style.RESET_ALL)
-    #     except FileNotFoundError:
-    #         failures += 1
-    #         print(Fore.RED)
-    #         print("No log file found for '" + batch + "'.")
-    #         print(Style.RESET_ALL)
-
-    # # Print final count. What else would be useful?
-    # if failures == 0:
-    #     print(Fore.GREEN)
-    # else:
-    #     print(Fore.RED)
-    # print("Logs checked with {} incompletions.".format(failures))
-
-    # # Reset terminal colors
-    # print(Style.RESET_ALL)
-
+            print(Fore.YELLOW + "stdout file: " + olog + Style.RESET_ALL) 
 
 if __name__ == "__main__":
     main()

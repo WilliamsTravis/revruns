@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from setuptools import setup
+import fastentrypoints
+
 
 setup(
     name='revruns',
@@ -22,10 +24,8 @@ setup(
                        "rrexclusion = revruns.rrexclusion:main",
                        "rrgraphs = revruns.rrgraphs:main",
                        "rrgeoref = revruns.rrgeoref:main",
-                       "rrgeotiff = revruns.rrgeotiff:main",   
                        "rrlogs = revruns.rrlogs:main",
-                       "rrmax = revruns.rrmax:main",
-                       "rrmin = revruns.rrmin:main",
+                       "rrlist = revruns.rrlist:main",
                        "rrpoints = revruns.rrpoints:main",
                        "rrshape = revruns.rrshape:main",
                        "rrsetup = revruns.rrsetup:main",

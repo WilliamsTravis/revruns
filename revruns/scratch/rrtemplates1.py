@@ -1,58 +1,47 @@
 # -*- coding: utf-8 -*-
-"""Setup configuration files as templates for a reV run.
+"""
+Run this to setup configuration files as templates for a reV run.
 """
 
-import json
 import os
+import pkgutil
 
 import click
 import numpy as np
+import pandas as pd
 
-from revruns.constants import RESOURCE_DATASETS, TEMPLATES, SAM_TEMPLATES
+from revruns import RESOURCE_DATASETS, TEMPLATES, SAM_TEMPLATES, write_config
+from xlrd import XLRDError
 
 
 # Help printouts
-AGGREGATION_HELP = ("Setup the `aggregation` module configuration template "
-                    "and all of its required module templates. "
-                    "This module will resample the outputs to a coarser "
-                    "resolution and group results by specified regions "
-                    "after excluding specified areas and return "
-                    "a csv of results for each coordinate. (boolean)")
-ALLOC_HELP = ("Eagle account to use.")
-ALLPOINTS_HELP = ("Use all available coordinates for the specified generator. "
-                  "(boolean)")
-BATCH_HELP = ("Set up the `batch` module configuration template. This"
-              "module will run reV with a sequence of arguments or argument"
-              "combinations. (boolean)")
-COLLECT_HELP = ("Setup the `collect` module configuration template and all "
-                "of its required module templates. When "
-                "you run the generation module with multiple nodes, "
-                "multiple files will be written for each year. This will "
-                "combine these into single yearly files HDF5 files. (boolean)")
-FULL_HELP = ("Setup the full pipeline of reV module templates, from "
-             "`generation` to `rep-profiles`. (boolean)")
-GEN_HELP = ("This is the generator type to simulate using the Systems "
-            "Advisor Model (SAM). Defaults to pvwattsv5. Options include: "
-            "\pvwattsv5 or pvwattsv7: Photovoltaic \nwindpower: Wind Turbines "
-            "\ncsp: Concentrating Solar Power.")
-LOGDIR_HELP = ("Logging directory. Defaults to './logs'")
-MULTIYEAR_HELP = ("Setup the `multi-year` module configuration template ."
-                  "and all of its required module templates. "
-                  "This module will combine yearly HDF5 files into one "
-                  "large HDF5 file. (boolean)")
-OUTDIR_HELP = ("Output directory. This is also used as the SLURM job name "
-               "in the queue. Defaults to './'")
-REPPROFILES_HELP = ("Setup the `rep-profiles` module configuration "
-                    "template and all of its required module templates. "
-                    "This module will select a number of "
-                    "representative profiles within each specified region "
-                    "according to a specified measure of similarity to "
-                    "all profiles within a region. (boolean)")
-SUPPLYCURVE_HELP = ("Setup the `supply-curve` module configuration "
-                    "template and all of its required module templates. "
-                    "This module will calculate supply curves "
-                    "for each aggregated coordinate and return a csv. "
-                    "(boolean)")
+DATA = pkgutil.get_data("revruns", "data/rev_inputs.xlsx")
+
+
+def get_sheet(file_name, sheet_name=None):
+    """Read in a sheet from and excel spreadsheet file."""
+
+    # Open file
+    file = pd.ExcelFile(file_name)
+    sheets = file.sheet_names
+
+    # Run with no sheet_name for a list of available sheets
+    if not sheet_name:
+        return sheets
+
+    # Try to open sheet, print options if it fails
+    try:
+        table = file.parse(sheet_name=sheet_name)
+    except XLRDError:
+        print(sheet_name + " is not available. Available sheets:\n")
+        for s in sheets:
+            print("   " + s)
+
+    return table
+
+
+
+
 
 MODULE_NAMES = {
     "gen": "generation",
@@ -80,7 +69,7 @@ DEFAULT_PATHS = {
 DEFAULT_YEARS = {
     "csp": [y for y in range(1998, 2019)],
     "pvwattsv5": [y for y in range(1998, 2019)],
-    "pvwattsv7": [y for y in range(1998, 2019)],
+    "pvwattsv5": [y for y in range(1998, 2019)],
     "windpower": [y for y in range(2007, 2014)]
 }
 
@@ -90,15 +79,6 @@ PIPELINE_TEMPLATE =  {
     },
     "pipeline": []
 }
-
-
-def write_config(config_dict, path, verbose=False):
-    """ Write a configuration dictionary to a json file."""
-
-    # Write json to file
-    with open(path, "w") as file:
-        file.write(json.dumps(config_dict, indent=4))
-
 
 @click.command()
 @click.option("--generation", "-gen", is_flag=True, help=AGGREGATION_HELP)

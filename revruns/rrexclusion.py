@@ -1,14 +1,8 @@
 # -*- coding: utf-8 -*-
-"""
-Append a data set to an exclusions layer.
-
-Created on Wed Feb 19 12:27:23 2020
-
-@author: twillia2
+"""Append a data set to an exclusions layer.
 """
 
 import os
-import tempfile
 
 import click
 import h5py
@@ -33,9 +27,7 @@ def main(excl_file, add_file, name, desc, verbose):
     """Append a data set to an exlusion file.
     
     Issues:
-
         This is a rather long process.
-
     excl_file = "/shared-projects/rev/exclusions/ATB_Exclusions.h5"
     add_file = "/projects/rev/data/conus/friction_surface_102008/friction_surface_conus.tif"
     desc = "Social resistance/friction index"

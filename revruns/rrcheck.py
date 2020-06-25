@@ -1,21 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-A CLI to quickly check if HDF files have potentially anomalous values. This
-will check all files with an 'h5' extension in the current directory.
-The checks, so far, only include whether the minimum and maximum values are
-within the ranges defined in the "VARIABLE_CHECKS" object.'
-
-Things to do:
-    
-    1) Add in more threshold values, infer output type, maybe using units
-
-    3) Suggest uniform meta data for all of our resource data sets.
-    4) Make it work better.
-    5) Remove xml files, address "Cannot open {}.xml" problem.
-    
-Created on Mon Nov 25 08:52:00 2019
-
-@author: twillia2
+"""Check if HDF files have potentially anomalous values. 
 """
 
 import json
@@ -31,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 from osgeo import gdal
-from revruns import VARIABLE_CHECKS
+from revruns.constants import VARIABLE_CHECKS
 from tqdm import tqdm
 
 

@@ -1,28 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""Postprocessing for batch model outputs. These are heavily nested and need to
+ be consolidated some how.
 """
-Postprocessing for batch model outputs. These are heavily nested and need to
-be consolidated some how.
 
-
-Things to do:
-
-    1) Catch cases where a pipeline is not complete. The status log is not
-       consistent at catching this situation btw.
-
-Created on Tue Jan 21 08:38:11 2020
-
-@author: twillia2
-"""
-import click
-import h5py
 import json
 import os
-import numpy as np
-import pandas as pd
+
 from pathlib import Path
 from glob import glob
-from reV.utilities.utilities import parse_year
+
+import click
+import h5py
+import numpy as np
+import pandas as pd
+
+from rex.utilities import parse_year
 
 
 FOLDER_HELP = ("Path to a folder with a completed set of batched reV runs. "

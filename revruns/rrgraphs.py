@@ -1,12 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-A CLI to quickly generate some summary statistics/charts and graphs. For now
-this is just use the supply curve tables.
-
-Created on Thu Apr 23 10:06:50 2020
-
-@author: twillia2
+"""Quickly generate some summary statistics/charts and graphs. Incomplete.
 """
 
 import json
@@ -25,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 from pandas.core.common import SettingWithCopyWarning
-from revruns import VARIABLE_CHECKS
+from revruns.constants import VARIABLE_CHECKS
 from revruns.rrshape import h5_to_shape, csv_to_shape
 from tqdm import tqdm
 

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Run this to setup configuration files from a standard template.
+"""Setup configuration files from a standard template.
 """
 
 import os
@@ -8,12 +7,11 @@ import pkgutil
 import shutil
 
 import click
-import numpy as np
+import h5py
 import pandas as pd
 
 from colorama import Fore, Style
-from revruns import ROOT, RESOURCE_DATASETS, TEMPLATES, SAM_TEMPLATES
-from revruns import  write_config
+from revruns.constants import ROOT, RESOURCE_DATASETS, TEMPLATES, SAM_TEMPLATES
 from xlrd import XLRDError
 
 
@@ -75,7 +73,10 @@ OPTION = "eagle"
 
 # For random configurations
 NPROFILES = 1
-AG_RESOLUTION = 128
+AG_RESOLUTION = {
+    "pv": 128,
+    "wind": 64
+}
 
 # Path constants
 EXCLUSIONS = "/projects/rev/data/exclusions/ATB_Exclusions.h5"
@@ -124,6 +125,25 @@ def get_sheet(file_name, sheet_name=None):
     return table
 
 
+def build_points(dataset, config, dst):
+    """Build default project point files based on the resource."""
+
+    # Get the data set path
+    dpath = RESOURCE_DATASETS[dataset].format(2010)
+
+    # Build the meta data frame
+    with h5py.File(dpath, "r") as ds:
+        points = pd.DataFrame(ds["meta"][:])
+
+    # Clena this up a bit
+    points["gid"] = points.index
+    points["config"] = config
+    points = points[["latidue", "longitude", "config"]]
+
+    # Save
+    points.to_csv(dst, index=False)
+
+
 def write_template(dst=None):
     """Write a template rev input configuration file."""
 
@@ -140,17 +160,22 @@ def write_template(dst=None):
         print(Fore.YELLOW + dst + " exists. Choose a different path for "
               "the template." + Style.RESET_ALL)
 
+def write_config(config_dict, path, verbose=False):
+    """ Write a configuration dictionary to a json file."""
+
+    # Write json to file
+    with open(path, "w") as file:
+        file.write(json.dumps(config_dict, indent=4))
+
 
 class Paths:
 
     def __init__(self, master, proj_dir):
         """Initiate Paths object.
 
-        proj_dir = "~/github/revruns/tests"
+        proj_dir = "~/github/revruns/tests/project"
         master = "~/github/revruns/revruns/data/rev_inputs.xlsx"
-
-        proj_dir = "/shared-projects/rev/projects/southern_co/scratch"
-        master = "/shared-projects/rev/projects/southern_co/scratch/rev_inputs.xlsx"
+        self = Paths(master, proj_dir)
         """
 
         self.module_paths = MODULE_CONFIG_PATHS
@@ -204,6 +229,17 @@ class Paths:
 
             for m in modules:
                 paths = self._set_path(paths, spath, m)
+
+        # Now project points
+        pcontrol = self.project_control 
+        scenarios = list(pcontrol)[1:]
+        point_paths = {}
+        for scen in scenarios:
+            resources = pcontrol[pcontrol["parameter"] == "resource"]
+            r = resources[scen].values[0]
+            path = os.path.join(self.proj_dir, "project_points", r + ".csv")
+            point_paths[scen] = path
+        paths["points"] = point_paths
 
         # Set paths dictionary as attribute
         self.paths = paths
@@ -278,6 +314,12 @@ class Setup(Paths):
             years = self.years[name].dropna().astype(int).to_list()
             tech = sysdct["compute_module"]
     
+            # Create the point table
+            point_path = self.paths["points"][name]
+            if not os.path.exists(point_path):
+                os.makedirs(os.path.dirname(point_path), exist_ok=True)
+                build_points(resource_files, "default", point_path)
+
             # Replace template placholders
             config = TEMPLATES["gen"].copy()
             config["execution_control"]["allocation"] = projdct["allocation"]
@@ -286,6 +328,7 @@ class Setup(Paths):
             config["technology"] = tech
             config["sam_files"] = {system: sam_files}
             config["resource_file"] = resource_files
+            config["project_points"] = point_path
 
             # This is the target path
             save = self.paths["generation"][name]
@@ -341,6 +384,48 @@ class Setup(Paths):
         """Create a different pipeline for generation and aggregation modules.
         """
 
+    def aggregation(self):
+        """Create all collect configurations."""
+
+        # Get the needed data frames
+        scendf = self.scenarios
+        sysdf = self.system_configs
+        projdf = self.project_control
+        exdf = self.exclusion_files
+        projdf = projdf.applymap(lambda x: x.replace(" ", ""))
+        for name, spath in self.paths["scenarios"].items():
+
+            # Some items depend on how many years are run
+            years = self.years[name].dropna().astype(int).to_list()
+            if len(years) > 1:
+                cf_dset = "cf_mean-means"
+                lcoe_dset = "lcoe_fcr-means"
+            else:
+                cf_dset = "cf_mean"
+                lcoe_dset = "lcoe_fcr"
+
+            # Get a new template
+            config = TEMPLATES["ag"].copy()
+            config["execution_control"]["allocation"]
+            config["cf_dset"] = cf_dset
+            config["lcoe_dset"] = lcoe_dset
+
+            # Exclusions
+            layerdf = scendf[scendf["scenario_name"]== name]
+            excls = layerdf["exclusion_name"][layerdf["scenario_name"] == name]
+            excls = excls.dropna().values
+            excl_dict = {}
+            for e in excls:
+                entry = {}
+                exclude_values = exdf["exclude_values"][exdf["exclusion_name"] == e]
+                entry["exclude_values"]
+                
+            
+
+            # This is the target path
+            save = self.paths["aggregation"][name]
+            write_config(config, save)
+
 
     def sam(self):
         """Create all SAM configurations."""
@@ -379,6 +464,11 @@ class Setup(Paths):
         self.generation()
         self.collect()
         self.multi_year()
+        
+        self.aggregation()
+        self.supply_curve()
+        self.rep_profiles()
+        self.pipeline()
 
 
 def setup_project(master, proj_dir):
@@ -423,5 +513,6 @@ def main(file, project_dir, template):
         print(Fore.GREEN + "Project set up in " + project_dir + "." + 
               Style.RESET_ALL)
 
-if __name__ == "__main__":
-    main()
+
+# if __name__ == "__main__":
+#     main()

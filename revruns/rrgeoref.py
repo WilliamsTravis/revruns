@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
-"""
-A CLI to georeference an HDF5 files for compatibility with GIS and GDAL tools.
-
-Created on Wed Jun  3 09:48:49 2020
-
-@author: twillia2
+"""Georeference an HDF5 files for compatibility with GIS and GDAL tools. Needs
+work.
 """
 
 import json
@@ -14,6 +10,7 @@ import click
 import h5py
 
 from osgeo import osr
+
 
 # Help printouts
 FILE_HELP = ("The path to the target HDF5 file.")

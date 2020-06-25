@@ -1,18 +1,10 @@
 # -*- coding: utf-8 -*-
-"""
-It would be good to gbe able to make a quick shape file or geopackage out of
-the csv outputs from rev (i.e., aggregations, supply-curves, and
-representative profiles).
-
-Created on Tue Dec 17 2019
-
-@author: twillia2
+"""Make a quick shape file or geopackage out of the outputs from reV.
 """
 
 import os
 
 import click
-import fiona
 import geopandas as gpd
 import h5py
 import pandas as pd
@@ -23,6 +15,7 @@ from tqdm import tqdm
 
 # Use GDAL to catch GDAL exceptions
 gdal.UseExceptions()
+
 
 # Help printouts
 FILE_HELP = "The file from which to create the shape file. (str)"

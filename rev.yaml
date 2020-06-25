@@ -1,14 +1,25 @@
-name: testrev
+name: revruns
 channels:
   - nrel
-dependencies: # These don't appear to work yet, but this is ready for when they do!
+dependencies:
   - python=3.7
+  - geopandas
+  - pandas
+  - numpy
+  - rasterio
+  - h5py
+  - gdal
+  - dask
   - nrel-rev
   - nrel-pysam
   - nrel-rex
   - nrel-revx
+  - ipython
   - pip
   - pip:
     - colorama
     - xlrd
     - xlsxwriter
+    - h5pyd
+    - fastentrypoints
+    - tabulate
