@@ -2,6 +2,7 @@
 """Setup configuration files from a standard template.
 """
 
+import json
 import os
 import pkgutil
 import shutil

@@ -1,6 +1,7 @@
 name: revruns
 channels:
   - nrel
+  - conda-forge
 dependencies:
   - python=3.7
   - geopandas
@@ -23,3 +24,4 @@ dependencies:
     - h5pyd
     - fastentrypoints
     - tabulate
+    - tqdm
