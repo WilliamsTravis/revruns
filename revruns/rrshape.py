@@ -140,10 +140,10 @@ def h5_to_shape(file, driver="gpkg", dataset=None, layer=0, savepath=None,
     Sample Arguments
     ----------------
     
-    file = "/shared-projects/rev/projects/heco/data/resource/comparisons/differences.h5"
-    savepath = "/shared-projects/rev/projects/heco/data/resource/comparisons/mean_windspeed_differences.gpkg"
+    file = "/shared-projects/rev/projects/heco/data/exclusions/HI_Exclusions.h5"
+    savepath = "/shared-projects/rev/projects/heco/data/exclusions/slope.h5"
     driver = "gpkg"
-    dataset = None
+    dataset = "slope"
     layer = 0
     epsg = 4326
     """
@@ -176,8 +176,11 @@ def h5_to_shape(file, driver="gpkg", dataset=None, layer=0, savepath=None,
 
 
         if dataset:
-            scale = ds[dataset].attrs["scale_factor"]
-            arrays[dataset] = ds[dataset][:] #/ scale
+            if "scale_factor" in ds[dataset].attrs.keys():
+                scale = ds[dataset].attrs["scale_factor"]
+                arrays[dataset] = ds[dataset][:] / scale
+            else:
+                arrays[dataset] = ds[dataset][:] 
         else:
             datasets = [k for k in ds.keys() if k not in OMISSIONS]
             print("Rendering " + str(len(datasets)) + " datasets: \n  " + 
@@ -240,5 +243,5 @@ def main(file, savepath, dataset, layer, driver):
         print("Sorry, rrshape can't handle that file type yet.")
         raise KeyError
 
-if "__name__" == "__main__":
-    main()
+#if "__name__" == "__main__":
+#    main()

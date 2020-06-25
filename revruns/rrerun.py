@@ -30,6 +30,7 @@ MODULE_SHORTS = {"generation":"gen",
                  "supply-curve": "_sc",
                  "rep-profiles": "rep_profiles"}
 
+
 @click.command()
 @click.option("--folder", "-f", default=".", help=FOLDER_HELP)
 @click.option("--module", "-m", required=True, help=MODULE_HELP)

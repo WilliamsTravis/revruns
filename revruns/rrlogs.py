@@ -4,6 +4,7 @@
 
 import json
 import os
+import subprocess as sp
 import warnings
 
 from glob import glob
@@ -239,6 +240,20 @@ def status_dataframe(folder, module=None):
     return df
 
 
+
+#def run_time(df):
+#    """Append runtime from SLURM for running processes if possible."""
+#
+#    for row in df.iterrows():
+#        if row["job_status"] == "R":
+#            try:
+#                user = sp.check_output("whoami", shell=False) 
+#                user = user.decode().replace("\n", "")
+#                queue = sp.check_output(["squeue",  "-u", user], shell=False) 
+#                                user = user.decode().replace("\n", "")
+
+    
+
 def color_print(df):
     """Print each line of a data frame in red for failures and green for
     success."""
@@ -255,7 +270,6 @@ def color_print(df):
 
     df["job_status"] = df["job_status"].apply(color_string)
 
-#    print(df.to_string(index=False))
     print(tabulate(df, showindex=False, headers=df.columns,
                    tablefmt="simple"))
 
@@ -304,6 +318,7 @@ def main(folder, module, check, error, out):
     # Convert module status to data frame
     status_df = status_dataframe(folder, module)
     status_df["job_name"] = status_df.index
+#    status_df = run_time(status_df)
     print_df = status_df[['job_id', 'job_name', 'job_status', 'pipeline_index',
                           'runtime']]
 
