@@ -1,0 +1,22 @@
+{
+    "directories": {
+        "collect_directory": "PIPELINE",
+        "logging_directory": "./logs",
+        "output_directory": "./"
+    },
+    "execution_control": {
+        "allocation": "rev",
+        "feature": "--qos=normal",
+        "memory": 90,
+        "option": "eagle",
+        "walltime": 1.0
+    },
+    "dsets": [
+        "cf_profile",
+        "ws_mean"
+    ],
+    "file_prefixes": "PIPELINE",
+    "logging_level": "INFO",
+    "parallel": false,
+    "project_points": "PLACEHOLDER"
+}

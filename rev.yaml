@@ -1,4 +1,4 @@
-name: revruns
+name: rr
 channels:
   - nrel
   - conda-forge

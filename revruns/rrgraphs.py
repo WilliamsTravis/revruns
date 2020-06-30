@@ -124,7 +124,7 @@ def supply_histograms(directory, savedir, show=False):
         ax.set_ylabel("Count")
         ax.set_title(variable)
         fig.tight_layout()
-        # plt.show()
+        plt.show()
         plt.savefig(save_path)
         plt.close(fig)
 
@@ -150,7 +150,7 @@ def main(directory, savedir):
     directory = os.path.expanduser(directory)
     directory = os.path.abspath(directory)
     savedir = os.path.expanduser(savedir)
-    savedir = os.path.abspath(savedir)
+    savedir = os.path.join(directory, "graphs")
 
     # Make the save directory
     os.makedirs(savedir, exist_ok=True)

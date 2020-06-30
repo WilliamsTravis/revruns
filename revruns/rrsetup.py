@@ -139,7 +139,7 @@ def build_points(dataset, config, dst):
     # Clena this up a bit
     points["gid"] = points.index
     points["config"] = config
-    points = points[["latidue", "longitude", "config"]]
+    points = points[["latitude", "longitude", "config"]]
 
     # Save
     points.to_csv(dst, index=False)
@@ -319,7 +319,7 @@ class Setup(Paths):
             point_path = self.paths["points"][name]
             if not os.path.exists(point_path):
                 os.makedirs(os.path.dirname(point_path), exist_ok=True)
-                build_points(resource_files, "default", point_path)
+                build_points(projdct["resource"], "default", point_path)
 
             # Replace template placholders
             config = TEMPLATES["gen"].copy()
@@ -420,8 +420,7 @@ class Setup(Paths):
                 entry = {}
                 exclude_values = exdf["exclude_values"][exdf["exclusion_name"] == e]
                 entry["exclude_values"]
-                
-            
+
 
             # This is the target path
             save = self.paths["aggregation"][name]
@@ -515,5 +514,5 @@ def main(file, project_dir, template):
               Style.RESET_ALL)
 
 
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()

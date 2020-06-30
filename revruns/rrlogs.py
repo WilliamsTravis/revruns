@@ -154,7 +154,7 @@ def find_status(folder):
     # Fix artifacts
     status = fix_status(status)
 
-    return status
+    return file, status
 
 
 def fix_status(status):
@@ -217,7 +217,7 @@ def status_dataframe(folder, module=None):
     dataframe."""
 
     # Get the status dictionary
-    status = find_status(folder)
+    _, status = find_status(folder)
 
     # If just one module
     if module:
@@ -241,18 +241,26 @@ def status_dataframe(folder, module=None):
 
 
 
-#def run_time(df):
-#    """Append runtime from SLURM for running processes if possible."""
-#
-#    for row in df.iterrows():
-#        if row["job_status"] == "R":
-#            try:
-#                user = sp.check_output("whoami", shell=False) 
-#                user = user.decode().replace("\n", "")
-#                queue = sp.check_output(["squeue",  "-u", user], shell=False) 
-#                                user = user.decode().replace("\n", "")
+def run_time(df):
+    """Append runtime from SLURM for running processes if possible."""
 
-    
+    rows = df[df["job_status"] == "R"]
+
+    for i, row in rows.iterrows():
+        if row["job_status"] == "R":
+            jobid = row["job_id"]
+            try:
+                user = sp.check_output("whoami", shell=False) 
+                user = user.decode().replace("\n", "")
+                queue = sp.check_output(["squeue",  "-u", user], shell=False) 
+                queue = queue.decode().split('\n')
+                qlines =  [q.split() for q in queue]
+                qdf = pd.DataFrame(qlines[1:], columns=qlines[0])
+                time = qdf["TIME"][qdf["JOBID"] == jobid].values[0]
+                df["runtime"][df["jobid"] == jobid] = time
+            except:
+                pass
+
 
 def color_print(df):
     """Print each line of a data frame in red for failures and green for
