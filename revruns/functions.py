@@ -1,47 +1,20 @@
 """
-Notes:
-
-    - Collect cannot apparently be run without a pipeline configuration. This means that a run with more than one
-      module will need a pipeline configuration.
-
-
-Steps to Configure (Order is important for steps 3 through 9):
-    1) SAM - This is a json written from a Python dictionary that includes all of the specifications needed for a
-             modeled power generator (solar pv, wind turbine, concentrating solar power, etc.). SAM stands for the
-             Systems Advisor Model and is the starting point for the reV model. It will generate power generation
-             estimates for a point using historical resource data sets. reV will then run at multiple points, or all
-             points in a data set.
-    2) Project Points - These are the grid IDs (GIDs) of the resource data set where the reV model will simulate. This
-                        needs to be saved as a csv with the GIDs in a "gid" column and a key pointing to a SAM
-                        configuration file in a "config" column. You may include whatever else you want in this file,
-                        only those two columns will be read.
-    3) Generation - This module is required for every subsequent module since it uses SAM to generate the initial power
-                    figures. Also, though this isn't totally intuitive, it generates our Levelized Cost of Energy
-                    figures. You may  If you are running just one SAM configuration using a single node and a single
-                    year, this will be all you need to run.
-    4) Collect - If you are running the job on multiple nodes, outputs for each year run will be split into chunks.
-                 To combine these chunks into single yearly files, a collection configuration will be needed.
-    5) Multi-year - If you are running the job for multiple years and want to combine output into a single file, this
-                    module will do that for you, and will need a configuration file. It does not appear as though it
-                    will combine the larger profile data sets into one.
-    6) Aggregation - To reduce the file size and grid resolution to fit outputs into subsequent modules, the aggregation
-                     module will resample to larger grid sizes and requires a configuration file.
-    7) Supply-curve - To generate cost vs generation supply curves across the area of interest, the "supply-curve"
-                      module is used.
-    8) Rep-profiles - To select representative profiles for an area of interest, run the "rep-profiles" module. This
-                      will choose the most appropriate set (single) profile of whatever output is requested.
-    9) Pipeline - This module will run each of the previous modules with a single reV call.
-    10) Batch - If you are running multiple SAM configurations, you may run a "batch" job once. This will run the
-                full pipeline for each SAM configuration or SAM model parameter that you give it.
+Almost all of the functionality is currently stored in the CLI scripts to
+avoid the load time needed to load shared functions, but anything in here can
+be accessed through revruns.functions. Place new functions that might be useful
+in the future here.
 
 Created on Wed Dec  4 07:58:42 2019
 
 @author: twillia2
 """
 
+import datetime as dt
 import json
+import multiprocessing as mp
 import os
 import ssl
+import warnings
 
 from glob import glob
 
@@ -49,12 +22,15 @@ import geopandas as gpd
 import h5py
 import numpy as np
 import pandas as pd
+import rasterio as rio
 
-from reV.utilities.exceptions import JSONError
+from rasterio.errors import RasterioIOError
 from shapely.geometry import Point
+from tqdm import tqdm
 
 # Fix remote file transfer issues with ssl (for gpd, find a better way).
 ssl._create_default_https_context = ssl._create_unverified_context
+warnings.filterwarnings(action='ignore', category=UserWarning)
 
 
 def check_config(config_file):
@@ -83,10 +59,6 @@ def to_sarray(df):
     """Encode data frame values, return a structured array and an array of
     dtypes. This is needed for storing pandas data frames in the h5 format.
     """
-
-    for c in df.columns:
-        if isinstance(df[c].iloc[0], bytes):
-                df[c] = df[c].apply(lambda x: x.decode())
 
     def make_col_type(col, types):
         
@@ -122,6 +94,24 @@ def to_sarray(df):
             raise
 
     return array, dtypes
+
+
+def decode_cols(df):
+    """ Decode the columns of a meta data object from a reV output. 
+
+    Fix:
+        When an HDF has been transfered or synced across networks, columns with
+        byte format might be stored as strings...meaning that they will be
+        strings of bytes of strings (i.e. "b'string'").
+    """
+
+    for c in df.columns:
+        if isinstance(df[c].iloc[0], bytes):
+                df[c] = df[c].apply(lambda x: x.decode())
+
+    return df
+
+
 
 
 def write_config(config_dict, path, verbose=False):
@@ -946,6 +936,12 @@ def pipeline(paths):
 
 
 # Class methods
+class JSONError(Exception):
+    """
+    Error reading json file.
+    """
+
+
 class Data_Path:
     """Data_Path joins a root directory path to data file paths."""
 
@@ -985,13 +981,17 @@ class Data_Path:
 
         return folders
 
-    def files(self, *args):
+    def files(self, pattern=None, *args):
         """List files in the data_path or in sub directories."""
 
         items = self.contents(*args)
-        folders = [i for i in items if os.path.isfile(i)]
+        files = [i for i in items if os.path.isfile(i)]
+        if pattern:
+            files = [f for f in files if pattern in f]
+            if len(files) == 1:
+                files = files[0]
 
-        return folders
+        return files
 
     def _expand_check(self):
 
@@ -1001,3 +1001,279 @@ class Data_Path:
 
         # Make sure path exists
         os.makedirs(self.data_path, exist_ok=True)
+
+
+class Exclusions:
+    """Build or add to an HDF5 Exclusions dataset."""
+
+    def __init__(self, excl_fpath):
+        """Initialize Exclusions object."""
+        
+        self.excl_fpath = excl_fpath
+        self._initialize_h5()
+
+    def __repr__(self):
+        msg = "<Exclusions Object:  excl_fpath={}>".format(self.excl_fpath)
+        return msg
+
+    def add_layer(self, dname, file, description=None, overwrite=False):
+        """Add a raster file and its description to the HDF5 exclusion file."""
+
+        # Open raster object
+        try:
+            raster = rio.open(file)
+        except:
+            raise RasterioIOError("file " + file + " does not exist")
+
+        profile = raster.profile
+        profile["crs"] = profile["crs"].to_proj4()
+        dtype = profile["dtype"]
+        profile = json.dumps(dict(profile))
+
+        # Add coordinates and else check that the new file matches everything
+        self._set_coords(raster)
+        self._check_dims(raster, profile, dname)
+
+        # Add everything to target exclusion HDF
+        array = raster.read()
+        with h5py.File(self.excl_fpath, "r+") as hdf:
+            keys = list(hdf.keys())
+            if dname in keys:
+                if overwrite:
+                    del hdf[dname]
+
+            if not dname in keys:
+                hdf.create_dataset(name=dname, data=array, dtype=dtype,
+                                   chunks=(1, 128, 128))
+                hdf[dname].attrs["file"] = os.path.abspath(file)
+                hdf[dname].attrs["profile"] = profile
+                if description:
+                    hdf[dname].attrs["description"] = description
+
+    def add_layers(self, file_dict, desc_dict=None, overwrite=False):
+        """Add multiple raster files and their descriptions."""
+
+        # If description are provided make sure they match the files
+        if desc_dict:
+            try:
+                dninf = [k for k in desc_dict if k not in file_dict]
+                fnind = [k for k in file_dict if k not in desc_dict]
+                assert not dninf
+                assert not fnind
+            except:
+                mismatches = np.unique(dninf + fnind)
+                msg = ("File and description keys do not match. "
+                       "Problematic keys: " + ", ".join(mismatches))
+                raise AssertionError(msg)
+        else:
+            desc_dict = {key: None for key in file_dict.keys()}
+
+        # Should we parallelize this?
+        for key, file in tqdm(file_dict.items(), total=len(file_dict)):
+            description = desc_dict[key]
+            self.add_layer(key, file, description, overwrite=overwrite)
+
+    def techmap(self, res_fpath, dname, max_workers=None, map_chunk=2560,
+                distance_upper_bound=None, save_flag=True):
+        """
+        Build a technical resource mapping grid between exclusion rasters cells
+        and resource points.
+
+        Parameters
+        ----------
+        res_fpath : str
+            Filepath to HDF5 resource file.
+        dname : str
+            Dataset name in excl_fpath to save mapping results to.
+        max_workers : int, optional
+            Number of cores to run mapping on. None uses all available cpus.
+            The default is None.
+        distance_upper_bound : float, optional
+            Upper boundary distance for KNN lookup between exclusion points and
+            resource points. None will calculate a good distance based on the
+            resource meta data coordinates. 0.03 is a good value for a 4km
+            resource grid and finer. The default is None.
+        map_chunk : TYPE, optional
+          Calculation chunk used for the tech mapping calc. The default is
+            2560.
+        save_flag : boolean, optional
+            Save the techmap in the excl_fpath. The default is True.
+        """
+
+        from reV.supply_curve.tech_mapping import TechMapping
+
+        # If saving, does it return an object?
+        arrays = TechMapping.run(self.excl_fpath, res_fpath, dname, 
+                                 max_workers=None, distance_upper_bound=None,
+                                 map_chunk=2560, save_flag=save_flag)
+        return arrays
+
+    def _check_dims(self, raster, profile, dname):
+        # Check new layers against the first added raster
+        with h5py.File(self.excl_fpath, "r") as hdf:
+            
+            # Find any existing layers (these will have profiles)
+            lyrs = [k for k in hdf.keys() if hdf[k] and "profile" in
+                    hdf[k].attrs.keys()]
+
+            if lyrs:
+                key = lyrs[0]
+                old = json.loads(hdf[key].attrs["profile"])
+                new = json.loads(profile)
+
+                # Check the CRS
+                try:
+                    assert old["crs"] == new["crs"]
+                except:
+                    raise AssertionError("CRS for " + dname + " does not match"
+                                         " exisitng CRS.")
+
+                # Check the transform
+                try:
+                    assert old["transform"] == new["transform"]
+                except:
+                    raise AssertionError("Geotransform for " + dname + " does "
+                                         "not match geotransform.")
+
+                # Check the dimesions
+                try:
+                    assert old["width"] == new["width"]
+                    assert old["height"] == new["height"]
+                except:
+                    raise AssertionError("Width and/or height for " + dname +
+                                         " does not match exisitng " +
+                                         "dimensions.")
+
+    def _get_coords(self, raster):
+        # Get x and y coordinates (One day we'll have one transform order!)
+        profile = raster.profile
+        geom = raster.profile["transform"]
+        xres = geom[0]
+        xrot = geom[1]
+        ulx = geom[2]
+        yrot = geom[3]
+        yres = geom[4]
+        uly = geom[5]
+        
+        # Not doing rotations here
+        xs = [ulx + col * xres for col in range(profile["width"])]
+        ys = [uly + row * yres for row in range(profile["height"])]
+
+        return xs, ys
+
+    def _set_coords(self, raster):
+        # Add the lat and lon meshgrids if they aren't already present
+        with h5py.File(self.excl_fpath, "r+") as hdf:
+            keys = list(hdf.keys())
+            if not "latitude" in keys or not "longitude" in keys:
+                xs, ys = self._get_coords(raster)
+                xgrid, ygrid = np.meshgrid(xs, ys)
+                hdf.create_dataset(name="longitude", data=xgrid)
+                hdf.create_dataset(name="latitude", data=ygrid)
+
+    def _initialize_h5(self):
+        # Create an empty hdf file if one doesn't exist
+        date = format(dt.datetime.today(), "%Y-%m-%d %H:%M")
+        os.makedirs(os.path.dirname(self.excl_fpath), exist_ok=True)
+        if not os.path.exists(self.excl_fpath):
+            with h5py.File(self.excl_fpath, "w") as ds:
+                ds.attrs["creation_date"] = date
+
+
+@pd.api.extensions.register_dataframe_accessor("rr")
+class PandasExtension:
+    """Making dealing with meta objects easier."""
+    def __init__(self, pandas_obj):
+        try:
+            assert type(pandas_obj) ==  pd.core.frame.DataFrame
+        except:
+            raise AssertionError("Can only use .rr accessor with a pandas "
+                                 "data frame.")
+        self._obj = pandas_obj
+
+    def decode(self):
+        """ Decode the columns of a meta data object from a reV output. 
+    
+        Fix:
+            When an HDF has been transfered or synced across networks, columns
+            with byte format might be stored as strings...meaning that they
+            will be strings of bytes of strings (i.e. "b'string'").
+        """
+    
+        for c in self._obj.columns:
+            if isinstance(self._obj[c].iloc[0], bytes):
+                try:
+                    self._obj[c] = self._obj[c].apply(lambda x: x.decode())
+                except:
+                    self._obj[c] = None
+                    print("Column " + c + " could not be decoded.")
+
+    def to_bbox(self, bbox):
+        """Return points filtered by a bounding box ([xmin, ymin, xmax, ymax])
+        """
+
+        df = self._obj.copy()
+        df = df[(df["longitude"] >= bbox[0]) &
+                (df["latitude"] >= bbox[1]) &
+                (df["longitude"] <= bbox[2]) &
+                (df["latitude"] <= bbox[3])]
+        return df
+
+    def to_geo(self):
+        """ Convert a Pandas data frame to a geopandas geodata frame """
+
+        # Let's not transform in place
+        df = self._obj.copy()
+        df.rr.decode()
+
+        # For a single row
+        to_point = lambda x: Point(tuple(x))
+        df["geometry"] = df[["longitude", "latitude"]].apply(to_point, axis=1)
+        gdf = gpd.GeoDataFrame(df, crs='epsg:4326', geometry="geometry")
+        return gdf
+
+    def to_sarray(self):
+        """Create a structured array for storing in HDF5 files."""
+
+        # Create a copy
+        df = self._obj.copy()
+
+        # For a single column
+        def make_col_type(col, types):
+            
+            coltype = types[col]
+            column = df.loc[:, col]
+            
+            try:
+                if 'numpy.object_' in str(coltype.type):
+                    maxlens = column.dropna().str.len()
+                    if maxlens.any():
+                        maxlen = maxlens.max().astype(int)
+                        coltype = ('S%s' % maxlen)
+                    else:
+                        coltype = 'f2'
+                return column.name, coltype
+            except:
+                print(column.name, coltype, coltype.type, type(column))
+                raise
+
+        # All values and types
+        v = df.values
+        types = df.dtypes
+        struct_types = [make_col_type(col, types) for col in df.columns]
+        dtypes = np.dtype(struct_types)
+
+        # The target empty array
+        array = np.zeros(v.shape[0], dtypes)
+
+        # For each type fill in the empty array
+        for (i, k) in enumerate(array.dtype.names):
+            try:
+                if dtypes[i].str.startswith('|S'):
+                    array[k] = df[k].str.encode('utf-8').astype('S')
+                else:
+                    array[k] = v[:, i]
+            except:
+                raise
+    
+        return array, dtypes

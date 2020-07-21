@@ -16,23 +16,31 @@ FOLDER_HELP = ("Path to a folder with a completed set of batched reV runs. "
                "Defaults to current directory. (str)")
 MODULE_HELP = ("The reV module logs to check: generation, collect, "
                "multi-year, aggregation, supply-curve, or rep-profiles")
-
-MODULE_DICT = {"gen": "generation",
-               "collect": "collect",
-               "multi-year": "multi-year",
-               "aggregation": "aggregation",
-               "supply-curve": "supply-curve",
-               "rep-profiles": "rep-profiles"}
-CONFIG_DICT = {"gen": "config_gen.json",
-               "collect": "config_collect.json",
-               "multi-year": "config_multi-year.json",
-               "aggregation": "config_ag.son",
-               "supply-curve": "config_supply-curve.json",
-               "rep-profiles": "config_rep-profiles.json"}
-
+MODULE_DICT = {
+    "gen": "generation",
+    "collect": "collect",
+    "multi-year": "multi-year",
+    "aggregation": "aggregation",
+    "supply-curve": "supply-curve",
+    "rep-profiles": "rep-profiles"
+}
+CONFIG_DICT = {
+    "gen": "config_gen.json",
+    "collect": "config_collect.json",
+    "multi-year": "config_multi-year.json",
+    "aggregation": "config_ag.son",
+    "supply-curve": "config_supply-curve.json",
+    "rep-profiles": "config_rep-profiles.json",
+    "batch": "config_batch.json"
+}
+TECH_ABBRS = {
+    "pvwattsv5": "pv",
+    "pvwattsv7": "pv",
+    "windpower": "wind"  # ??
+}
 
 @click.command()
-@click.option("--folder", "-f", default=".", help=FOLDER_HELP)
+@click.argument("folder", default=".")
 @click.option("--module", "-m", default="gen", help=MODULE_HELP)
 def main(folder, module):
     """
@@ -45,7 +53,7 @@ def main(folder, module):
         rrbatch_logs -f "." -m generation
 
     sample arguments:
-        folder = "/projects/rev/new_projects/sergei_doubleday/5min"
+        folder = "/shared-projects/rev/projects/perform/rev/day_ahead/2017"
         module = "gen"
     """
 
@@ -54,10 +62,11 @@ def main(folder, module):
     with open(CONFIG_DICT["gen"], "r") as file:
         config = json.load(file)
     tech = config["technology"]
+    tech_abbr = TECH_ABBRS[tech]
     module_name = MODULE_DICT[module]
 
     # List all batch folders and check that they exist
-    batches = glob("{}_*".format(tech))
+    batches = glob("{}_*".format(tech_abbr))
     try:
         assert batches
     except AssertionError:
