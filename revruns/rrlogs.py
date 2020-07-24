@@ -33,10 +33,9 @@ USER_HELP = ("Unix username. If another user is running a job in the current "
 MODULE_HELP = ("The reV module logs to check. Defaults to all modules: gen, "
                "collect, multi-year, aggregation, supply-curve, or "
                "rep-profiles")
-CHECK_HELP = ("The type of check to perform. Option include 'failure' (print "
-            "which jobs failed), 'success' (print which jobs finished), and "
-            "'pending' (print which jobs have neither of the other two "
-            "statuses). Defaults to failure.")
+STATUS_HELP = ("Print jobs with a given status. Option include 'failed' "
+               "(or 'f'), 'success' (or 's'), 'pending' (or 'p'), 'running' "
+               "(or 'r'), 'submitted' (or 'sb') and 'unsubmitted (or 'usb')")
 ERROR_HELP = ("A job ID. This will print the first 20 lines of the error log "
               "of a job.")
 OUT_HELP = ("A job ID. This will print the first 20 lines of the standard "
@@ -345,10 +344,10 @@ def check_entries(print_df, check):
 @click.option("--folder", "-f", default=".", help=FOLDER_HELP)
 @click.option("--user", "-u", default=None, help=USER_HELP)
 @click.option("--module", "-m", default=None, help=MODULE_HELP)
-@click.option("--check", "-c", default=None, help=CHECK_HELP)
+@click.option("--status", "-s", default=None, help=STATUS_HELP)
 @click.option("--error", "-e", default=None, help=ERROR_HELP)
 @click.option("--out", "-o", default=None, help=OUT_HELP)
-def main(folder, user, module, check, error, out):
+def main(folder, user, module, status, error, out):
     """
     revruns - logs
 
@@ -383,7 +382,7 @@ def main(folder, user, module, check, error, out):
     status_df = status_dataframe(folder, module, user)
 
     # Now return the requested return type
-    if check:
+    if status:
         print_df = check_entries(status_df, check)
 
     if not error and not out:
