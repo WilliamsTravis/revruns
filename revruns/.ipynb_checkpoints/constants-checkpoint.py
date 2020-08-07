@@ -163,7 +163,7 @@ MULTIYEAR_TEMPLATE = {
   "execution_control": {
     "allocation": "PLACEHOLDER",
     "feature": "--qos=normal",
-    "memory": 179,
+    "memory": 192,
     "option": "eagle",
     "walltime": 1.0
   },
@@ -258,7 +258,7 @@ REPPROFILES_TEMPLATE = {
   "execution_control": {
     "allocation": "PLACEHOLDER",
     "feature": "--qos=normal",
-    "memory": 179,
+    "memory": 196,
     "nodes": 10,
     "option": "eagle",
     "site_per_worker": 100,

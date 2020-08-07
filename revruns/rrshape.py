@@ -20,7 +20,7 @@ gdal.UseExceptions()
 # Help printouts
 FILE_HELP = "The file from which to create the shape file. (str)"
 SAVE_HELP = ("The path to use for the output file. Defaults to current "
-             "directory with the basename of the csv file. (str)")
+             "directory with the basename of the csvh5 file. (str)")
 LAYER_HELP = ("For HDF5 time series, the time index to render. Defaults to "
               " 0. (int)")
 DATASET_HELP = ("For HDF5 files, the data set to render. Defaults to "
