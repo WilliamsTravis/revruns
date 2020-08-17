@@ -1,0 +1,11 @@
+{
+    "logging": {
+        "log_file": null,
+        "log_level": "INFO"
+    },
+    "pipeline": [
+        {
+            "supply-curve-aggregation": "/home/twillia2/github/revruns/agtables/revruns_090/config_aggregation.json"
+        }
+    ]
+}

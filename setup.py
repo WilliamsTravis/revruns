@@ -1,15 +1,13 @@
 # -*- coding: utf-8 -*-
 
 from setuptools import setup
-import fastentrypoints
-
 
 setup(
     name='revruns',
     version='0.0.2',
     packages=['revruns'],
     description=("Functions and CLIs that to help to configure, run, "
-	         "and check outputs for NREL's Renewable Energy Technical "
+	             "and check outputs for NREL's Renewable Energy Technical "
                  "Potential Model (reV)."),
     author="Travis Williams",
     author_email="travis.williams@nrel.gov",
@@ -20,6 +18,7 @@ setup(
                        "rrbatch_hack = revruns.rrbatch_hack:main",
                        "rrbatch_logs = revruns.rrbatch_logs:main",
                        "rrcheck = revruns.rrcheck:main",
+                       "rrconnections = revruns.rrconnections:main",
                        "rrerun = revruns.rrerun:main",
                        "rrexclusion = revruns.rrexclusion:main",
                        "rrgraphs = revruns.rrgraphs:main",

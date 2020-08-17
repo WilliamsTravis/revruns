@@ -76,22 +76,19 @@ def point_line(arg):
         and the category of the transmission connection structure.
     """
 
-    df, linedf = arg
-
-    # Find the closest point on the closest line to the target point
-    def single_row(point, linedf):
-        distances = [point.distance(l) for l in linedf["geometry"]]
-        dmin = np.min(distances)
-        idx = np.where(distances == dmin)[0][0]
-
-        # We need this gid and this category
-        gid = linedf.index[idx]
-        category = linedf["category"].iloc[idx]
+    row, linedf = arg
     
-        return gid, dmin, category
+    # Find the closest point on the closest line to the target point
+    point = row["geometry"]
+    distances = [point.distance(l) for l in linedf["geometry"]]
+    dmin = np.min(distances)
+    idx = np.where(distances == dmin)[0][0]
 
-    return df.shape
-#     distances = df["geometry"].apply(single_row, linedf=linedf)
+    # We need this gid and this category
+    gid = linedf.index[idx]
+    category = linedf["category"].iloc[idx]
+
+    return gid, dmin, category
 
 
 def write_config(config_dict, path):
@@ -380,9 +377,10 @@ class PandasExtension:
         args = [(self._obj.loc[idx], linedf) for idx in chunks]
         distances = []
         with mp.Pool() as pool:
-            for dists in tqdm(pool.imap(point_line, args),
+            for dists in tqdm(pool.imap_unordered(point_line, args),
                               total=len(args)):
-                distances.append(dist)
+                for dist in dists:
+                    distances.append(dist)
         return distances
 
     def to_bbox(self, bbox):
@@ -492,3 +490,6 @@ class PandasExtension:
         # If there's just one column use that
         else:
             return possible_ys[0], possible_xs[0]
+
+            
+

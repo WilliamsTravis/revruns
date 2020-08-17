@@ -34,7 +34,6 @@ FILTER_HELP = ("A column name, value pair to use to filter the data before "
                "rasterizing (e.g. rrraster -f state -f Georgia ...). (list)")
 FILL_HELP = ("Fill na values by interpolation. (boolen)")
 
-
 def get_scale(ds, dataset):
     attrs = ds[dataset].attrs.keys()
     scale_key = [k for k in attrs if "scale_factor" in k][0]
@@ -161,36 +160,6 @@ def rasterize(gdf, res, dst, mask, fillna):
     # Get rid of temporary shapefile
     os.remove(tmp_src)
 
-    
-    
-def mask(gen, crs, gres, scres):
-    """Rasterizing to the appropriate resolution results in streaks of 
-    nodata because the point coordinates don't align well to a consistent
-    grid. With generation its not as much of a problem to just fillna,
-    but with aggregation doing that fills in the supply-curve gaps. Those
-    gaps need to remain.
-
-    I'm thinking that we need to rasterize a full grid, catch the warped gaps,
-    and use that as a mask...how to get the full supply curve points?
-
-    We can also use the generation file, that can be rasterized at its own
-    resoltuion and resampled to the target resolution to (hopefully) recreate
-    the striations.
-
-    src = "/shared-projects/rev/projects/soco/rev/project_points.csv"
-    dst = "/shared-projects/rev/projects/soco/rev/project_points.tif"
-    crs = "epsg:3466"
-    res = 5670
-    """
-
-    # Temp gpkg
-    csv(src, dst, "gid", res, crs, mask=None, fillna=False)
-
-    r = rio.open(dst)
-    profile = r.profile
-    array = r.read(1)
-    plt.imshow(array)
-
 
 @click.command()
 @click.argument("src")
@@ -205,8 +174,8 @@ def mask(gen, crs, gres, scres):
 @click.option("--fillna", "-fn", is_flag=True, help=FILL_HELP)
 def main(src, dst, dataset, resolution, crs, agg_fun, layer, filter, mask, fillna):
     """
-    src = "/shared-projects/rev/projects/soco/rev/runs/reference/results/sctables/120hs_20ps_sc.csv"
-    dst = "/shared-projects/rev/projects/soco/rev/runs/reference/results/sctables/120hs_20ps_sc.tif"
+    file = "20ps_sc.csv"
+    dst = "120hh_total_lcoe.tif"
     dataset = "total_lcoe"
     res = 5760
     crs = "EPSG:3466"

@@ -1,0 +1,12 @@
+{
+    "supply-curve-aggregation": {
+        "pipeline_index": 0,
+        "revruns_090_agg": {
+            "job_id": "3989815",
+            "hardware": "eagle",
+            "fout": "revruns_090_agg.csv",
+            "dirout": "/home/twillia2/github/revruns/agtables/revruns_090",
+            "job_status": "failed"
+        }
+    }
+}

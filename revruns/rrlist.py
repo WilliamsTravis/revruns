@@ -21,8 +21,11 @@ def build_docs():
     for p in pkgutil.iter_modules(revruns.__path__):
         if "rr" in p.name[:2]:
             rr = importlib.import_module("revruns.{}".format(p.name))
-            rrdocs[p.name] = rr.__doc__.replace("\n", "")
-
+            try:
+                rrdocs[p.name] = rr.__doc__.replace("\n", "")
+            except:
+                print("Docs for " + p.name + " not found.")
+                pass
     return rrdocs
 
 

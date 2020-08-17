@@ -1,9 +1,12 @@
-name: rr
+name: revruns
 channels:
   - nrel
   - conda-forge
+  - defaults
 dependencies:
   - python=3.7
+  - pgpasslib
+  - colorama
   - geopandas
   - pandas
   - numpy
@@ -16,12 +19,8 @@ dependencies:
   - nrel-rex
   - nrel-revx
   - ipython
-  - pip
-  - pip:
-    - colorama
-    - xlrd
-    - xlsxwriter
-    - h5pyd
-    - fastentrypoints
-    - tabulate
-    - tqdm
+  - xlrd
+  - xlsxwriter
+  - spyder
+  - tabulate
+  - tqdm

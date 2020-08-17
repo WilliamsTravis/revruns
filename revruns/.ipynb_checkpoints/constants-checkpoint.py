@@ -163,7 +163,7 @@ MULTIYEAR_TEMPLATE = {
   "execution_control": {
     "allocation": "PLACEHOLDER",
     "feature": "--qos=normal",
-    "memory": 192,
+    "memory": 179,
     "option": "eagle",
     "walltime": 1.0
   },
@@ -258,7 +258,7 @@ REPPROFILES_TEMPLATE = {
   "execution_control": {
     "allocation": "PLACEHOLDER",
     "feature": "--qos=normal",
-    "memory": 196,
+    "memory": 179,
     "nodes": 10,
     "option": "eagle",
     "site_per_worker": 100,
@@ -276,6 +276,15 @@ REPPROFILES_TEMPLATE = {
   "rev_summary": "PIPELINE"
 }
 
+PIPELINE_TEMPLATE = {
+    "logging": {
+        "log_file": None,
+        "log_level": "INFO"
+    },
+    "pipeline": []
+}
+
+
 TEMPLATES = {
     "gen": GEN_TEMPLATE,
     "co": COLLECT_TEMPLATE,
@@ -283,7 +292,8 @@ TEMPLATES = {
     "ag": AGGREGATION_TEMPLATE,
     "sc": SUPPLYCURVE_TEMPLATE,
     "rp": REPPROFILES_TEMPLATE,
-    "ba": BATCH_TEMPLATE
+    "ba": BATCH_TEMPLATE,
+    "pi": PIPELINE_TEMPLATE
 }
 
 # Default SAM model parameters
