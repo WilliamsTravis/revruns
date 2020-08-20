@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """Create a transmission connection table for a particular supply-curve
  aggregation factor.
-
 """
 
 import click
@@ -12,12 +11,16 @@ import multiprocessing as mp
 import os
 import shutil
 import subprocess as sp
+import warnings
 
 from contextlib import redirect_stdout
 
 import geopandas as gpd
+import getpass
 import numpy as np
 import pandas as pd
+import pgpasslib
+import psycopg2 as pg
 import revruns as rr
 
 from reV.pipeline import Pipeline
@@ -26,6 +29,9 @@ from shapely.geometry import Point
 from scipy.spatial import cKDTree
 from tqdm import tqdm
 
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 1000)
 tqdm.pandas()
@@ -33,9 +39,8 @@ tqdm.pandas()
 
 AEA_CRS = ("+proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 "
            "+ellps=GRS80 +datum=NAD83 +units=m +no_defs ")
-GEN_PATH = ("shared-projects/rev/projects/soco/rev/runs/reference/generation/"
-            "120hh/150ps/150ps_multi-year.h5")
-RES_PATH = "/datasets/WIND/conus/v1.0.0/wtk_conus_{}.h5"
+GEN_PATH = "/projects/rev/data/transmission/build/sample_gen_2013.h5"
+RES_PATH = "/datasets/WIND/conus/v1.0.0/wtk_conus_2013.h5"
 EXCL_PATH = "/projects/rev/data/exclusions/ATB_Exclusions.h5"
 TM_DSET = "techmap_wtk"
 ALLCONNS_PATH = ("/projects/rev/data/transmission/shapefiles/"
@@ -57,10 +62,6 @@ SIMPLE_HELP = ("Use the simple minimum distance connection criteria for each "
 def get_allconns(dst):
     """The file is stored on the PostGres data base. How to manage other 
     countries than CONUS?"""
-
-    import getpass
-    import pgpasslib
-    import psycopg2 as pg
 
     # Write to file for later
     if not os.path.exists(dst):
@@ -107,10 +108,59 @@ def get_allconns(dst):
         return df
 
 
-def get_linedf(allconns_path):
+def get_reeds(dst):
+    """We need this to join to the multipliers table. It's by reeds region."""
+
+    # Write to file for later
+    if not os.path.exists(dst):
+        os.makedirs(os.path.dirname(dst), exist_ok=True) 
+
+        # Setup Postgres Connection Paramters
+        user = getpass.getuser()
+        host = "gds_edit.nrel.gov"
+        dbase = "tech_potential"
+        port = 5432
+        pw = pgpasslib.getpass(host, port, dbase, user)
+
+        # The user might need to set up their password
+        if not pw:
+            msg = ("No password found for the PostGres database needed to "
+                   "retrieve the transmission lines dataset."
+                   " Please install pgpasslib and add this line to "
+                   "~/.pgpass: \n "
+                   "gds_edit.nrel.gov:5432:tech_potential:<user_name>:<password>")
+            raise LookupError(msg)
+
+        # Open a connection
+        con = pg.connect(user=user, host=host, database=dbase, password=pw,
+                         port=port)
+
+        # Retrieve dataset
+        cmd = """select * from transmission.conus_nrel_reeds_region;"""
+        df = gpd.GeoDataFrame.from_postgis(cmd, con, geom_col="geom",
+                                           crs=AEA_CRS)
+        con.close()
+
+        # Can't have lists in geopackage columns
+        for c in df.columns:
+            first_value = df[c][~pd.isnull(df[c])].iloc[0]
+            if isinstance(first_value, list):
+                df[c] = df[c].apply(lambda x: json.dumps(x))
+
+        # Save
+        df.to_file(dst, driver="GPKG")
+
+        return df
+
+    else:
+        df = gpd.read_file(dst)
+        return df
+
+
+def get_linedf():
 
     # Get the transmission table and set ids
-    transdf = get_allconns(allconns_path)
+    transdf = get_allconns(ALLCONNS_PATH)
     transdf["trans_line_gid"] = transdf.index
 
     # Apply point_line to each row in the dataframe
@@ -119,16 +169,19 @@ def get_linedf(allconns_path):
     return  linedf
 
 
-def pipeline(config_path):
-    f = io.StringIO()
-    with redirect_stdout(f):
-        p = Pipeline.run(config_path, monitor=True, verbose=False)
-    out = f.getvalue()
-    return out
+# def pipeline(config_path):
+#     import logging
+#     import sys
+#     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+
+#     f = io.StringIO()
+#     with contextlib.suppressdout(f):
+#         p = Pipeline.run(config_path, monitor=True, verbose=False)
+#     out = f.getvalue()
+#     return out
 
             
-def simple_ag(gen_fpath, dstdir, resolution, res_fpath, allocation, excl_fpath,
-              tm_dset):
+def simple_ag(dstdir, resolution, allocation):
     """Run aggregation with no exclusions to get full set of sc points.
 
     gen_fpath = "/lustre/eaglefs/shared-projects/rev/projects/soco/rev/runs/reference/generation/120hh/150ps/150ps_multi-year.h5"
@@ -181,15 +234,15 @@ def simple_ag(gen_fpath, dstdir, resolution, res_fpath, allocation, excl_fpath,
 
         config["directories"]["logging_directories"] = logdir
         config["directories"]["output_directory"] = rundir
-        config["excl_fpath"] = excl_fpath
+        config["excl_fpath"] = EXCL_PATH
         config["execution_control"]["allocation"] = allocation
-        config["lcoe_dset"] = "lcoe_fcr-means"
-        config["cf_dset"] = "cf_mean-means"
-        config["res_class_dset"] = "ws_mean-means"
+        config["lcoe_dset"] = "lcoe_fcr"
+        config["cf_dset"] = "cf_mean"
+        config["res_class_dset"] = "ws_mean"
         config["resolution"] = resolution
-        config["tm_dset"] = tm_dset
-        config["gen_fpath"] = gen_fpath
-        config["res_fpath"] = res_fpath
+        config["tm_dset"] = TM_DSET
+        config["gen_fpath"] = GEN_PATH
+        config["res_fpath"] = RES_PATH
         config["power_density"] = 3
 
         # Write config to file
@@ -204,7 +257,8 @@ def simple_ag(gen_fpath, dstdir, resolution, res_fpath, allocation, excl_fpath,
             cfile.write(json.dumps(config, indent=4))
 
         # Call reV on this file
-        out = pipeline(config_pipath)
+        # out = pipeline(config_pipath)
+        Pipeline.run(config_pipath, monitor=True, verbose=False)
         shutil.move(point_path, final_path)
         shutil.rmtree(os.path.dirname(point_path))
 
@@ -250,40 +304,54 @@ def par_dist(arg):
     # global linedf  # <--------------------------------------------------------- I can't define this within the connections, but these are specific to it :/
     # global scdf
 
-    idx, ppath, allconns_path, simple = arg
-    linedf = get_linedf(allconns_path)
+    idx, ppath, simple = arg
+    linedf = get_linedf()
     scdf = pd.read_csv(ppath, low_memory=False)
     crs = linedf.crs.to_wkt()
     scdf = scdf.rr.to_geo()
     scdf = scdf.to_crs(crs)
     scdf = scdf.loc[idx]
 
-    condf = scdf.progress_apply(single_dist, linedf=linedf, simple=simple, axis=1)
+    condf = scdf.progress_apply(single_dist, linedf=linedf, simple=simple,
+                                axis=1)
     condfs = [condf.iloc[i] for i in range(condf.shape[0])]
     condf = pd.concat(condfs)
 
     return condf
 
 
-def connections(ppath, allconns_path, simple=False):
+def connections(ppath, tpath, simple=False):
     """Find distances to nearby transmission lines or stations."""
 
-    scdf = pd.read_csv(ppath)
-    linedf = get_linedf(allconns_path)
-    crs = linedf.crs.to_wkt()
-    scdf = scdf.rr.to_geo()
-    scdf = scdf.to_crs(crs)
+    if not os.path.exists(tpath):
 
-    ncpu = mp.cpu_count()
-    chunks = np.array_split(scdf.index, ncpu)
-    args = [(list(idx), ppath, allconns_path, simple) for idx in chunks]
-    condfs = []
-    with mp.Pool(ncpu) as pool:
-        for condf in pool.imap(par_dist, args):
-            condfs.append(condf)
-    condf = pd.concat(condfs)
+        scdf = pd.read_csv(ppath)
+        linedf = get_linedf()
+        crs = linedf.crs.to_wkt()
+        scdf = scdf.rr.to_geo()
+        scdf = scdf.to_crs(crs)
+    
+        ncpu = mp.cpu_count()
+        chunks = np.array_split(scdf.index, ncpu)
+        args = [(list(idx), ppath, simple) for idx in chunks]
+        condfs = []
+        with mp.Pool(ncpu) as pool:
+            for condf in pool.imap(par_dist, args):
+                condfs.append(condf)
+        condf = pd.concat(condfs)
+
+        # It's too big
+        condf = condf.drop(["geometry" ,"bgid", "egid", "gid", "voltage"],
+                           axis=1)
+
+        print("Saving connections table to " + tpath)
+        condf.to_csv(tpath, index=False)
+
+    else:
+        condf = pd.read_csv(tpath)
 
     return condf
+
 
 @click.command()
 @click.option("--resolution", "-r", required=True, help=RES_HELP)
@@ -298,21 +366,26 @@ def main(resolution, dstdir, allocation, exclusions, simple):
     Create a table with transmission feature connections and distance for a
     given supply curve aggregation factor.
 
-    exclusions = EXCL_PATH
+    Exclusion file input not implemented yet.
     """
 
+    dstdir = os.path.abspath(os.path.expanduser(dstdir))
+
     # Build the point file and retrieve the file path
-    ppath = simple_ag(GEN_PATH, dstdir, resolution, RES_PATH, allocation,
-                      exclusions, TM_DSET)
-    
+    ppath = simple_ag(dstdir, resolution, allocation)
+
     # Create the target path
     resolution = int(resolution)
-    tpath = os.path.join(dstdir, "connections_{:02d}.csv".format(resolution))
+    tpath = os.path.join(dstdir, "connections_{:03d}.csv".format(resolution))
 
     # And run transmission connections
-    condf = connections(ppath, ALLCONNS_PATH, simple)
-    print("Saving connections table to " + tpath)
-    condf.to_csv(tpath)
+    condf = connections(ppath, tpath, simple)
+
+    # And lastly, the multipliers table (just using 1 for everything for now)
+    mpath = os.path.join(dstdir, "multipliers_{:03d}.csv".format(resolution))
+    mdf = condf[["sc_point_gid"]].drop_duplicates()
+    mdf["transmission_multiplier"] = 1
+    mdf.to_csv(mpath, index=False)
 
 
 if __name__ == "__main__":

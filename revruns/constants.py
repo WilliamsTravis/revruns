@@ -94,7 +94,7 @@ TARGET_CRS = ["+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ",
 
 GEN_TEMPLATE = {
     "directories": {
-        "logging_directory": "./logs",
+        "log_directory": "./logs",
         "output_directory": "./"
     },
     "execution_control": {
@@ -137,7 +137,7 @@ BATCH_TEMPLATE = {
 COLLECT_TEMPLATE = {
     "directories": {
         "collect_directory": "PIPELINE",
-        "logging_directory": "./logs",
+        "log_directory": "./logs",
         "output_directory": "./"
     },
     "execution_control": {
@@ -157,7 +157,7 @@ COLLECT_TEMPLATE = {
 
 MULTIYEAR_TEMPLATE = {
   "directories": {
-    "logging_directory": "./logs",
+    "log_directory": "./logs",
     "output_directory": "./"
   },
   "execution_control": {
@@ -191,7 +191,7 @@ AGGREGATION_TEMPLATE = {
     }
   },
   "directories": {
-    "logging_directories": "./logs",
+    "log_directory": "./logs",
     "output_directory": "./"
   },
   "excl_dict": {
@@ -220,7 +220,7 @@ AGGREGATION_TEMPLATE = {
 
 SUPPLYCURVE_TEMPLATE = {
   "directories": {
-    "logging_directory": "./logs",
+    "log_directory": "./logs",
     "output_directory": "./"
   },
   "execution_control": {
@@ -251,7 +251,7 @@ SUPPLYCURVE_TEMPLATE = {
 REPPROFILES_TEMPLATE = {
   "cf_dset": "cf_profile-{}",
   "directories": {
-    "logging_directory": "./logs",
+    "log_directory": "./logs",
     "output_directory": "./"
   },
   "err_method": "rmse",

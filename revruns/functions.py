@@ -35,6 +35,14 @@ pd.options.mode.chained_assignment = None
 
 
 # Functions
+def isint(x):
+    try:
+        int(x)
+        return True
+    except ValueError:
+        return False
+
+
 def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=True):
     """Read in/check available sheets from an excel spreadsheet file."""
 
