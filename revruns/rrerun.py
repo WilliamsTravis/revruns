@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Reconfigure a reV run to rerun from a specified point in the pipeline,
-instead of manually rewriting the logs. 
+instead of manually rewriting the logging and status files. 
 """
 
 import json
@@ -23,7 +23,8 @@ MODULE_HELP = ("A module in the reV pipeline. Options include 'generation', "
                "'rep_profiles'. rrerun will overwrite all results in the "
                "pipeline starting  at this point (the results of this module "
                "included).(str)")
-RUN_HELP = "Rerun reV pipeline. (Boolean)"
+RUN_HELP = ("Rerun reV pipeline. Without this, the logging and status "
+            "files will be updated and you must rerun manually. (Boolean)")
 MODULES = ["generation", "collect", "econ", "offshore", "multi-year",
            "supply-curve-aggregation", "supply-curve", "rep-profiles", "qa-qc"]
 MODULE_SHORTS = {"generation": "gen",
@@ -56,19 +57,20 @@ def find_pipeline(folder):
 @click.option("--run", "-r", is_flag=True, help=RUN_HELP)
 def main(folder, module, run):
     """
-    revrun Rerun
+    reVruns Re-run
 
     Reconfigure reV to run from a specified point in the pipeline of a
     successful run.
+
     Once you have reconfigured the desired parameters, rrerun will remove
-    results from the specified module and all subsequent modules in the
-    pipeline, remove their entries from the logs, and rerun reV.
+    results from the specified module along with all subsequent modules in the
+    pipeline, and remove their entries from the logging and status files. If 
+    '--run' is specified, this will also resubmit the pipeline.
 
     Note that you can only rerun modules in one pipeline at a time. So, if
     modules in one pipeline depend on outputs from another, you must rerun the
     other first if you want to start over that far back.
     """
-
     # The module syntax can be easily confused
     ag_spellings = ["ag", "agg", "aggregation", "supply-curve_aggregation"]
     if any([m == module for m in ag_spellings]):
@@ -100,7 +102,7 @@ def main(folder, module, run):
         sfile.write(json.dumps(status, indent=4))
 
 
-    # Remove old logs  - not necessary, but help keep the logs uncluttered
+    # Remove old logs  - not necessary, but helps keep the logs uncluttered
 #    for drop in droppers:
 #        module_status = status[drop]
 #        job_name = "_".join([run_name, drop])
@@ -184,12 +186,13 @@ def main(folder, module, run):
             os.remove("nohup.out")
         sp.Popen(["nohup", "reV", "-c", "config_pipeline.json", "pipeline",
                   "--monitor"],
-                 stdout=open('/dev/null', 'w'),
-                 stderr=open('nohup.out', 'a'),
+                 stdout=open('pipeline.out', 'a'),
+                 stderr=open('pipeline.out', 'a'),
                  preexec_fn=os.setpgrp)
         time.sleep(2)
         initial_out = sp.check_output(["cat", "nohup.out"])
         print(initial_out.decode())
+
 
 if __name__ == "__main__":
     main()

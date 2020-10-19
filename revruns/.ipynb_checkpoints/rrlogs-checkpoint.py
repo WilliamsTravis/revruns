@@ -17,6 +17,8 @@ import pandas as pd
 from colorama import Fore, Style
 from pandas.core.common import SettingWithCopyWarning
 from tabulate import tabulate
+from revruns.rrpipeline import find_files
+
 
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 10)
@@ -40,6 +42,8 @@ ERROR_HELP = ("A job ID. This will print the first 20 lines of the error log "
               "of a job.")
 OUT_HELP = ("A job ID. This will print the first 20 lines of the standard "
             "output log of a job.")
+WALK_HELP = ("Walk the given directory structure and return the status of "
+             "all jobs found.")
 MODULE_NAMES = {
     "gen": "generation",
     "collect": "collect",
@@ -160,7 +164,11 @@ def find_status(folder):
     except:
         outdir = find_outputs(folder)
         files = glob(os.path.join(outdir, "*.json"))
-        file = [f for f in files if "_status.json" in f][0]
+        file = [f for f in files if "_status.json" in f]
+        if not file:
+            raise FileNotFoundError(Fore.RED
+                                    + "No status file found."
+                                    + Style.RESET_ALL)
 
     # Return the dictionary
     with open(file, "r") as f:
@@ -170,6 +178,24 @@ def find_status(folder):
     status = fix_status(status)
 
     return file, status
+
+
+def find_pid_dirs(folders, target_pid):
+    """Check the log files and find which folder contain the target pid."""
+    pid_dirs=[]
+    for folder in folders:
+        logs = glob(os.path.join(folder, "logs", "stdout", "*e"))
+        for l in logs:
+            file = os.path.basename(l)
+            idx = file.rindex("_")
+            pid = file[idx + 1:].replace(".e", "")
+            if pid == str(target_pid):
+                pid_dirs.append(folder)
+    if not pid_dirs:
+        raise FileNotFoundError(Fore.RED
+                                + "No log files found for pid "
+                                + str(target_pid) + Style.RESET_ALL)
+    return pid_dirs
 
 
 def fix_status(status):
@@ -235,19 +261,31 @@ def get_scontrol(jobid):
     return status, runtime
 
 
-def check_stdout(jobid, logdir):
-    """Searching for a consistent way to keep track of job statuses."""
+def checkout(logdir, pid, output="stdout"):
+    """Print out the first 20 lines of an error or stdout log file."""
+    
+    if output == "stdout":
+        pattern = "*e"
+        name = "Error"
+    else:
+        pattern = "*o"
+        name = "STDOUT"
+        outs = glob(os.path.join(logdir, "stdout", pattern))
 
-    pattern = os.path.join(logdir, "stdout", "*" + str(jobid) + "*.o")
-    file = glob(pattern)[0]
-    with open(file, "r") as f:
-        stdout = f.readlines()
+    try:
+        log = [o for o in outs if str(pid) in o][0]
+    except IndexError:
+        print(Fore.RED + name + " log for job ID " + str(pid)
+              + " not found." + Style.RESET_ALL)
+        return
 
-    # If it's successful the last line will tell us
-    lline = stdout[-1]
-    if "complete." in lline:
-        status = "successful"
-        time = lline[lline.index("Time elapsed: ") + 14: lline.index(" min.")]
+    with open(log, "r") as file:
+        lines = file.readlines()
+        if len(lines) > 20:
+            print("  \n   ...   \n")
+        for l in lines[-20:]:
+            print(l)
+        print(Fore.YELLOW + "cat " + log + Style.RESET_ALL) 
 
 
 def convert_time(runtime):
@@ -277,25 +315,6 @@ def sq_adjust(df, user):
         runtime = convert_time(row["TIME"])
         df["job_status"][df["job_id"] == jid] = status
         df["runtime"][df["job_id"] == jid] = runtime
-
-
-#     # Replace runtime and status
-#     def numeric(x):
-#         try:
-#             int(x)
-#             return True
-#         except:
-#             return False
-
-#     jobids = [jid for jid in df["job_id"].values if numeric(jid)]
-    
-#     for jid in jobids:
-#         try:
-#             status, runtime = get_scontrol(int(jid))
-#             df["job_status"][df["job_id"] == jid] = status
-#             df["runtime"][df["job_id"] == jid] = runtime
-#         except IndexError:
-#             pass
 
     return df
 
@@ -410,32 +429,8 @@ def check_entries(print_df, check):
     return print_df
 
 
-@click.command()
-@click.option("--folder", "-f", default=".", help=FOLDER_HELP)
-@click.option("--user", "-u", default=None, help=USER_HELP)
-@click.option("--module", "-m", default=None, help=MODULE_HELP)
-@click.option("--status", "-s", default=None, help=STATUS_HELP)
-@click.option("--error", "-e", default=None, help=ERROR_HELP)
-@click.option("--out", "-o", default=None, help=OUT_HELP)
-def main(folder, user, module, status, error, out):
-    """
-    revruns - logs
-
-    Check log files of a reV run directory. Assumes certain standard
-    naming conventions:
-
-    Configuration File names: \n
-    "gen": "config_gen.json" \n
-    "econ": "config_econ.json" \n
-    "offshore": "config_offshore.json" \n
-    "collect": "config_collect.json" \n 
-    "multi-year": "config_multi-year.json", \n
-    "aggregation": "config_aggregation.son", \n
-    "supply-curve": "config_supply-curve.json", \n
-    "rep-profiles": "config_rep-profiles.json" \n
-    "qaqc": "config_qaqc.json"
-    """
-
+def logs(folder, user, module, status, error, out):
+    """Print status and job pids for a single project directory."""
     # Expand folder path
     folder = os.path.expanduser(folder)
     folder = os.path.abspath(folder)
@@ -459,33 +454,62 @@ def main(folder, user, module, status, error, out):
         color_print(status_df)
 
     if error:
-        errors = glob(os.path.join(logdir, "stdout", "*e"))
-        try:
-            elog = [e for e in errors if str(error) in e][0]
-        except IndexError:
-            print("Error log for job ID " + str(error) + " not found.")
-            return
-        with open(elog, "r") as file:
-            elines = file.readlines()
-            if len(elines) > 20:
-                print("  \n   ...   \n")
-            for e in elines[-20:]:
-                print(e)
-            print(Fore.YELLOW + "cat " + elog + Style.RESET_ALL) 
+        checkout(logdir, error, output="stderr")
     if out:
-        outs = glob(os.path.join(logdir, "stdout", "*o"))
-        try:
-            olog = [o for o in outs if str(out) in o][0]
-        except IndexError:
-            print("STDOUT log for job ID " + str(out) + " not found.")
-            return
-        with open(olog, "r") as file:
-            olines = file.readlines()
-            if len(olines) > 20:
-                print("  \n   ...   \n")
-            for o in olines[-20:]:
-                print(o)
-            print(Fore.YELLOW + "cat " + olog + Style.RESET_ALL) 
+        checkout(logdir, pid, output="stdout")
+
+
+@click.command()
+@click.option("--folder", "-f", default=".", help=FOLDER_HELP)
+@click.option("--user", "-u", default=None, help=USER_HELP)
+@click.option("--module", "-m", default=None, help=MODULE_HELP)
+@click.option("--status", "-s", default=None, help=STATUS_HELP)
+@click.option("--error", "-e", default=None, help=ERROR_HELP)
+@click.option("--out", "-o", default=None, help=OUT_HELP)
+@click.option("--walk", "-w", is_flag=True, help=WALK_HELP)
+def main(folder, user, module, status, error, out, walk):
+    """
+    revruns - logs
+
+    Check log files of a reV run directory. Assumes certain standard
+    naming conventions:
+
+    Configuration File names: \n
+    "gen": "config_gen.json" \n
+    "econ": "config_econ.json" \n
+    "offshore": "config_offshore.json" \n
+    "collect": "config_collect.json" \n 
+    "multi-year": "config_multi-year.json", \n
+    "aggregation": "config_aggregation.son", \n
+    "supply-curve": "config_supply-curve.json", \n
+    "rep-profiles": "config_rep-profiles.json" \n
+    "qaqc": "config_qaqc.json"
+
+    folder = "/shared-projects/rev/projects/soco/rev/runs/aggregation"
+    error  = 4183851
+    out = None
+    user = None
+    module = None
+    status = None
+    walk = True
+    """
+    # If walk find all project directories with a 
+    if walk or error or out:
+        folders = [os.path.dirname(f) for f in find_files(folder, file="logs")]
+    else:
+        folders = [folder]
+
+    # If an error our stdout logs is requested, only run the containing folder
+    if error:
+        folders = find_pid_dirs(folders, error)
+    if out:
+        folders = find_pid_dirs(folders, out)
+
+    # Run logs for each
+    for folder in folders:
+        print("\n" + Fore.CYAN + folder + ": " + Style.RESET_ALL)
+        logs(folder, user, module, status, error, out)
+
 
 if __name__ == "__main__":
     main()

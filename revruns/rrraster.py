@@ -2,10 +2,10 @@
 """Create a raster out of an HDF point file.
 """
 
+import click
 import os
 import subprocess as sp
 
-import click
 import geopandas as gpd
 import h5py
 import numpy as np
@@ -13,6 +13,7 @@ import pandas as pd
 import rasterio as rio
 import revruns as rr
 
+from scipy.spatial import cKDTree
 
 FILE_HELP = "The file from which to create the shape geotiff. (str)"
 SAVE_HELP = ("The path to use for the output file. Defaults to current "
@@ -161,8 +162,78 @@ def rasterize(gdf, res, dst, mask, fillna):
     # Get rid of temporary shapefile
     os.remove(tmp_src)
 
-    
-    
+
+def to_grid(gdf, variable, res):
+    """
+    Convert coordinates from an irregular point dataset into an even grid.
+    Parameters
+    ----------
+    gdf: geopandas.geodataframe.GeoDataFrame
+        A geopandas data frame
+    res: int | float
+        The resolution of the target grid.
+    Returns
+    -------
+    numpy.ndarray, numpy.ndarray
+        Returns a 3D array (y, x, time) of data values a 2D array of coordinate
+        values (nxy, 2).
+    Notes
+    -----
+    - This only takes about a minute for a ~500 X 500 X 8760 dim dataset, but
+    it eats up memory. If we saved the df to file, opened it as a dask data
+    frame, and generated the arrays as dask arrays we might be able to save
+    space.
+    - At the moment it is a little awkardly shaped, just because I haven't
+    gotten to it yet. 
+    """
+
+    # Only one variable at a time here
+    gdf = gdf[[variable, "geometry"]]
+
+    # At the end of all this the actual data will be inbetween these columns
+    non_values = ["geometry", "gx", "gy", "ix", "iy"]
+
+    # Get the extent
+    minx, miny, maxx, maxy = gdf.total_bounds
+
+    # Estimate target grid coordinates
+    gridx = np.arange(minx, maxx + res, res)
+    gridy = np.arange(miny, maxy + res, res)
+    grid_points = np.array(np.meshgrid(gridy, gridx)).T.reshape(-1, 2)
+
+    # Go ahead and make the geotransform 
+    geotransform = [res, 0, minx, 0, res, miny]
+
+    # Get source point coordinates
+    gdf["y"] = gdf["geometry"].apply(lambda p: p.y)
+    gdf["x"] = gdf["geometry"].apply(lambda p: p.x)
+    points = gdf[["y", "x"]].values
+
+    # Build kdtree
+    ktree = cKDTree(grid_points)
+    dist, indices = ktree.query(points)
+
+    # Those indices associate grid point coordinates with the original points
+    gdf["gy"] = grid_points[indices, 0]
+    gdf["gx"] = grid_points[indices, 1]
+
+    # And these indices indicate the 2D cartesion positions of the grid
+    gdf["iy"] = gdf["gy"].apply(lambda y: np.where(gridy == y)[0][0])
+    gdf["ix"] = gdf["gx"].apply(lambda x: np.where(gridx == x)[0][0])
+
+    # Now we want just the values from the data frame, no coordinates
+    values = gdf[variable].T.values
+
+    # Okay, now use this to create our 2D empty target grid
+    grid = np.zeros((gridy.shape[0], gridx.shape[0]))
+
+    # Now, use the cartesian indices to add the values to the new grid
+    grid[gdf["iy"].values, gdf["ix"].values] = values # <--------------------- Check these values against the original dataset
+
+    # Holy cow, did that work?
+    return grid, geotransform
+
+
 def mask(gen, crs, gres, scres):
     """Rasterizing to the appropriate resolution results in streaks of 
     nodata because the point coordinates don't align well to a consistent
@@ -205,11 +276,11 @@ def mask(gen, crs, gres, scres):
 @click.option("--fillna", "-fn", is_flag=True, help=FILL_HELP)
 def main(src, dst, dataset, resolution, crs, agg_fun, layer, filter, mask, fillna):
     """
-    src = "/shared-projects/rev/projects/soco/rev/runs/reference/results/sctables/120hs_20ps_sc.csv"
-    dst = "/shared-projects/rev/projects/soco/rev/runs/reference/results/sctables/120hs_20ps_sc.tif"
-    dataset = "total_lcoe"
-    res = 5760
-    crs = "EPSG:3466"
+    src = "/shared-projects/rev/projects/weto/bat_curtailment/rev_supply_curve/blanket_cf0_sd0/blanket_cf0_sd0_sc.csv"
+    dst = "/shared-projects/rev/projects/weto/bat_curtailment/rev_supply_curve/blanket_cf0_sd0/test.tif"
+    dataset = "capacity"
+    res = 6750
+    crs = "EPSG:4326"
     agg_fun = "mean"
     layer = None
     filter = None

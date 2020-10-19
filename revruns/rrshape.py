@@ -118,21 +118,23 @@ def csv_to_shape(src, dst=None, driver="gpkg", epsg=4326):
     gdf.to_file(dst, layer=layer, driver=driver_str)
 
 
-def h5_to_shape(src, dst, driver="gpkg", dataset=None, layer=0, epsg=4326):
+def h5_to_shape(src, dst=None, driver="gpkg", dataset=None, layer=0,
+                epsg=4326):
     """For now, this will just take a single time period as an index position
     in the time series.
 
     Parameters
     ----------
-    src : TYPE
-        DESCRIPTION.
-    dst : TYPE, optional
-        DESCRIPTION. The default is None.
-    driver : TYPE, optional
-        DESCRIPTION. The default is "gpkg".
-    dataset : TYPE, optional
-        DESCRIPTION. The default is "cf_mean".
-    layer : TYPE, optional
+    src : str
+        reV HDF5 output file path.
+    dst : str, optional
+        Path to output shapefile. If not specified the output shapefile will be
+        named using the input src path. The default is None.
+    driver : str, optional
+        The shapefile driver to use. The default is "GPKG".
+    dataset : str
+        The dataset to write, optional. The default is "cf_mean".
+    layer : The , optional
         DESCRIPTION. The default is 0.
     epsg : TYPE, optional
         DESCRIPTION. The default is 4326.

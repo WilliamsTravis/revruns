@@ -9,6 +9,7 @@ Created on Wed Dec  4 07:58:42 2019
 @author: twillia2
 """
 
+import ast
 import datetime as dt
 import json
 import multiprocessing as mp
@@ -25,6 +26,7 @@ import pandas as pd
 import rasterio as rio
 
 from rasterio.errors import RasterioIOError
+from scipy.spatial import cKDTree
 from shapely.geometry import Point
 from tqdm import tqdm
 from xlrd import XLRDError
@@ -35,12 +37,53 @@ pd.options.mode.chained_assignment = None
 
 
 # Functions
-def isint(x):
-    try:
-        int(x)
-        return True
-    except ValueError:
-        return False
+def closest_points(df1, df2, field, latcol=None, loncol=None):
+    """
+    Find all of the closest points in df2 to those in df1
+
+    Parameters
+    ----------
+    df1 : pandas.core.frame.DataFrame | geopandas.geodataframe.GeoDataFrame
+        The first data frame in which all points will have a match.
+    df2 : pandas.core.frame.DataFrame | geopandas.geodataframe.GeoDataFrame
+        The second data frame from which a subset will be extracted to match
+        all points in the first.
+    field : str
+        The field in the second data frame to append to the first.
+
+    Returns
+    -------
+    df : pandas.core.frame.DataFrame | geopandas.geodataframe.GeoDataFrame
+        A copy of the first data frame with the specified field and a
+        distance column.
+    """
+    # We need geodataframes
+    original_type = type(df1)
+    if not isinstance(df1, gpd.geodataframe.GeoDataFrame):
+        df1 = df1.rr.to_geo(latcol, loncol)
+    if not isinstance(df2, gpd.geodataframe.GeoDataFrame):
+        df2 = df2.rr.to_geo(latcol, loncol)
+
+    # Get arrays of point coordinates
+    crds1 = np.array(list(df1["geometry"].apply(lambda x: (x.x, x.y))))
+    crds2 = np.array(list(df2["geometry"].apply(lambda x: (x.x, x.y))))
+
+    # Build the connections tree and query points from the first df
+    btree = cKDTree(crds2)
+    dist, idx = btree.query(crds1, k=1)
+
+    # Rebuild the dataset
+    dfa = df1.reset_index(drop=True)
+    dfb = df2.loc[idx, df2.columns != 'geometry'].reset_index(drop=True)
+    df = pd.concat([dfa, dfb[field], pd.Series(dist, name='dist')], axis=1)
+
+    # If this wasn't already a geopandas data frame reformat
+    if not isinstance(df, original_type):
+        del df["geometry"]
+        df = pd.DataFrame(df)
+
+    return df
+
 
 
 def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=True):
@@ -55,6 +98,9 @@ def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=True):
         print("No sheet specified, returning a list of available sheets.")
         return sheets
 
+    if not sheet_name in sheets:
+        raise ValueError(sheet_name + " not in file.")
+
     # Try to open sheet, print options if it fails
     try:
         table = file.parse(sheet_name=sheet_name)
@@ -64,6 +110,14 @@ def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=True):
             print("   " + s)
 
     return table
+
+
+def isint(x):
+    try:
+        int(x)
+        return True
+    except ValueError:
+        return False
 
             
 def point_line(arg):
@@ -185,7 +239,6 @@ class Exclusions:
 
     def add_layer(self, dname, file, description=None, overwrite=False):
         """Add a raster file and its description to the HDF5 exclusion file."""
-
         # Open raster object
         try:
             raster = rio.open(file)
@@ -355,7 +408,6 @@ class Exclusions:
 @pd.api.extensions.register_dataframe_accessor("rr")
 class PandasExtension:
     """Making dealing with meta objects easier."""
-
     def __init__(self, pandas_obj):
         if type(pandas_obj) !=  pd.core.frame.DataFrame:
             if type(pandas_obj) !=  gpd.geodataframe.GeoDataFrame:
@@ -371,14 +423,27 @@ class PandasExtension:
             with byte format might be stored as strings...meaning that they
             will be strings of bytes of strings (i.e. "b'string'").
         """
-
         for c in self._obj.columns:
-            if isinstance(self._obj[c].iloc[0], bytes):
+            x = self._obj[c].iloc[0]
+            if isinstance(x, bytes):
                 try:
                     self._obj[c] = self._obj[c].apply(lambda x: x.decode())
                 except:
                     self._obj[c] = None
                     print("Column " + c + " could not be decoded.")
+            elif isinstance(x, str):
+                try:
+                    if isinstance(ast.literal_eval(x), bytes):
+                        try:
+                            self._obj[c] = self._obj[c].apply(
+                                lambda x: ast.literal_eval(x).decode()
+                                )
+                        except:
+                            self._obj[c] = None
+                            print("Column " + c + " could not be decoded.")
+                except:
+                    pass
+
 
     def dist_apply(self, linedf):
         """To apply the distance function in parallel."""  # <------------------ Not quite done
@@ -412,13 +477,21 @@ class PandasExtension:
         df.rr.decode()
 
         # Find coordinate columns
-        if not latcol or not loncol:
-            latcol, loncol = self.find_coords()
+        if not "geometry" in df.columns:
+            if not "geom" in df.columns:
+                if not latcol or not loncol:
+                    latcol, loncol = self.find_coords()
+        
+                # For a single row
+                to_point = lambda x: Point(tuple(x))
+                df["geometry"] = df[[loncol, latcol]].apply(to_point, axis=1)
 
-        # For a single row
-        to_point = lambda x: Point(tuple(x))
-        df["geometry"] = df[[loncol, latcol]].apply(to_point, axis=1)
-        gdf = gpd.GeoDataFrame(df, crs='epsg:4326', geometry="geometry")
+        # Create teh geodataframe
+        if "geometry" in df.columns:
+            gdf = gpd.GeoDataFrame(df, crs='epsg:4326', geometry="geometry")
+        if "geom" in df.columns:
+            gdf = gpd.GeoDataFrame(df, crs='epsg:4326', geometry="geom")
+
         return gdf
 
     def to_sarray(self):
@@ -475,8 +548,9 @@ class PandasExtension:
         cols = df.columns
 
         # For direct matches
-        ynames = ["y", "lat", "latitude", "ylat"]
-        xnames = ["x", "lon", "long", "longitude", "xlon", "xlong"]
+        ynames = ["y", "lat", "latitude", "Latitude", "ylat"]
+        xnames = ["x", "lon", "long", "longitude", "Longitude", "xlon",
+                  "xlong"]
 
         # Direct matches
         possible_ys = [c for c in cols if c in ynames]
@@ -500,3 +574,50 @@ class PandasExtension:
         # If there's just one column use that
         else:
             return possible_ys[0], possible_xs[0]
+
+    def closest_points(self, df, field, latcol=None, loncol=None):
+        """
+        Find all of the closest points in df2 to those in the current data
+        frame.
+
+        Parameters
+        ----------
+        df : pandas.core.frame.DataFrame | geopandas.geodataframe.GeoDataFrame
+            The second data frame from which a subset will be extracted to
+            match all points in the first data frame.
+        field : str
+            The field in the second data frame to append to the first.
+
+        Returns
+        -------
+        df : pandas.core.frame.DataFrame | geopandas.geodataframe.GeoDataFrame
+            A copy of the first data frame with the specified field and a
+            distance column.
+        """
+        # We need geodataframes
+        df1 = self._obj.copy()
+        original_type = type(df1)
+        if not isinstance(df1, gpd.geodataframe.GeoDataFrame):
+            df1 = df1.rr.to_geo(latcol, loncol)
+        if not isinstance(df2, gpd.geodataframe.GeoDataFrame):
+            df2 = df2.rr.to_geo(latcol, loncol)
+
+        # Get arrays of point coordinates
+        crds1 = np.array(list(df1["geometry"].apply(lambda x: (x.x, x.y))))
+        crds2 = np.array(list(df2["geometry"].apply(lambda x: (x.x, x.y))))
+
+        # Build the connections tree and query points from the first df
+        btree = cKDTree(crds2)
+        dist, idx = btree.query(crds1, k=1)
+
+        # Rebuild the dataset
+        dfa = df1.reset_index(drop=True)
+        dfb = df2.loc[idx, df2.columns != 'geometry'].reset_index(drop=True)
+        df = pd.concat([dfa, dfb[field], pd.Series(dist, name='dist')], axis=1)
+
+        # If this wasn't already a geopandas data frame reformat
+        if not isinstance(df, original_type):
+            del df["geometry"]
+            df = pd.DataFrame(df)
+
+        return df

@@ -154,6 +154,43 @@ COLLECT_TEMPLATE = {
     "project_points": "PLACEHOLDER"
 }
 
+ECON_TEMPLATE = {
+  "analysis_years": [
+    2007,
+	2008,
+	2009,
+    2010,
+    2011,
+	2012,
+	2013
+  ],
+  "append": True,
+  "cf_file": "PLACEHOLDER",
+  "directories": {
+    "log_directory": "./logs",
+    "output_directory": "./"
+  },
+  "execution_control": {
+    "allocation": "PLACEHOLDER",
+    "nodes": "PLACEHOLDER",
+    "option": "eagle",
+    "memory": 90,
+    "memory_utilization_limit": 0.4,
+    "nodes": 10,
+    "option": "eagle",
+    "sites_per_worker": 100,
+    "walltime": 1.0
+  },
+  "log_level": "INFO",
+  "output_request": [
+    "lcoe_fcr"
+  ],
+  "project_points": "./project_points.csv",
+  "sam_files": "PLACEHOLDER",
+  "technology": "PLACEHOLDER",
+  "site_data": "PLACEHOLDER"
+}
+
 
 MULTIYEAR_TEMPLATE = {
   "directories": {
@@ -288,6 +325,7 @@ PIPELINE_TEMPLATE = {
 TEMPLATES = {
     "gen": GEN_TEMPLATE,
     "co": COLLECT_TEMPLATE,
+    "econ": ECON_TEMPLATE,
     "my": MULTIYEAR_TEMPLATE,
     "ag": AGGREGATION_TEMPLATE,
     "sc": SUPPLYCURVE_TEMPLATE,

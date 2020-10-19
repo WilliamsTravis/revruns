@@ -25,6 +25,7 @@ setup(
                        "rrgeoref = revruns.rrgeoref:main",
                        "rrlogs = revruns.rrlogs:main",
                        "rrlist = revruns.rrlist:main",
+                       "rrpipeline = revruns.rrpipeline:rrpipeline",
                        "rrpoints = revruns.rrpoints:main",
                        "rrshape = revruns.rrshape:main",
                        "rrsetup = revruns.rrsetup:main",
