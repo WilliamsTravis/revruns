@@ -24,7 +24,6 @@ import pandas as pd
 from colorama import Fore, Style
 from pandas.core.common import SettingWithCopyWarning
 from tabulate import tabulate
-from revruns.rrpipeline import find_files
 
 
 pd.set_option('display.max_rows', 500)
@@ -81,6 +80,24 @@ SUBMITTED_STRINGS = ["submitted", "submit", "sb"]
 UNSUBMITTED_STRINGS = ["unsubmitted", "unsubmit", "u"]
 
 
+def check_entries(print_df, check):
+    if check in FAILURE_STRINGS:
+        print_df = print_df[print_df["job_status"] == "failed"]
+    elif check in SUCCESS_STRINGS:
+        print_df = print_df[print_df["job_status"] == "successful"]
+    elif check in PENDING_STRINGS:
+        print_df = print_df[print_df["job_status"] == "PD"]
+    elif check in RUNNING_STRINGS:
+        print_df = print_df[print_df["job_status"] == "R"]    
+    elif check in SUBMITTED_STRINGS:
+        print_df = print_df[print_df["job_status"] == "submitted"] 
+    elif check in UNSUBMITTED_STRINGS:
+        print_df = print_df[print_df["job_status"] == "unsubmitted"] 
+    else:
+        print("Could not find status filter.")
+
+    return print_df
+
 def checkout(logdir, pid, output="error"):
     """Print out the first 20 lines of an error or stdout log file."""
     if output == "error":
@@ -109,6 +126,27 @@ def checkout(logdir, pid, output="error"):
         print(Fore.YELLOW + "cat " + log + Style.RESET_ALL) 
 
 
+def color_print(df):
+    """Print each line of a data frame in red for failures and green for
+    success."""
+
+    def color_string(string):
+        if string == "failed":
+            string = Fore.RED + string + Style.RESET_ALL
+        elif string == "successful":
+            string = Fore.GREEN + string + Style.RESET_ALL
+        elif string == "R":
+            string = Fore.BLUE + string + Style.RESET_ALL
+        else:
+            string = Fore.YELLOW + string + Style.RESET_ALL
+        return string
+
+    df["job_status"] = df["job_status"].apply(color_string)
+
+    print(tabulate(df, showindex=False, headers=df.columns,
+                   tablefmt="simple"))
+
+
 def convert_time(runtime):
     """Convert squeue time to minutes."""
     mults = [0.016666666666666666, 1, 60]
@@ -119,6 +157,38 @@ def convert_time(runtime):
     except:
         minutes = "nan"
     return minutes
+
+
+def find_file(dirpath, file="config_pipeline.json"):
+    """Check/return the config_pipeline.json file in the given directory."""
+    config_path = os.path.join(dirpath, file)
+    if not os.path.exists(config_path):
+        raise ValueError(ValueError(Fore.RED
+                         + "No "
+                         + file
+                         + " files found. If you were looking for nested"
+                         + " files, try running the with --walk option."
+                         + Style.RESET_ALL))
+    return config_path
+
+
+def find_files(dirpath, file="config_pipeline.json"):
+    """Walk the dirpath directories and finall confi_pipeline.json paths."""
+    config_paths = []
+    for root, dirs, files in os.walk(dirpath, topdown=False):
+        for name in files:
+            if name == file:
+                config_paths.append(os.path.join(root, file))
+        for name in dirs:
+            if name == file:
+                config_paths.append(os.path.join(root, file))
+    if not config_paths:
+        raise ValueError(Fore.RED
+                         + "No "
+                         + file
+                         + " files found."
+                         + Style.RESET_ALL)
+    return config_paths
 
 
 def find_logs(folder):
@@ -169,27 +239,25 @@ def find_logs(folder):
 def find_outputs(folder):
     """Find the output directory based on configs present in folder. Assumes
     only one log directory per folder."""
-
     # Check each json till you find it
     config_files = glob(os.path.join(folder, "*.json"))
     outdir = None
     try:
         for file in config_files:
             if not outdir:
-                
                 # The file might not open
                 try:
                     config = json.load(open(file, "r"))
                 except:
                     pass
-    
+
                 # The directory might be named differently
                 try:
                     outdir = config["directories"]["output_directory"]
                 except KeyError:
                     pass
     except:
-        print("Could not find 'output_directory'")
+        print("Could not find 'reV output directory'")
         raise
     
     # Expand log directory
@@ -199,30 +267,6 @@ def find_outputs(folder):
     outdir = os.path.expanduser(outdir)
 
     return outdir
-
-
-def find_status(folder):
-    """Find the job status json."""
-
-    # Find output directory
-    try:
-        files = glob(os.path.join(folder, "*.json"))
-        file = [f for f in files if "_status.json" in f][0]
-    except:
-        outdir = find_outputs(folder)
-        files = glob(os.path.join(outdir, "*.json"))
-        file = [f for f in files if "_status.json" in f]
-        if not file:
-            return None, None
-
-    # Return the dictionary
-    with open(file, "r") as f:
-        status = json.load(f)
-
-    # Fix artifacts
-    status = fix_status(status)
-
-    return file, status
 
 
 def find_pid_dirs(folders, target_pid):
@@ -243,9 +287,31 @@ def find_pid_dirs(folders, target_pid):
     return pid_dirs
 
 
+def find_status(folder):
+    """Find the job status json."""
+    # Find output directory
+    try:
+        files = glob(os.path.join(folder, "*.json"))
+        file = [f for f in files if "_status.json" in f][0]
+    except IndexError:
+        outdir = find_outputs(folder)
+        files = glob(os.path.join(outdir, "*.json"))
+        file = [f for f in files if "_status.json" in f]
+        if not file:
+            return None, None
+
+    # Return the dictionary
+    with open(file, "r") as f:
+        status = json.load(f)
+
+    # Fix artifacts
+    status = fix_status(status)
+
+    return file, status
+
+
 def fix_status(status):
     """Using different versions of reV can result in problematic artifacts."""
-
     # Aggregation vs Supply-Curve-Aggregation
     if "aggregation" in status and "supply-curve-aggregation" in status:
         ag = status["aggregation"]
@@ -265,7 +331,6 @@ def fix_status(status):
    
 def get_squeue(user=None):
     """Return a pandas table of the SLURM squeue output."""
-
     if not user:
         user = getpass.getuser()
     result = sp.run(['squeue', '-u', user], stdout=sp.PIPE)
@@ -284,7 +349,6 @@ def get_scontrol(jobid):
     Notes:
         I haven't seen enough outputs to know how long this is availabe.
     """
-
     result = sp.run(["scontrol",  "show", "jobid", "-dd", str(jobid)],
                     stdout=sp.PIPE)
     lines = [l.split() for l in result.stdout.decode().split("\n")]
@@ -308,8 +372,8 @@ def get_scontrol(jobid):
 
 def sq_adjust(df, user):
     """Retrieve run time and jobstatus from squeue since these aren't always
-    accurate in the status log."""
-
+    accurate in the status log.
+    """
     # Get the squeue data frame
     sqdf = get_squeue(user)
 
@@ -328,9 +392,44 @@ def sq_adjust(df, user):
     return df
 
 
+def logs(folder, user, module, status, error, out):
+    """Print status and job pids for a single project directory."""
+    # Expand folder path
+    folder = os.path.expanduser(folder)
+    folder = os.path.abspath(folder)
+
+    # Find the logging directoy
+    try:
+        logdir = find_logs(folder)
+    except:
+        print(Fore.YELLOW + "Could not find log directory" +
+              Style.RESET_ALL)
+        return
+
+    # Convert module status to data frame
+    status_df = status_dataframe(folder, module, user)
+
+    # This might return None
+    if status_df is not None:
+        # Now return the requested return type
+        if status:
+            print_df = check_entries(status_df, status)  # <-------------------- Specific status check not implemented yet
+
+        if not error and not out:
+            color_print(status_df)
+
+        if error:
+            checkout(logdir, error, output="error")
+        if out:
+            checkout(logdir, out, output="stdout")
+    else:
+        print(Fore.RED + "No status file found for " + folder
+              + Style.RESET_ALL)
+
+
+
 def module_status_dataframe(status, module="gen"):
     """Convert the status entry for a module to a dataframe."""
-
     # Target columns
     tcols = ["job_id", "hardware", "fout", "dirout", "job_status", "finput",
              "runtime"]
@@ -365,8 +464,8 @@ def module_status_dataframe(status, module="gen"):
 
 def status_dataframe(folder, module=None, user=None):
     """Convert the status entry for a module or an enitre project to a
-    dataframe."""
-
+    dataframe.
+    """
     # Get the status dictionary
     _, status = find_status(folder)
 
@@ -402,81 +501,6 @@ def status_dataframe(folder, module=None, user=None):
         return df
     else:
         return None
-
-
-def color_print(df):
-    """Print each line of a data frame in red for failures and green for
-    success."""
-
-    def color_string(string):
-        if string == "failed":
-            string = Fore.RED + string + Style.RESET_ALL
-        elif string == "successful":
-            string = Fore.GREEN + string + Style.RESET_ALL
-        elif string == "R":
-            string = Fore.BLUE + string + Style.RESET_ALL
-        else:
-            string = Fore.YELLOW + string + Style.RESET_ALL
-        return string
-
-    df["job_status"] = df["job_status"].apply(color_string)
-
-    print(tabulate(df, showindex=False, headers=df.columns,
-                   tablefmt="simple"))
-
-
-def check_entries(print_df, check):
-    if check in FAILURE_STRINGS:
-        print_df = print_df[print_df["job_status"] == "failed"]
-    elif check in SUCCESS_STRINGS:
-        print_df = print_df[print_df["job_status"] == "successful"]
-    elif check in PENDING_STRINGS:
-        print_df = print_df[print_df["job_status"] == "PD"]
-    elif check in RUNNING_STRINGS:
-        print_df = print_df[print_df["job_status"] == "R"]    
-    elif check in SUBMITTED_STRINGS:
-        print_df = print_df[print_df["job_status"] == "submitted"] 
-    elif check in UNSUBMITTED_STRINGS:
-        print_df = print_df[print_df["job_status"] == "unsubmitted"] 
-    else:
-        print("Could not find status filter.")
-
-    return print_df
-
-
-def logs(folder, user, module, status, error, out):
-    """Print status and job pids for a single project directory."""
-    # Expand folder path
-    folder = os.path.expanduser(folder)
-    folder = os.path.abspath(folder)
-
-    # Find the logging directoy
-    try:
-        logdir = find_logs(folder)
-    except:
-        print(Fore.YELLOW + "Could not find log directory" +
-              Style.RESET_ALL)
-        return
-
-    # Convert module status to data frame
-    status_df = status_dataframe(folder, module, user)
-
-    # This might return None
-    if status_df is not None:
-
-        # Now return the requested return type
-        if status:
-            print_df = check_entries(status_df, check)
-
-        if not error and not out:
-            color_print(status_df)
-
-        if error:
-            checkout(logdir, error, output="error")
-        if out:
-            checkout(logdir, out, output="stdout")
-    else:
-        print(Fore.RED + "No status file found for " + folder + Style.RESET_ALL)
 
 
 @click.command()

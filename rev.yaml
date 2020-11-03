@@ -1,4 +1,4 @@
-name: revruns
+name: rr
 channels:
   - nrel
   - conda-forge
@@ -27,3 +27,6 @@ dependencies:
   - pip
   - pip:
     - pgpasslib
+    - h5pyd
+    - pandarallel
+    - ipywidgets
