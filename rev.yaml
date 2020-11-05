@@ -30,3 +30,4 @@ dependencies:
     - h5pyd
     - pandarallel
     - ipywidgets
+    - pathos

@@ -12,7 +12,6 @@ Created on Wed Dec  4 07:58:42 2019
 import ast
 import datetime as dt
 import json
-import multiprocessing as mp
 import os
 
 from glob import glob
@@ -24,7 +23,7 @@ import numpy as np
 import pandas as pd
 import rasterio as rio
 
-from pandarallel import pandarallel
+from pathos.multiprocessing import ProcessingPool as Pool
 from rasterio.errors import RasterioIOError
 from scipy.spatial import cKDTree
 from shapely.geometry import Point
@@ -71,7 +70,7 @@ def isint(x):
 
 def mode(x):
     """Return the mode of a list of values."""
-    return max(set(x), key=x.count)
+    return np.max(set(x), key=x.count)
 
 
 def point_line(arg):
@@ -412,11 +411,11 @@ class PandasExtension:
 
     def dist_apply(self, linedf):
         """To apply the distance function in parallel (not ready)."""
-        ncpu = mp.cpu_count()
+        ncpu = os.cpu_count()
         chunks = np.array_split(self._obj.index, ncpu)
         args = [(self._obj.loc[idx], linedf) for idx in chunks]
         distances = []
-        with mp.Pool() as pool:
+        with Pool(ncpu) as pool:
             for dists in tqdm(pool.imap(point_line, args),
                               total=len(args)):
                 distances.append(dists)
@@ -636,13 +635,14 @@ class PandasExtension:
                 x[g] = np.average(values, weights=weights)
         return x
 
-    def gid_join(self, df, fields, agg="mode",left_on="res_gids", right_on="gid"):
+    def gid_join(self, df_path, fields, agg="mode", left_on="res_gids",
+                 right_on="gid"):
         """Join a resource-scale data frame to a supply curve data frame.
 
         Parameters
         ----------
-        df : pandas.core.frame.DataFrame
-            Pandas DataFrame to join.
+        df_path : str
+            Path to csv with desired join fields.
         fields : str | list
             The field(s) in the right DataFrame to join to the left.
         agg : str
@@ -659,23 +659,32 @@ class PandasExtension:
             A pandas DataFrame with the specified fields in the right
             DataFrame aggregated and joined.
         """
-        # Initialize this here for now
-        pandarallel.initialize(progress_bar=True)
-
         # Create a copy of the left data frame
         df1 = self._obj.copy()
 
         # The function to apply to each item of the left dataframe field
-        def single(x, df, right_on, field, agg):
+        def single_join(x, vdict, right_on, field, agg):
             """Return the aggregation of a list of values in df."""
             x = self._destring(x)
-            rvalues = df[df[right_on].isin(x)][field].values
+            rvalues = [vdict[v] for v in x]
             rvalues = [self._destring(v) for v in rvalues]
             rvalues = [self._delist(v) for v in rvalues]
             return agg(rvalues)
 
+        def chunk_join(arg):
+            """Apply single to a subset of the main dataframe."""
+            chunk, df_path, left_on, right_on, field, agg = arg
+            rdf = pd.read_csv(df_path)
+            vdict = dict(zip(rdf[right_on], rdf[field]))
+            chunk[field] = chunk[left_on].apply(single_join, args=(
+                vdict, right_on, field, agg
+                )
+            )
+            return chunk
+
         # Set the function
         if agg == "mode":
+            def mode(x): max(set(x), key=x.count)
             agg = mode
         else:
             agg = getattr(np, agg)
@@ -683,12 +692,19 @@ class PandasExtension:
         # If a single string is given for the field, make it a list
         if isinstance(fields, str):
             fields = [fields]
-            
-        # Apply the single row function to all rows
-        for field in fields:
-            df1[left_on].parallel_apply(single, df=df, right_on=right_on,
-                                        field=field, agg=agg)
 
+        # Split this up and apply the join functions
+        chunks = np.array_split(df1, os.cpu_count())
+        for field in fields:
+            args = [(c, df_path, left_on, right_on, field, agg)
+                    for c in chunks]
+            df1s = []
+            with Pool(os.cpu_count()) as pool:
+                for cdf1 in pool.imap(chunk_join, args):
+                    df1s.append(cdf1)
+            df = pd.concat(df1s)
+
+        return df
 
     def _destring(self, string):
         """Destring values into their literal python types if needed."""
