@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Create a raster out of an HDF point file.
-"""
-
+"""Create a raster out of an HDF point file."""
 import click
 import os
 import subprocess as sp
@@ -19,16 +17,14 @@ from scipy.spatial import cKDTree
 FILE_HELP = "The file from which to create the shape geotiff. (str)"
 SAVE_HELP = ("The path to use for the output file. Defaults to current "
              "directory with the basename of the csv/h5 file. (str)")
-DATASET_HELP = ("For HDF5 files, the data set to rasterize. For CSV files, the "
-                "field to rasterize. (str)")
+DATASET_HELP = ("For HDF5 files, the data set to rasterize. For CSV files, the"
+                " field to rasterize. (str)")
 CRS_HELP = ("Coordinate reference system. Pass as <'authority':'code'>. (str)")
 RES_HELP = ("Target resolution, in the same units as the CRS. (numeric)")
 AGG_HELP = ("For HDF5 time series, the aggregation function to use to render "
             " the raster layer. Any appropriate numpy method. If 'layer' is "
             "provided, this will be ignored."
             " defaults to mean. (str)")
-MASK_HELP = ("Path to a binary raster of equal dimension to the output raster "
-             "used to mask out cells of the output raster. (str)")
 LAYER_HELP = ("For HDF5 time series, the time index to render. If attempting "
               "to rasterize a time series and this isn't provided, an "
               "aggregation function will be used. Defaults to 0. (int)")
@@ -47,7 +43,7 @@ def get_scale(ds, dataset):
     return scale
 
 
-def h5(src, dst, dataset, res, crs, agg_fun, layer, fltr, mask, fillna):
+def h5(src, dst, dataset, res, crs, agg_fun, layer, fltr, fillna):
     # Open the file
     with h5py.File(src, "r") as ds:
         meta = pd.DataFrame(ds["meta"][:])
@@ -77,35 +73,33 @@ def h5(src, dst, dataset, res, crs, agg_fun, layer, fltr, mask, fillna):
     gdf = gdf.to_crs(crs)
 
     # And finally rasterize
-    rasterize(gdf, res, dst, mask, fillna)
+    rasterize(gdf, res, dst, fillna)
 
 
-def gpkg(file, dst, dataset, res, crs, mask, fillna):
-
+def gpkg(file, dst, dataset, res, crs, fillna):
     # This is inefficient
     gdf = gpd.read_file(file)
-    gdf = gdf[["geometry", dataset]]    
+    gdf = gdf[["geometry", dataset]]
 
     # We need to reproject to the specified projection system
     gdf = gdf.to_crs(crs)
 
     # And finally rasterize
-    rasterize(gdf, res, dst, mask, fillna)
+    rasterize(gdf, res, dst, fillna)
 
 
-def csv(file, dst, dataset, res, crs, mask, fillna):
-    
+def csv(file, dst, dataset, res, crs, fillna):
     # This is inefficient
     df = pd.read_csv(file)
     gdf = df.rr.to_geo()
-    gdf = gdf[["geometry", dataset]]    
+    gdf = gdf[["geometry", dataset]]
 
     # We need to reproject to the specified projection system
     gdf = gdf.to_crs(crs)
 
     # And finally rasterize
-    rasterize(gdf, res, dst, mask, fillna)
-    
+    rasterize(gdf, res, dst, fillna)
+
 
 def h5_timeseries(ds, dataset, agg_fun, layer):
     # Specifying a layer overrides the aggregation
@@ -117,12 +111,12 @@ def h5_timeseries(ds, dataset, agg_fun, layer):
     return data
 
 
-def rasterize(gdf, res, dst, mask, fillna):
+def rasterize(gdf, res, dst, fillna):
     # Make sure we have the target directory
     os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
 
     # Not doing this in memory in case it's big
-    tmp_src = dst.replace(".tif" ,".gpkg")
+    tmp_src = dst.replace(".tif", ".gpkg")
     layer_name = os.path.basename(dst).replace(".tif", "")
     gdf.to_file(tmp_src, driver="GPKG")
 
@@ -142,38 +136,13 @@ def rasterize(gdf, res, dst, mask, fillna):
     if fillna:
         sp.call(["gdal_fillnodata.py", dst])
 
-    # If mask is provided  # <------------------------------------------------- Not done  yet
-    if mask:
-        with rio.open(dst) as raster:
-            extent = [str(e) for e in raster.bounds]
-            crs = raster.crs.to_wkt()
-            with rio.open(mask) as rmask:
-                tmp_mask = dst.replace(".tif", "_mask.tif")
-                if os.path.exists(tmp_mask):
-                    os.remove(tmp_mask)
-                sp.call(["gdalwarp",
-                         "-t_srs", crs,
-                         "-tr", str(res), str(res),
-                         "-te", *extent,
-                         mask, tmp_mask
-                         ])
-
-                r = raster.read(1)
-                m = rmask.read(1)
-                final = r * m
-                profile = raster.profile
-        profile["nodata"] = 0
-        with rio.Env():
-            with rio.open(dst, "w", **profile) as file:
-                file.write(final, 1)
-
     # Get rid of temporary shapefile
     os.remove(tmp_src)
 
 
 def to_grid(gdf, variable, res):
-    """
-    Convert coordinates from an irregular point dataset into an even grid.
+    """Convert coordinates from an irregular point dataset into an even grid.
+
     Parameters
     ----------
     gdf: geopandas.geodataframe.GeoDataFrame
@@ -192,9 +161,8 @@ def to_grid(gdf, variable, res):
     frame, and generated the arrays as dask arrays we might be able to save
     space.
     - At the moment it is a little awkardly shaped, just because I haven't
-    gotten to it yet. 
+    gotten to it yet.
     """
-
     # Only one variable at a time here
     gdf = gdf[[variable, "geometry"]]
 
@@ -209,7 +177,7 @@ def to_grid(gdf, variable, res):
     gridy = np.arange(miny, maxy + res, res)
     grid_points = np.array(np.meshgrid(gridy, gridx)).T.reshape(-1, 2)
 
-    # Go ahead and make the geotransform 
+    # Go ahead and make the geotransform
     geotransform = [res, 0, minx, 0, res, miny]
 
     # Get source point coordinates
@@ -242,35 +210,6 @@ def to_grid(gdf, variable, res):
     return grid, geotransform
 
 
-def mask(gen, crs, gres, scres):
-    """Rasterizing to the appropriate resolution results in streaks of 
-    nodata because the point coordinates don't align well to a consistent
-    grid. With generation its not as much of a problem to just fillna,
-    but with aggregation doing that fills in the supply-curve gaps. Those
-    gaps need to remain.
-
-    I'm thinking that we need to rasterize a full grid, catch the warped gaps,
-    and use that as a mask...how to get the full supply curve points?
-
-    We can also use the generation file, that can be rasterized at its own
-    resoltuion and resampled to the target resolution to (hopefully) recreate
-    the striations.
-
-    src = "/shared-projects/rev/projects/soco/rev/project_points.csv"
-    dst = "/shared-projects/rev/projects/soco/rev/project_points.tif"
-    crs = "epsg:3466"
-    res = 5670
-    """
-
-    # Temp gpkg
-    csv(src, dst, "gid", res, crs, mask=None, fillna=False)
-
-    r = rio.open(dst)
-    profile = r.profile
-    array = r.read(1)
-    plt.imshow(array)
-
-
 @click.command()
 @click.argument("src")
 @click.argument("dst")
@@ -279,35 +218,29 @@ def mask(gen, crs, gres, scres):
 @click.option("--crs", "-c", default="epsg:4326", help=CRS_HELP)
 @click.option("--agg_fun", "-a", default="mean", help=AGG_HELP)
 @click.option("--layer", "-l", default=None, help=LAYER_HELP)
-@click.option("--fltr", "-f",default=None, multiple=True, help=FILTER_HELP)
-@click.option("--mask", "-m", default=None, help=MASK_HELP)
+@click.option("--fltr", "-f", default=None, multiple=True, help=FILTER_HELP)
 @click.option("--fillna", "-fn", is_flag=True, help=FILL_HELP)
-def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, mask,
-         fillna):
-    """
-    src = "/shared-projects/rev/projects/weto/task_1/generation/3_2030_midcost_medinnov/outputs/outputs_multi-year.h5"
-    dst = "/shared-projects/rev/projects/weto/task_1/generation/3_2030_midcost_medinnov/outputs/3_2030_midcost_medinnov_2007_2013_cf.tif"
+def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna):
+    """REVRUNS - RRASTER.
+
+    src = "/shared-projects/rev/projects/weto/fy20/task_1/generation/3_2030_midcost_medinnov/outputs/outputs_multi-year.h5"
+    dst = "/shared-projects/rev/projects/weto/fy20/task_1/generation/3_2030_midcost_medinnov/outputs/3_2030_midcost_medinnov_2007_2013_cf.tif"
     dataset = "cf_mean-means"
     res = 2000
     crs = "esri:102008"
     agg_fun = "mean"
     layer = None
     filter = None
-    mask = "/shared-projects/rev/projects/soco/data/rasters/se_mask.tif"
     """
-
-    extension = os.path.splitext(src)[1]        
-
+    # Get the file extension and call the appropriate function
+    extension = os.path.splitext(src)[1]
     if extension == ".h5":
-        h5(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, mask,
-           fillna)
-
+        h5(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna)
     elif extension == ".csv":
-        csv(src, dst, dataset, resolution, crs, mask, fillna)
-
+        csv(src, dst, dataset, resolution, crs, fillna)
     elif extension == ".gpkg":
-        gpkg(src, dst, dataset, resolution, crs, mask, fillna)
+        gpkg(src, dst, dataset, resolution, crs, fillna)
 
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
     main()

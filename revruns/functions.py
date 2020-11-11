@@ -2,7 +2,7 @@
 
 Almost all of the functionality is currently stored in the CLI scripts to
 avoid the load time needed to load shared functions, but anything in here can
-be accessed through revruns.functions. Place new functions that might be useful
+be accessed directly from revruns. Place new functions that might be useful
 in the future here.
 
 Created on Wed Dec  4 07:58:42 2019
@@ -106,7 +106,6 @@ def point_line(arg):
         return gid, dmin, category
 
     return df.shape
-#     distances = df["geometry"].apply(single_row, linedf=linedf)
 
 
 def write_config(config_dict, path):
@@ -115,7 +114,6 @@ def write_config(config_dict, path):
         file.write(json.dumps(config_dict, indent=4))
 
 
-# Class methods
 class Data_Path:
     """Data_Path joins a root directory path to data file paths."""
 
@@ -368,8 +366,10 @@ class Exclusions:
     def _initialize_h5(self):
         # Create an empty hdf file if one doesn't exist
         date = format(dt.datetime.today(), "%Y-%m-%d %H:%M")
-        os.makedirs(os.path.dirname(self.excl_fpath), exist_ok=True)
+        self.excl_fpath = os.path.expanduser(self.excl_fpath)
+        self.excl_fpath = os.path.abspath(self.excl_fpath)
         if not os.path.exists(self.excl_fpath):
+            os.makedirs(os.path.dirname(self.excl_fpath), exist_ok=True)
             with h5py.File(self.excl_fpath, "w") as ds:
                 ds.attrs["creation_date"] = date
 

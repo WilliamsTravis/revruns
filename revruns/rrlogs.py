@@ -8,11 +8,10 @@ See if we can't use pyslurm to speed up the squeue call
 rrpipeline is outputting all logs to the working directory, fix that or handle
 it here.
 """
-
-import getpass
+import datetime as dt
 import json
+import multiprocessing as mp
 import os
-import subprocess as sp
 import warnings
 
 from glob import glob
@@ -24,7 +23,6 @@ import pandas as pd
 from colorama import Fore, Style
 from pandas.core.common import SettingWithCopyWarning
 from tabulate import tabulate
-
 
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 10)
@@ -81,6 +79,7 @@ UNSUBMITTED_STRINGS = ["unsubmitted", "unsubmit", "u"]
 
 
 def check_entries(print_df, check):
+    """Check for a specific status."""
     if check in FAILURE_STRINGS:
         print_df = print_df[print_df["job_status"] == "failed"]
     elif check in SUCCESS_STRINGS:
@@ -88,15 +87,16 @@ def check_entries(print_df, check):
     elif check in PENDING_STRINGS:
         print_df = print_df[print_df["job_status"] == "PD"]
     elif check in RUNNING_STRINGS:
-        print_df = print_df[print_df["job_status"] == "R"]    
+        print_df = print_df[print_df["job_status"] == "R"]
     elif check in SUBMITTED_STRINGS:
-        print_df = print_df[print_df["job_status"] == "submitted"] 
+        print_df = print_df[print_df["job_status"] == "submitted"]
     elif check in UNSUBMITTED_STRINGS:
-        print_df = print_df[print_df["job_status"] == "unsubmitted"] 
+        print_df = print_df[print_df["job_status"] == "unsubmitted"]
     else:
         print("Could not find status filter.")
 
     return print_df
+
 
 def checkout(logdir, pid, output="error"):
     """Print out the first 20 lines of an error or stdout log file."""
@@ -104,7 +104,6 @@ def checkout(logdir, pid, output="error"):
         pattern = "*e"
         name = "Error"
         outs = glob(os.path.join(logdir, "stdout", pattern))
-
     else:
         pattern = "*o"
         name = "STDOUT"
@@ -121,15 +120,13 @@ def checkout(logdir, pid, output="error"):
         lines = file.readlines()
         if len(lines) > 20:
             print("  \n   ...   \n")
-        for l in lines[-20:]:
-            print(l)
-        print(Fore.YELLOW + "cat " + log + Style.RESET_ALL) 
+        for line in lines[-20:]:
+            print(line)
+        print(Fore.YELLOW + "cat " + log + Style.RESET_ALL)
 
 
-def color_print(df):
-    """Print each line of a data frame in red for failures and green for
-    success."""
-
+def color_print(df, print_folder):
+    """Color the status portion of the print out."""
     def color_string(string):
         if string == "failed":
             string = Fore.RED + string + Style.RESET_ALL
@@ -141,34 +138,20 @@ def color_print(df):
             string = Fore.YELLOW + string + Style.RESET_ALL
         return string
 
+    name = "\n" + Fore.CYAN + "/" + print_folder + Style.RESET_ALL + ":"
     df["job_status"] = df["job_status"].apply(color_string)
-
-    print(tabulate(df, showindex=False, headers=df.columns,
-                   tablefmt="simple"))
-
-
-def convert_time(runtime):
-    """Convert squeue time to minutes."""
-    mults = [0.016666666666666666, 1, 60]
-    try:
-        time = [int(t) for t in runtime.split(":")][::-1]
-        minute_list = [t * mults[i] for i, t in enumerate(time)]
-        minutes = round(sum(minute_list), 4)
-    except:
-        minutes = "nan"
-    return minutes
+    pdf = tabulate(df, showindex=False, headers=df.columns, tablefmt="simple")
+    print(name)
+    print(pdf)
 
 
 def find_file(dirpath, file="config_pipeline.json"):
     """Check/return the config_pipeline.json file in the given directory."""
     config_path = os.path.join(dirpath, file)
     if not os.path.exists(config_path):
-        raise ValueError(ValueError(Fore.RED
-                         + "No "
-                         + file
-                         + " files found. If you were looking for nested"
-                         + " files, try running the with --walk option."
-                         + Style.RESET_ALL))
+        msg = ("No {} files found. If you were looking for nested files, try "
+               "running the with --walk option.").format(file)
+        raise ValueError(Fore.RED + msg + Style.RESET_ALL)
     return config_path
 
 
@@ -183,21 +166,14 @@ def find_files(dirpath, file="config_pipeline.json"):
             if name == file:
                 config_paths.append(os.path.join(root, file))
     if not config_paths:
-        raise ValueError(Fore.RED
-                         + "No "
-                         + file
-                         + " files found."
-                         + Style.RESET_ALL)
+        msg = "No {} files found.".format(file)
+        raise ValueError(Fore.RED + msg + Style.RESET_ALL)
     return config_paths
 
 
-def find_logs(folder):
-    """Find the log folders based on configs present in folder. Assumes
-    only one log directory per folder.
-
-    folder = "/shared-projects/rev/projects/soco/rev/runs/reference/generation/120hh/20ps/logs/stdout"
-    """
-    # if there is a log directory directly in this folder use that
+def find_logs(folder):  # <---------------------------------------------------- Speed this up or use find_files
+    """Find the log directory, assumes one per folder."""
+    # If there is a log directory directly in this folder use that
     contents = glob(os.path.join(folder, "*"))
     possibles = [c for c in contents if "log" in c]
     if len(possibles) == 1:
@@ -214,7 +190,6 @@ def find_logs(folder):
     logdir = None
     for file in config_files:
         if not logdir:
-
             # The file might not open
             try:
                 config = json.load(open(file, "r"))
@@ -229,7 +204,7 @@ def find_logs(folder):
 
     # Expand log directory
     if logdir[0] == ".":
-        logdir = logdir[2:]  # "it will have a / as well
+        logdir = logdir[2:]
         logdir = os.path.join(folder, logdir)
     logdir = os.path.expanduser(logdir)
 
@@ -237,8 +212,7 @@ def find_logs(folder):
 
 
 def find_outputs(folder):
-    """Find the output directory based on configs present in folder. Assumes
-    only one log directory per folder."""
+    """Find the output directory, assumes one per folder."""
     # Check each json till you find it
     config_files = glob(os.path.join(folder, "*.json"))
     outdir = None
@@ -259,7 +233,7 @@ def find_outputs(folder):
     except:
         print("Could not find 'reV output directory'")
         raise
-    
+
     # Expand log directory
     if outdir[0] == ".":
         outdir = outdir[2:]  # "it will have a / as well
@@ -271,30 +245,81 @@ def find_outputs(folder):
 
 def find_pid_dirs(folders, target_pid):
     """Check the log files and find which folder contain the target pid."""
-    pid_dirs=[]
+    pid_dirs = []
     for folder in folders:
         logs = glob(os.path.join(folder, "logs", "stdout", "*e"))
-        for l in logs:
-            file = os.path.basename(l)
+        for line in logs:
+            file = os.path.basename(line)
             idx = file.rindex("_")
             pid = file[idx + 1:].replace(".e", "")
             if pid == str(target_pid):
                 pid_dirs.append(folder)
     if not pid_dirs:
-        raise FileNotFoundError(Fore.RED
-                                + "No log files found for pid "
-                                + str(target_pid) + Style.RESET_ALL)
+        msg = "No log files found for pid {}".format(target_pid)
+        raise FileNotFoundError(Fore.RED + msg + Style.RESET_ALL)
     return pid_dirs
 
 
-def find_status(folder):
+def find_runtime(job):
+    """Find the runtime for a specific job (dictionary entry)."""
+    dirout = job["dirout"]
+    fout = job["fout"]
+
+    # We will be looking for the logs files associated with fout
+    if "_node" in fout:
+        fout = fout.replace("node", "")
+    jobname = fout.replace(".h5", "")
+
+    # Find all the output logs for this jobname
+    logdir = find_logs(dirout)
+    stdout = os.path.join(logdir, "stdout")
+    logs = glob(os.path.join(stdout, "*{}*.o".format(jobname)))
+
+    # Take the last, will also work if there were multiple attempts
+    logpath = logs[-1]
+
+    # We can't get file creation in Linux
+    with open(logpath, "r") as file:
+        loglines = [line.replace("\n", "") for line in file.readlines()]
+    for line in loglines:
+        if "INFO" in line or "DEBUG" in line:
+            date = line.split()[2]
+            time = line.split()[3][:8]
+            break
+
+    # Format the start time from these
+    time_string = " ".join([date, time])
+    stime = dt.datetime.strptime(time_string, "%Y-%m-%d %H:%M:%S")
+
+    # Get the modification time from the file stats
+    fstats = os.stat(logpath)
+    etime = dt.datetime.fromtimestamp(fstats.st_mtime)
+
+    # Take the difference
+    minutes = round((etime - stime).seconds / 60, 3)
+    return minutes
+
+
+def find_runtimes(status):
+    """Find runtimes if missing from the main status json."""
+    for module, entry in status.items():
+        for label, job in entry.items():
+            if "pipeline_index" != label:
+                if isinstance(job, dict):
+                    if "job_id" in job and "runtime" not in job:
+                        job["runtime"] = find_runtime(job)
+                        status[module][label] = job
+    return status
+
+
+def find_status(sub_folder):
     """Find the job status json."""
     # Find output directory
     try:
-        files = glob(os.path.join(folder, "*.json"))
+        files = glob(os.path.join(sub_folder, "*.json"))
         file = [f for f in files if "_status.json" in f][0]
     except IndexError:
-        outdir = find_outputs(folder)
+        outdir = find_outputs(sub_folder)
         files = glob(os.path.join(outdir, "*.json"))
         file = [f for f in files if "_status.json" in f]
         if not file:
@@ -307,124 +332,32 @@ def find_status(folder):
     # Fix artifacts
     status = fix_status(status)
 
+    # Fill in missing runtimes
+    try:
+        status = find_runtimes(status)
+    except IndexError:
+        pass
+
     return file, status
 
 
 def fix_status(status):
-    """Using different versions of reV can result in problematic artifacts."""
+    """Fix problematic artifacts from older reV versions."""
     # Aggregation vs Supply-Curve-Aggregation
     if "aggregation" in status and "supply-curve-aggregation" in status:
         ag = status["aggregation"]
         scag = status["supply-curve-aggregation"]
-    
+
         if len(scag) > len(ag):
             del status["aggregation"]
         else:
             status["supply-curve-aggregation"] = status["aggregation"]
             del status["aggregation"]
     elif "aggregation" in status:
-            status["supply-curve-aggregation"] = status["aggregation"]
-            del status["aggregation"]
+        status["supply-curve-aggregation"] = status["aggregation"]
+        del status["aggregation"]
 
     return status
-
-   
-def get_squeue(user=None):
-    """Return a pandas table of the SLURM squeue output."""
-    if not user:
-        user = getpass.getuser()
-    result = sp.run(['squeue', '-u', user], stdout=sp.PIPE)
-    lines = [l.split() for l in result.stdout.decode().split("\n")]
-    try:
-        df = pd.DataFrame(lines[1:], columns=lines[0]).dropna()
-    except:
-        df = pd.DataFrame([["0"] * 8], columns=lines[0], index=[0])
-    return df
-
-
-def get_scontrol(jobid):
-    """Return the full status printout of a specific job, override status
-    json if this is available.
-
-    Notes:
-        I haven't seen enough outputs to know how long this is availabe.
-    """
-    result = sp.run(["scontrol",  "show", "jobid", "-dd", str(jobid)],
-                    stdout=sp.PIPE)
-    lines = [l.split() for l in result.stdout.decode().split("\n")]
-
-    # Line 4 contains the jobstatus
-    statuses = {
-        "FAILED": "failed",
-        "COMPLETED": "successful",
-        "PENDING": "PD",
-        "RUNNING": "R"
-    }
-    status = lines[3][0].split("=")[1]
-    if status in statuses:
-        status = statuses[status]
-
-    # Runtime is in line 7
-    runtime = lines[6][0].split("=")[1]
-
-    return status, runtime
-
-
-def sq_adjust(df, user):
-    """Retrieve run time and jobstatus from squeue since these aren't always
-    accurate in the status log.
-    """
-    # Get the squeue data frame
-    sqdf = get_squeue(user)
-
-    # Some entries might not even have a run time column
-    if not "runtime" in df.columns:
-        df["runtime"] = np.nan
-
-    # Replace runtime and status
-    for i, row in sqdf.iterrows():
-        jid = row["JOBID"]
-        status = row["ST"]
-        runtime = convert_time(row["TIME"])
-        df["job_status"][df["job_id"] == jid] = status
-        df["runtime"][df["job_id"] == jid] = runtime
-
-    return df
-
-
-def logs(folder, user, module, status, error, out):
-    """Print status and job pids for a single project directory."""
-    # Expand folder path
-    folder = os.path.expanduser(folder)
-    folder = os.path.abspath(folder)
-
-    # Find the logging directoy
-    try:
-        logdir = find_logs(folder)
-    except:
-        print(Fore.YELLOW + "Could not find log directory" +
-              Style.RESET_ALL)
-        return
-
-    # Convert module status to data frame
-    status_df = status_dataframe(folder, module, user)
-
-    # This might return None
-    if status_df is not None:
-        # Now return the requested return type
-        if status:
-            print_df = check_entries(status_df, status)  # <-------------------- Specific status check not implemented yet
-
-        if not error and not out:
-            color_print(status_df)
-
-        if error:
-            checkout(logdir, error, output="error")
-        if out:
-            checkout(logdir, out, output="stdout")
-    else:
-        print(Fore.RED + "No status file found for " + folder
-              + Style.RESET_ALL)
 
 
 
@@ -453,7 +386,7 @@ def module_status_dataframe(status, module="gen"):
                 mstatus[col] = "unsubmitted"
             else:
                 mstatus[col] = None
-        mstatus = {mkey: mstatus} 
+        mstatus = {mkey: mstatus}
 
     # Create data frame
     mdf = pd.DataFrame(mstatus).T
@@ -462,16 +395,54 @@ def module_status_dataframe(status, module="gen"):
     return mdf
 
 
-def status_dataframe(folder, module=None, user=None):
-    """Convert the status entry for a module or an enitre project to a
-    dataframe.
-    """
+def rrlogs(args):
+    """Print status and job pids for a single project directory."""
+    folder, sub_folder, user, module, status, error, out = args
+
+    # Expand folder path
+    sub_folder = os.path.expanduser(sub_folder)
+    sub_folder = os.path.abspath(sub_folder)
+
+    # Convert module status to data frame
+    status_df = status_dataframe(sub_folder, module, user)
+
+    # This might return None
+    if status_df is not None:
+        # Now return the requested return type
+        if status:
+            status_df = check_entries(status_df, status)
+
+        if not error and not out:
+            print_folder = os.path.relpath(sub_folder, folder)
+            color_print(status_df, print_folder)
+
+        # If a specific status was requested
+        if error or out:
+            # Find the logging directoy
+            try:
+                logdir = find_logs(sub_folder)
+            except:
+                print(Fore.YELLOW
+                      + "Could not find log directory"
+                      + Style.RESET_ALL)
+                return
+            if error:
+                checkout(logdir, error, output="error")
+            if out:
+                checkout(logdir, out, output="stdout")
+    else:
+        print(Fore.RED + "No status file found for " + sub_folder
+              + Style.RESET_ALL)
+    return sub_folder
+
+
+def status_dataframe(sub_folder, module=None, user=None):
+    """Convert a status entr into dataframe."""
     # Get the status dictionary
-    _, status = find_status(folder)
+    _, status = find_status(sub_folder)
 
     # There might be a log file with no status data frame
     if status:
-
         # If just one module
         if module:
             try:
@@ -490,8 +461,9 @@ def status_dataframe(folder, module=None, user=None):
                 dfs.append(module_status_dataframe(status, m))
             df = pd.concat(dfs, sort=False)
 
-        # Now let's borrow some information from squeue
-        df = sq_adjust(df, user)
+        # Here, let's improve the time estimation somehow
+        if "runtime" not in df.columns:
+            df["runtime"] = np.nan
 
         # And refine this down for the printout
         df["job_name"] = df.index
@@ -512,8 +484,7 @@ def status_dataframe(folder, module=None, user=None):
 @click.option("--out", "-o", default=None, help=OUT_HELP)
 @click.option("--walk", "-w", is_flag=True, help=WALK_HELP)
 def main(folder, user, module, status, error, out, walk):
-    """
-    revruns - logs
+    r"""REVRUNS - Check Logs. No Squeue.
 
     Check log files of a reV run directory. Assumes certain standard
     naming conventions:
@@ -522,22 +493,23 @@ def main(folder, user, module, status, error, out, walk):
     "gen": "config_gen.json" \n
     "econ": "config_econ.json" \n
     "offshore": "config_offshore.json" \n
-    "collect": "config_collect.json" \n 
+    "collect": "config_collect.json" \n
     "multi-year": "config_multi-year.json", \n
     "aggregation": "config_aggregation.son", \n
     "supply-curve": "config_supply-curve.json", \n
     "rep-profiles": "config_rep-profiles.json" \n
     "qaqc": "config_qaqc.json"
 
-    folder = "/shared-projects/rev/projects/weto/bat_curtailment/rev_supply_curve"
+    folder = ("/shared-projects/rev/projects/weto/bat_curtailment/reruns/"
+              "single_owner/irr/")
     error  = None
     out = None
     user = None
     module = None
-    status = None
+    status = "r"
     walk = True
     """
-    # If walk find all project directories with a 
+    # If walk find all project directories with a
     if walk or error or out:
         folders = [os.path.dirname(f) for f in find_files(folder, file="logs")]
     else:
@@ -549,10 +521,13 @@ def main(folder, user, module, status, error, out, walk):
     if out:
         folders = find_pid_dirs(folders, out)
 
-    # Run logs for each
-    for folder in folders:
-        print("\n" + Fore.CYAN + folder + ": " + Style.RESET_ALL)
-        logs(folder, user, module, status, error, out)
+    # Run rrlogs for each
+    args = [(folder, f, user, module, status, error, out) for f in folders]
+    for arg in args:
+        _ = rrlogs(arg)
+    # with mp.Pool(os.cpu_count()) as pool:
+    #     for sub_folder in pool.imap(rrlogs, args):
+    #         pass
 
 
 if __name__ == "__main__":
