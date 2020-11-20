@@ -32,8 +32,8 @@ CRS_HELP = ("A proj4 string or epsg code associated with the file's "
 OMISSIONS = ["coordinates", "time_index", "meta", "latitude", "longitude"]
 
 # Different possible lat lon column names
-COORD_NAMES = {"lat": ["latitude", "lat", "y"],
-               "lon": ["longitude", "lon", "long", "x"]}
+COORD_NAMES = {"lat": ["latitude", "lat", "y", "ylat"],
+               "lon": ["longitude", "lon", "long", "x", "xlong"]}
 DRIVERS = {"shp": "ESRI Shapefile",
            "gpkg": "GPKG"}
 
@@ -41,7 +41,6 @@ DRIVERS = {"shp": "ESRI Shapefile",
 # Decode HDF columns
 def decode_cols(df):
     """Decode byte columns in a pandas data frame."""
-
     for col in df.columns:
         if isinstance(df[col].iloc[0], bytes):
             df[col] = df[col].apply(lambda x: x.decode())
@@ -52,9 +51,8 @@ def decode_cols(df):
 # Guess what columns are lat and lons
 def guess_coords(csv):
     """Use some common coordinate labels to infer which columns are lat and lon
-    in a pandas data frame."""
-
-
+    in a pandas data frame.
+    """
     columns = csv.columns
     columns = ["lat" if c in COORD_NAMES["lat"] else c for c in columns]
     columns = ["lon" if c in COORD_NAMES["lon"] else c for c in columns]
@@ -64,7 +62,7 @@ def guess_coords(csv):
 
 
 def to_point(row):
-    """Create a point object from a row with 'lat' and 'lon' columns"""
+    """Create a point object from a row with 'lat' and 'lon' columns."""
     point = Point((row["lon"], row["lat"]))
     return point
 
@@ -88,7 +86,6 @@ def csv_to_shape(src, dst=None, driver="gpkg", epsg=4326):
     driver = "gpkg"
     dst = "/shared-projects/rev/projects/weto/aggregation/05_b_b_mid/05_b_b_mid_sc.gpkg"
     """
-
     # Select driver
     driver_str = DRIVERS[driver]
 

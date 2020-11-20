@@ -8,40 +8,28 @@ See if we can't use pyslurm to speed up the squeue call
 rrpipeline is outputting all logs to the working directory, fix that or handle
 it here.
 """
-import datetime as dt
 import json
-import multiprocessing as mp
 import os
 import warnings
 
 from glob import glob
 
 import click
-import numpy as np
-import pandas as pd
 
 from colorama import Fore, Style
 from pandas.core.common import SettingWithCopyWarning
-from tabulate import tabulate
 
-pd.set_option('display.max_rows', 500)
-pd.set_option('display.max_columns', 10)
-pd.set_option('display.width', 1000)
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 
 FOLDER_HELP = ("Path to a folder with a completed set of batched reV runs. "
                "Defaults to current directory. (str)")
-USER_HELP = ("Unix username. If another user is running a job in the current "
-             "pipeline, leaving this blank might result in out-of-date "
-             "values for the job status and will not display current runtimes."
-             " Defaults to current user. (str)")
 MODULE_HELP = ("The reV module logs to check. Defaults to all modules: gen, "
                "collect, multi-year, aggregation, supply-curve, or "
-               "rep-profiles")
+               "rep-profiles.")
 STATUS_HELP = ("Print jobs with a given status. Option include 'failed' "
                "(or 'f'), 'success' (or 's'), 'pending' (or 'p'), 'running' "
-               "(or 'r'), 'submitted' (or 'sb') and 'unsubmitted (or 'usb')")
+               "(or 'r'), 'submitted' (or 'sb') and 'unsubmitted (or 'usb').")
 ERROR_HELP = ("A job ID. This will print the first 20 lines of the error log "
               "of a job.")
 OUT_HELP = ("A job ID. This will print the first 20 lines of the standard "
@@ -127,6 +115,8 @@ def checkout(logdir, pid, output="error"):
 
 def color_print(df, print_folder):
     """Color the status portion of the print out."""
+    from tabulate import tabulate
+
     def color_string(string):
         if string == "failed":
             string = Fore.RED + string + Style.RESET_ALL
@@ -165,6 +155,9 @@ def find_files(dirpath, file="config_pipeline.json"):
         for name in dirs:
             if name == file:
                 config_paths.append(os.path.join(root, file))
+    present_file = os.path.join(dirpath, file)
+    if present_file in config_paths:
+        config_paths.remove(present_file)
     if not config_paths:
         msg = "No {} files found.".format(file)
         raise ValueError(Fore.RED + msg + Style.RESET_ALL)
@@ -193,7 +186,7 @@ def find_logs(folder):  # <---------------------------------------------------- 
             # The file might not open
             try:
                 config = json.load(open(file, "r"))
-            except:
+            except:  # <------------------------------------------------------- What would this/these be?
                 pass
 
             # The directory might be named differently
@@ -262,6 +255,8 @@ def find_pid_dirs(folders, target_pid):
 
 def find_runtime(job):
     """Find the runtime for a specific job (dictionary entry)."""
+    import datetime as dt
+
     dirout = job["dirout"]
     fout = job["fout"]
 
@@ -360,9 +355,10 @@ def fix_status(status):
     return status
 
 
-
 def module_status_dataframe(status, module="gen"):
     """Convert the status entry for a module to a dataframe."""
+    import pandas as pd
+
     # Target columns
     tcols = ["job_id", "hardware", "fout", "dirout", "job_status", "finput",
              "runtime"]
@@ -397,14 +393,14 @@ def module_status_dataframe(status, module="gen"):
 
 def rrlogs(args):
     """Print status and job pids for a single project directory."""
-    folder, sub_folder, user, module, status, error, out = args
+    folder, sub_folder, module, status, error, out = args
 
     # Expand folder path
     sub_folder = os.path.expanduser(sub_folder)
     sub_folder = os.path.abspath(sub_folder)
 
     # Convert module status to data frame
-    status_df = status_dataframe(sub_folder, module, user)
+    status_df = status_dataframe(sub_folder, module)
 
     # This might return None
     if status_df is not None:
@@ -436,8 +432,10 @@ def rrlogs(args):
     return sub_folder
 
 
-def status_dataframe(sub_folder, module=None, user=None):
+def status_dataframe(sub_folder, module=None):
     """Convert a status entr into dataframe."""
+    import pandas as pd
+
     # Get the status dictionary
     _, status = find_status(sub_folder)
 
@@ -463,7 +461,7 @@ def status_dataframe(sub_folder, module=None, user=None):
 
         # Here, let's improve the time estimation somehow
         if "runtime" not in df.columns:
-            df["runtime"] = np.nan
+            df["runtime"] = "nan"
 
         # And refine this down for the printout
         df["job_name"] = df.index
@@ -477,37 +475,27 @@ def status_dataframe(sub_folder, module=None, user=None):
 
 @click.command()
 @click.option("--folder", "-f", default=".", help=FOLDER_HELP)
-@click.option("--user", "-u", default=None, help=USER_HELP)
 @click.option("--module", "-m", default=None, help=MODULE_HELP)
 @click.option("--status", "-s", default=None, help=STATUS_HELP)
 @click.option("--error", "-e", default=None, help=ERROR_HELP)
 @click.option("--out", "-o", default=None, help=OUT_HELP)
 @click.option("--walk", "-w", is_flag=True, help=WALK_HELP)
-def main(folder, user, module, status, error, out, walk):
-    r"""REVRUNS - Check Logs. No Squeue.
+def main(folder, module, status, error, out, walk):
+    """REVRUNS - Check Logs.
 
     Check log files of a reV run directory. Assumes certain standard
     naming conventions:
 
-    Configuration File names: \n
+    Configuration File names:\n
     "gen": "config_gen.json" \n
     "econ": "config_econ.json" \n
     "offshore": "config_offshore.json" \n
     "collect": "config_collect.json" \n
-    "multi-year": "config_multi-year.json", \n
-    "aggregation": "config_aggregation.son", \n
-    "supply-curve": "config_supply-curve.json", \n
+    "multi-year": "config_multi-year.json" \n
+    "aggregation": "config_aggregation.son" \n
+    "supply-curve": "config_supply-curve.json" \n
     "rep-profiles": "config_rep-profiles.json" \n
-    "qaqc": "config_qaqc.json"
-
-    folder = ("/shared-projects/rev/projects/weto/bat_curtailment/reruns/"
-              "single_owner/irr/")
-    error  = None
-    out = None
-    user = None
-    module = None
-    status = "r"
-    walk = True
+    "qaqc": "config_qaqc.json" \n
     """
     # If walk find all project directories with a
     if walk or error or out:
@@ -522,12 +510,9 @@ def main(folder, user, module, status, error, out, walk):
         folders = find_pid_dirs(folders, out)
 
     # Run rrlogs for each
-    args = [(folder, f, user, module, status, error, out) for f in folders]
+    args = [(folder, f, module, status, error, out) for f in folders]
     for arg in args:
         _ = rrlogs(arg)
-    # with mp.Pool(os.cpu_count()) as pool:
-    #     for sub_folder in pool.imap(rrlogs, args):
-    #         pass
 
 
 if __name__ == "__main__":

@@ -61,7 +61,7 @@ def h5(src, dst, dataset, res, crs, agg_fun, layer, fltr, fillna):
     # Append the data to the meta object and create geodataframe
     meta[field] = data / scale
 
-    # Do we wnt to apply a filter? How to parameterize that?
+    # Do we wnt to apply a filter? How to parameterize that?  # <-------------- Not ready
     if fltr:
         meta = meta[meta[fltr[0]] == fltr[1]]
 
@@ -126,7 +126,6 @@ def rasterize(gdf, res, dst, fillna):
     # Write to dst
     sp.call(["gdal_rasterize",
              tmp_src, dst,
-             "-a_nodata", "-9999",
              "-l", layer_name,
              "-a", attribute,
              "-at",
@@ -221,7 +220,7 @@ def to_grid(gdf, variable, res):
 @click.option("--fltr", "-f", default=None, multiple=True, help=FILTER_HELP)
 @click.option("--fillna", "-fn", is_flag=True, help=FILL_HELP)
 def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna):
-    """REVRUNS - RRASTER.
+    """REVRUNS - RRASTER - Rasterize a reV output.
 
     src = "/shared-projects/rev/projects/weto/fy20/task_1/generation/3_2030_midcost_medinnov/outputs/outputs_multi-year.h5"
     dst = "/shared-projects/rev/projects/weto/fy20/task_1/generation/3_2030_midcost_medinnov/outputs/3_2030_midcost_medinnov_2007_2013_cf.tif"
@@ -230,7 +229,8 @@ def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna):
     crs = "esri:102008"
     agg_fun = "mean"
     layer = None
-    filter = None
+    fltr = None
+    fillna = True
     """
     # Get the file extension and call the appropriate function
     extension = os.path.splitext(src)[1]

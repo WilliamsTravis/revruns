@@ -53,7 +53,7 @@ def check_status(pdir):
 @click.command()
 @click.option("--dirpath", "-d", default=".", help=DIR_HELP)
 @click.option("--walk", "-w", is_flag=True, help=WALK_HELP)
-@click.option("--file", "-f", default="config_pipeline.json", help=FILE_HELP) 
+@click.option("--file", "-f", default="config_pipeline.json", help=FILE_HELP)
 @click.option("--print_paths", "-p", is_flag=True, help=PRINT_HELP)
 def rrpipeline(dirpath, walk, file, print_paths):
     """Run one or all reV pipelines in a directory."""
