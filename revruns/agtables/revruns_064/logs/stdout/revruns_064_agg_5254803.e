@@ -1,0 +1,1 @@
+slurmstepd: error: *** JOB 5254803 ON r103u27 CANCELLED AT 2020-11-23T13:03:32 ***

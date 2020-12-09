@@ -1,19 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Create a transmission connection table for a particular supply-curve
- aggregation factor.
-"""
-
+"""Create a transmission connection table for an aggregation factor."""
 import click
 import copy
-import io
 import json
 import multiprocessing as mp
 import os
 import shutil
-import subprocess as sp
 import warnings
-
-from contextlib import redirect_stdout
 
 import geopandas as gpd
 import getpass
@@ -22,13 +15,13 @@ import pandas as pd
 import pgpasslib
 import psycopg2 as pg
 import rasterio as rio
-import revruns as rr
+from revruns import rr
 
-from pyproj import Proj, transform
+from pyproj import Proj
 from rasterio.sample import sample_gen
 from reV.pipeline import Pipeline
 from revruns.constants import TEMPLATES
-from shapely.geometry import Point
+from rex.utilities.hpc import SLURM
 from scipy.spatial import cKDTree
 from tqdm import tqdm
 
@@ -41,42 +34,50 @@ tqdm.pandas()
 
 AEA_CRS = ("+proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 "
            "+ellps=GRS80 +datum=NAD83 +units=m +no_defs ")
+
 GEN_PATH = "/projects/rev/data/transmission/build/sample_gen_2013.h5"
 RES_PATH = "/datasets/WIND/conus/v1.0.0/wtk_conus_2013.h5"
-EXCL_PATH = "/projects/rev/data/exclusions/ATB_Exclusions.h5"
 TM_DSET = "techmap_wtk"
+
 ALLCONNS_PATH = ("/projects/rev/data/transmission/shapefiles/"
                  "conus_allconns.gpkg")
-MULTIPLIER_PATH = ("/projects/rev/data/transmission/transmults/"
-                   "conus_trans_multipliers.csv")
-RES_HELP = ("The resolution factor (or aggregation factor) to use to build "
-            "the supply curve points. (int)")
-DIR_HELP = ("Destination directory. For consistency the output files will be "
-            "named according to their aggregation factor. Defaults to "
-            " the current directory. (str)")  # <------------------------------- We should also include the exclusion resolution
+MULTIPLIER_PATHS = {
+    "conus": ("/projects/rev/data/transmission/transmults/"
+              "conus_trans_multipliers.csv")
+}
+EXCL_PATHS = {
+    "conus": "/projects/rev/data/exclusions/ATB_Exclusions.h5",
+    "canada": "/projects/rev/data/exclusions/Canada_Exclusions.h5"
+}
+
 ALLOC_HELP = ("The Eagle account/allocation to use to generate the supply "
               "curve points used in the connection table. (str)")
+DIR_HELP = ("Destination directory. For consistency the output files will be "
+            "named according to their aggregation factor. Defaults to "
+            "the current directory. (str)")
+COUNTRY_HELP = ("County for which to create connections table. Only 'CONUS' "
+                "and 'Canada' are available so far.")
+
+JA_HELP = ("Run the aggregation table and quit. This is here because I "
+           "haven't worked out how to submit the connection half of this "
+           "process through SLURM after the reV supply curve is completed. "
+           "(boolean)")
 MEM_HELP = ("The amount of memory in GB needed to generate the supply "
-            "curve points used in the connection table. If the default doesn't "
-            " work try 179. Defaults to 90 GB. (int)")
-TIME_HELP = ("The amount of time in hours needed to generate the supply "
-             "curve points used in the connection table. Defaults to 1. (int)")
-EXCL_HELP = ("The exclusion dataset to use for the supply curve point "
-             "aggregation. Defaults to " + EXCL_PATH + ". (str)")
+            "curve points used in the connection table. If the default "
+            "doesn't work try 179. Defaults to 90 GB. (int)")
+RES_HELP = ("The resolution factor (or aggregation factor) to use to build "
+            "the supply curve points. (int)")
 SIMPLE_HELP = ("Use the simple minimum distance connection criteria for each "
                "connection. (boolean)")
-JA_HELP = ("Run the aggregation table and quit. This is here because I haven't "
-           "worked out how to submit the connection half of this process "
-           "through SLURM after the reV supply curve is completed. (boolean)")
+TIME_HELP = ("The amount of time in hours needed to generate the supply "
+             "curve points used in the connection table. Defaults to 1. (int)")
 
 
-def get_allconns(dst):
-    """The file is stored on the PostGres data base. How to manage other 
-    countries than CONUS?"""
-
+def get_allconns(dst, country="conus"):
+    """Get file stored on the PostGres data base."""
     # Write to file for later
     if not os.path.exists(dst):
-        os.makedirs(os.path.dirname(dst), exist_ok=True) 
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
 
         # Setup Postgres Connection Paramters
         user = getpass.getuser()
@@ -87,10 +88,11 @@ def get_allconns(dst):
 
         # The user might need to set up their password
         if not pw:
-            msg = ("No password found for the PostGres database needed to retrieve "
-                   "the transmission lines dataset."
-                   " Please install pgpasslib and add this line to ~/.pgpass: \n "
-                   "gds_edit.nrel.gov:5432:tech_potential:<user_name>:<password>")
+            msg = ("No password found for the PostGres database needed to "
+                   "retrieve the transmission lines dataset. Please install "
+                   "pgpasslib and add this line to ~/.pgpass: \n "
+                   "gds_edit.nrel.gov:5432:tech_potential:<user_name>:"
+                   "<password>")
             raise LookupError(msg)
 
         # Open a connection
@@ -98,7 +100,10 @@ def get_allconns(dst):
                          port=port)
 
         # Retrieve dataset
-        cmd = """select * from transmission.rev_conus_trans_lines;"""
+        if country.lower() == "conus":
+            cmd = """select * from transmission.rev_conus_trans_lines;"""
+        elif country.lower() == "canada":
+            cmd = """select * from transmission.rev_can_trans_lines;"""
         df = gpd.GeoDataFrame.from_postgis(cmd, con, geom_col="geom",
                                            crs=AEA_CRS)
         con.close()
@@ -121,10 +126,9 @@ def get_allconns(dst):
 
 def get_reeds(dst):
     """We need this to join to the multipliers table. It's by reeds region."""
-
     # Write to file for later
     if not os.path.exists(dst):
-        os.makedirs(os.path.dirname(dst), exist_ok=True) 
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
 
         # Setup Postgres Connection Paramters
         user = getpass.getuser()
@@ -139,7 +143,8 @@ def get_reeds(dst):
                    "retrieve the transmission lines dataset."
                    " Please install pgpasslib and add this line to "
                    "~/.pgpass: \n "
-                   "gds_edit.nrel.gov:5432:tech_potential:<user_name>:<password>")
+                   "gds_edit.nrel.gov:5432:tech_potential:<user_name>:"
+                   "<password>")
             raise LookupError(msg)
 
         # Open a connection
@@ -169,7 +174,7 @@ def get_reeds(dst):
 
 
 def get_linedf():
-
+    """Return the transmission line data frame."""
     # Get the transmission table and set ids
     transdf = get_allconns(ALLCONNS_PATH)
     transdf["trans_line_gid"] = transdf["gid"]
@@ -177,27 +182,25 @@ def get_linedf():
     # Apply point_line to each row in the dataframe
     linedf = transdf[transdf["geometry"].notna()]
 
-    return  linedf
+    return linedf
 
 
-# def pipeline(config_path):
-#     import logging
-#     import sys
-#     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+def list_pgtables(con):
+    """List all available tables in a postgres connection."""
+    cursor = con.cursor()
+    cursor.execute("select relname from pg_class where relkind='r' "
+                   "and relname !~ '^(pg_|sql_)';")
+    tables = []
+    for lst in cursor.fetchall():
+        table = lst[0]
+        tables.append(table)
+    return tables
 
-#     f = io.StringIO()
-#     with contextlib.suppressdout(f):
-#         p = Pipeline.run(config_path, monitor=True, verbose=False)
-#     out = f.getvalue()
-#     return out
 
-
-def simple_ag(dstdir, resolution, allocation, memory, time):
+def simple_ag(dstdir, resolution, allocation, memory, time, country):
     """Run aggregation with no exclusions to get full set of sc points."""
-
     # Setup the path to the point file
-    dstdir = os.path.expanduser(dstdir)
-    dstdir = os.path.abspath(dstdir)
+    dstdir = os.path.abspath(os.path.expanduser(dstdir))
     resolution = int(resolution)
     point_dir = "{}_{:03d}".format(os.path.basename(dstdir), resolution)
     point_file = point_dir + "_agg.csv"
@@ -208,23 +211,22 @@ def simple_ag(dstdir, resolution, allocation, memory, time):
 
     # We'll only need to do this once for each
     if not os.path.exists(final_path):
-
         os.makedirs(rundir, exist_ok=True)
 
         # Create a simple configuration file for aggregation
         config = copy.deepcopy(TEMPLATES["ag"])
-
         logdir = os.path.join(rundir, "logs")
         config_agpath = os.path.join(rundir, "config_aggregation.json")
 
         config["execution_control"]["memory"] = memory
         config["execution_control"]["walltime"] = time
-        config["data_layers"]= {
-            "cnty_fips": {
-                "dset": "cnty_fips",
-                "method": "mode"
-            }
-        }
+        del config["data_layers"]
+        # config["data_layers"] = {
+        #     "cnty_fips": {
+        #         "dset": "cnty_fips",
+        #         "method": "mode"
+        #     }
+        # }
         config["excl_dict"] = {
             "albers": {
                 "include_values": [
@@ -238,7 +240,7 @@ def simple_ag(dstdir, resolution, allocation, memory, time):
 
         config["directories"]["logging_directories"] = logdir
         config["directories"]["output_directory"] = rundir
-        config["excl_fpath"] = EXCL_PATH
+        config["excl_fpath"] = EXCL_PATHS[country.lower()]
         config["execution_control"]["allocation"] = allocation
         config["lcoe_dset"] = "lcoe_fcr"
         config["cf_dset"] = "cf_mean"
@@ -260,8 +262,7 @@ def simple_ag(dstdir, resolution, allocation, memory, time):
         with open(config_pipath, "w") as cfile:
             cfile.write(json.dumps(config, indent=4))
 
-        # Call reV on this file
-        # out = pipeline(config_pipath)
+        # Call reV on this file  <--------------------------------------------- I want this to stay running until its done so I can run this and the connections in sequence, but it seems to run in the back ground still from the cli
         Pipeline.run(config_pipath, monitor=True, verbose=False)
         shutil.move(point_path, final_path)
         shutil.rmtree(os.path.dirname(point_path))
@@ -269,21 +270,20 @@ def simple_ag(dstdir, resolution, allocation, memory, time):
     return final_path
 
 
-# Find the closest point on the closest line to the target point
 def single_dist(row, linedf, simple=False):
-
+    """Find the closest point on the closest line to the target point."""
     # Grab the supply curve point
     point = row["geometry"]
 
     # Find the distance of the closest PCA load center and add 5km
     pcadf = linedf[linedf["category"] == "PCALoadCen"]
-    pcadists = [point.distance(l) for l in pcadf["geometry"]]
-    pcadist = min(pcadists) + 5000 
+    pcadists = [point.distance(line) for line in pcadf["geometry"]]
+    pcadist = min(pcadists) + 5000
 
     # We are only searching for transmission features within this radius
     buffer = row["geometry"].buffer(pcadist)
-    finaldf = linedf[linedf.intersects(buffer)] 
-    finaldf["dist_m"] = [point.distance(l) for l in finaldf["geometry"]]
+    finaldf = linedf[linedf.intersects(buffer)]
+    finaldf["dist_m"] = [point.distance(line) for line in finaldf["geometry"]]
 
     # If simple, we only need the closest transmission structure
     if simple:
@@ -304,18 +304,21 @@ def single_dist(row, linedf, simple=False):
 
 
 def par_dist(arg):
-
-    # global linedf  # <-------------------------------------------------------- I can't define this within the connections, but these are specific to it :/
-    # global scdf
-
+    """Find the closest point on the closest line to the target points."""
+    # Unpack arguments
     idx, ppath, simple = arg
+
+    # Get the transmission feature data frame
     linedf = get_linedf()
+
+    # Get the supply curve points and select the indices of this chunk
     scdf = pd.read_csv(ppath, low_memory=False)
     scdf = scdf.loc[idx]
     crs = linedf.crs.to_wkt()
     scdf = scdf.rr.to_geo()
     scdf = scdf.to_crs(crs)
 
+    # Apply the distance function to each row and reshape into a data frame
     condf = scdf.progress_apply(single_dist, linedf=linedf, simple=simple,
                                 axis=1)
     condfs = [condf.iloc[i] for i in range(condf.shape[0])]
@@ -326,18 +329,21 @@ def par_dist(arg):
 
 def connections(ppath, tpath, simple=False):
     """Find distances to nearby transmission lines or stations."""
-
+    # Don't run twice
     if not os.path.exists(tpath):
-
+        # Get the supply curve points
         scdf = pd.read_csv(ppath)
         linedf = get_linedf()
         crs = linedf.crs.to_wkt()
         scdf = scdf.rr.to_geo()
         scdf = scdf.to_crs(crs)
 
+        # Split data frame into chunks and build args for connection function
         ncpu = mp.cpu_count()
         chunks = np.array_split(scdf.index, ncpu)
         args = [(list(idx), ppath, simple) for idx in chunks]
+
+        # Run the connection functions on each chunk
         condfs = []
         with mp.Pool(ncpu) as pool:
             for condf in pool.imap(par_dist, args):
@@ -345,79 +351,98 @@ def connections(ppath, tpath, simple=False):
         condf = pd.concat(condfs)
 
         # It's too big
-        condf = condf.drop(["geometry" ,"bgid", "egid", "gid", "voltage"],
+        condf = condf.drop(["geometry", "bgid", "egid", "gid", "voltage"],
                            axis=1)
 
+        # Save to file
         print("Saving connections table to " + tpath)
         condf.to_csv(tpath, index=False)
 
 
-def multipliers(ppath, dst):
+def multipliers(ppath, dst, country):
     """Use the connection data frame to create the regional multipliers."""
     # Get supply curve points and multipliers
-    sc_points = pd.read_csv(ppath)
-    mult_lkup = pd.read_csv(MULTIPLIER_PATH)
+    pnts = pd.read_csv(ppath)
+    mult_lkup = pd.read_csv(MULTIPLIER_PATHS[country])
 
     # Get the projected coordinates of the points to match the reeds geotiff
     with rio.open('/projects/rev/data/conus/reeds_regions.tif') as fin:
-        proj102008 = Proj(fin.crs.to_proj4())
-    eastings, northings = proj102008(sc_points.longitude.values,
-                                     sc_points.latitude.values)
-    sc_points['eastings'] = eastings
-    sc_points['northings'] = northings
+        proj = Proj(fin.crs.to_proj4())
+    eastings, northings = proj(pnts.longitude.values, pnts.latitude.values)
+    pnts['eastings'] = eastings
+    pnts['northings'] = northings
 
     # Get the reeds regions associated with each point
     with rio.open('/projects/rev/data/conus/reeds_regions.tif') as fin:
-        generator = sample_gen(
-            fin, sc_points[['eastings', 'northings']].values
-            )
+        generator = sample_gen(fin, pnts[['eastings', 'northings']].values)
         results = [x[0] for x in generator]
-        proj102008 = fin.crs.to_proj4()
-    sc_points['reeds_demand_region'] = results
-    sc_points_tmults = pd.merge(sc_points,
-                                mult_lkup,
-                                on='reeds_demand_region',
-                                how='left')
+    pnts['reeds_demand_region'] = results
+    pnts_mults = pd.merge(pnts,
+                          mult_lkup,
+                          on='reeds_demand_region',
+                          how='left')
 
     # Make sure the multiplier dimensions match the points
     try:
-        assert sc_points_tmults.shape[0] == sc_points.shape[0]
+        assert pnts_mults.shape[0] == pnts.shape[0]
     except AssertionError:
         raise("Supply curve and multiplier point dimensions do not match.")
 
     # Find points with no multipliers and assign nearest neighbors
-    misses = sc_points_tmults[pd.isnull(sc_points_tmults.trans_multiplier)]
-    hits = sc_points_tmults[~pd.isnull(sc_points_tmults.trans_multiplier)]
+    misses = pnts_mults[pd.isnull(pnts_mults.trans_multiplier)]
+    hits = pnts_mults[~pd.isnull(pnts_mults.trans_multiplier)]
     hits_tree = cKDTree(hits[['eastings', 'northings']].values)
     dist, idx = hits_tree.query(misses[['eastings', 'northings']].values)
     nearests = hits.iloc[idx].trans_multiplier.values
-    sc_points_tmults.loc[misses.index.values, 'trans_multiplier'] = nearests
+    pnts_mults.loc[misses.index.values, 'trans_multiplier'] = nearests
     try:
-        n_missing = len(
-            sc_points_tmults[pd.isnull(sc_points_tmults.trans_multiplier)]
-            )
+        n_missing = len(pnts_mults[pd.isnull(pnts_mults.trans_multiplier)])
         assert n_missing == 0
     except AssertionError:
         raise("Nearest neighbor search to fill in missing mutlipliers failed.")
 
     # Save
     cols = ['sc_point_gid', 'trans_multiplier']
-    sc_points_tmults[cols].to_csv(dst)
+    pnts_mults[cols].to_csv(dst)
+
+
+def slurm(resolution, allocation, time, memory, country, dstdir):
+    """Submit this job to slurm.
+
+    This isn't worked in yet. I have to make it so this won't submit itself.
+    """
+    # Build command
+    name = "transmission_{:03d}".format(resolution)
+    template = "rrconnections -r {} -a {} -t {} -m {} -c {} -d {}"
+    cmd = template.format(
+        resolution,
+        allocation,
+        time,
+        memory,
+        country,
+        dstdir
+    )
+
+    # Submit command to slurm - there redundancy because of aggregation step
+    slurm = SLURM()
+    slurm.sbatch(cmd=cmd, alloc=allocation, walltime=time, memory=memory,
+                 name=name, stdout_path='./stdout',
+                 keep_sh=False, conda_env="revruns", module=None,
+                 module_root=None)
 
 
 @click.command()
 @click.option("--resolution", "-r", required=True, help=RES_HELP)
-@click.option("--dstdir", "-d", default=".", help=DIR_HELP)
 @click.option("--allocation", "-a", required=True, help=ALLOC_HELP)
+@click.option("--country", "-c", default="CONUS", help=COUNTRY_HELP)
+@click.option("--dstdir", "-d", default=".", help=DIR_HELP)
 @click.option("--memory", "-m", default=90, help=MEM_HELP)
 @click.option("--time", "-t", default=1, help=TIME_HELP)
-@click.option("--exclusions", "-e", default=EXCL_PATH, help=EXCL_HELP)
 @click.option("--simple", "-s", is_flag=True, help=SIMPLE_HELP)
 @click.option("--just_agg", "-ja", is_flag=True, help=JA_HELP)
-def main(resolution, dstdir, allocation, memory, time, exclusions, simple, 
+def main(resolution, allocation, country, dstdir, memory, time, simple,
          just_agg):
-    """
-    rrconnections
+    """RRCONNECTIONS.
 
     Create a table with transmission feature connections and distance for a
     given supply curve aggregation factor.
@@ -425,34 +450,35 @@ def main(resolution, dstdir, allocation, memory, time, exclusions, simple,
     Exclusion file input not implemented yet.
 
     Sample Parameters:
-    resolution = 77
-    dstdir = "/projects/rev/data/transmission/build"
-    allocation = "setallwind"
+    resolution = 64
+    dstdir = "/projects/rev/data/transmission/build/canada"
+    allocation = "wetosa"
     memory = 90
     time = 1
-    exclusions = EXCL_PATH
+    country = "canada"
+    exclusions = EXCL_PATHS[country]
     simple = False
     """
-
     dstdir = os.path.abspath(os.path.expanduser(dstdir))
+    country = country.lower()
 
     # Build the point file and retrieve the file path
-    ppath = simple_ag(dstdir, resolution, allocation, memory, time)
+    ppath = simple_ag(dstdir, resolution, allocation, memory, time, country)
 
     if not just_agg:
-
         # Create the target path
         resolution = int(resolution)
-        tpath = os.path.join(dstdir, "connections_{:03d}.csv".format(resolution))
+        tname = "connections_{:03d}.csv".format(resolution)
+        tpath = os.path.join(dstdir, tname)
 
         # And run transmission connections
         connections(ppath, tpath, simple)
 
-        # And lastly, the multipliers table (just using 1 for everything for now)
-        mpath = os.path.join(
-            dstdir, "multipliers_{:03d}.csv".format(resolution)
-            )
-        multipliers(ppath, dst)
+        # And lastly, the multipliers table
+        if country == "conus":
+            mfile = "multipliers_{:03d}.csv".format(resolution)
+            mpath = os.path.join(dstdir, mfile)
+            multipliers(ppath, mpath)
 
     else:
         print("A full supply curve point table has been saved to " + ppath)

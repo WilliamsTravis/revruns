@@ -340,6 +340,7 @@ class Exclusions:
 
     def _get_coords(self, profile):
         # Get x and y coordinates (One day we'll have one transform order!)
+        profile = json.loads(profile)
         geom = profile["transform"]
         xres = geom[0]
         xrot = geom[1]

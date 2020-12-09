@@ -1,0 +1,33 @@
+Running on: r105u11, Machine Type: x86_64-redhat-linux-gnu
+source activate revruns
+conda env activate complete!
+INFO - 2020-11-23 13:00:54,764 [pipeline.py:133] : reV pipeline submitting: "supply-curve-aggregation" for job "revruns_064"
+INFO - 2020-11-23 13:01:04,602 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:01:09,653 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:01:14,700 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:01:19,735 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:01:24,767 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:01:29,800 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:01:34,832 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:01:39,870 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:01:47,434 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:01:52,479 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:01:57,517 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:02:02,548 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:02:07,585 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:02:12,620 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:02:17,652 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:02:22,684 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:02:27,718 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:02:32,747 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:02:37,781 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:02:42,813 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:02:47,842 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:02:52,873 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:02:57,911 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:03:02,944 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:03:07,973 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:03:13,008 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:03:18,041 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:03:23,067 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.
+INFO - 2020-11-23 13:03:28,100 [pipeline.py:279] : reV "supply-curve-aggregation" for job "revruns_064" is running.

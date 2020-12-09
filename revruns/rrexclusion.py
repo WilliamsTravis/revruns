@@ -25,7 +25,6 @@ NAME_HELP = ("The name of the added data set in the HDF5 file. Defaults to "
 @click.option("--verbose", "-v", is_flag=True)
 def main(excl_file, add_file, name, desc, verbose):
     """Append a geotiff data set to an exlusion file."""
-
     # set the name with the tiff file if not specified
     if not name:
         name = os.path.basename(add_file).split(".")[0]

@@ -54,6 +54,7 @@ SUPPLYCURVE_HELP = ("Setup the `supply-curve` module configuration "
                     "This module will calculate supply curves "
                     "for each aggregated coordinate and return a csv. "
                     "(boolean)")
+PIPELINE_HELP = ("Setup a pipeline configuration template. (boolean)")
 
 MODULE_NAMES = {
     "gen": "generation",
@@ -62,7 +63,8 @@ MODULE_NAMES = {
     "ag": "supply-curve-aggregation",
     "sc": "supply-curve",
     "rp": "rep-profiles",
-    "ba": "batch"
+    "ba": "batch",
+    "pipe": "pipeline"
 }
 
 DEFAULT_PATHS = {
@@ -74,6 +76,7 @@ DEFAULT_PATHS = {
     "rp": "./config_rep-profiles.json",
     "ba": "./config_batch.json",
     "points": "./project_points/project_points.csv",
+    "pipe": "./config_pipeline.json",
     "sam": "./sam_configs/sam.json"
 }
 
@@ -89,13 +92,15 @@ PIPELINE_TEMPLATE =  {
     "logging": {
         "log_level": "INFO"
     },
-    "pipeline": []
+    "pipeline": [
+        {"generation": "./config_generation.json"},
+        {"collect": "./config_collect.json"}
+    ]
 }
 
 
 def write_config(config_dict, path, verbose=False):
     """ Write a configuration dictionary to a json file."""
-
     # Write json to file
     with open(path, "w") as file:
         file.write(json.dumps(config_dict, indent=4))
@@ -123,7 +128,7 @@ def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
     point files. Files will be written to your current directory.
 
     In the output configuration jsons the term 'PLACEHOLDER' is SET for values
-    that require user inputs. Other inputs have defaults that may or may not 
+    that require user inputs. Other inputs have defaults that may or may not
     be appropriate. To use all available points for the specified generator,
     provide the '--all-points' or '-ap' flag. To use all available years for a
     specified generator, provide the '--all-years' or '-ay' flag.

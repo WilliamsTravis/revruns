@@ -135,33 +135,30 @@ def color_print(df, print_folder):
     print(pdf)
 
 
-def find_file(dirpath, file="config_pipeline.json"):
+def find_file(folder, file="config_pipeline.json"):
     """Check/return the config_pipeline.json file in the given directory."""
-    config_path = os.path.join(dirpath, file)
-    if not os.path.exists(config_path):
+    path = os.path.join(folder, file)
+    if not os.path.exists(path):
         msg = ("No {} files found. If you were looking for nested files, try "
                "running the with --walk option.").format(file)
         raise ValueError(Fore.RED + msg + Style.RESET_ALL)
-    return config_path
+    return path
 
 
-def find_files(dirpath, file="config_pipeline.json"):
-    """Walk the dirpath directories and finall confi_pipeline.json paths."""
-    config_paths = []
-    for root, dirs, files in os.walk(dirpath, topdown=False):
+def find_files(folder, file="config_pipeline.json"):
+    """Walk the dirpath directories and find all file paths."""
+    paths = []
+    for root, dirs, files in os.walk(folder, topdown=False):
         for name in files:
             if name == file:
-                config_paths.append(os.path.join(root, file))
+                paths.append(os.path.join(root, file))
         for name in dirs:
             if name == file:
-                config_paths.append(os.path.join(root, file))
-    present_file = os.path.join(dirpath, file)
-    if present_file in config_paths:
-        config_paths.remove(present_file)
-    if not config_paths:
+                paths.append(os.path.join(root, file))
+    if not paths:
         msg = "No {} files found.".format(file)
         raise ValueError(Fore.RED + msg + Style.RESET_ALL)
-    return config_paths
+    return paths
 
 
 def find_logs(folder):  # <---------------------------------------------------- Speed this up or use find_files
@@ -396,8 +393,7 @@ def rrlogs(args):
     folder, sub_folder, module, status, error, out = args
 
     # Expand folder path
-    sub_folder = os.path.expanduser(sub_folder)
-    sub_folder = os.path.abspath(sub_folder)
+    sub_folder = os.path.abspath(os.path.expanduser(sub_folder))
 
     # Convert module status to data frame
     status_df = status_dataframe(sub_folder, module)
