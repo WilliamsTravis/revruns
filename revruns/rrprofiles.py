@@ -22,8 +22,10 @@ HELP = {
     "dataset": ("The HDF5 dataset containing the target timeseries. (str)"),
     "dataset2": ("An optional second HDF5 dataset containing a timeseries to "
                  "be compared to the first. (str)"),
-    "time": ("The first and second index positions of the timeseries "
-             "sample to display. (list)"),
+    "time_1": ("The first time index position of the timeseries sample to "
+               "display. Defaults to 0. (int)"),
+    "time_2": ("The second time index position of the timeseries sample to "
+               "display. Defaults to 500. (int)"),
     "agg_fun": ("The aggregation function to apply to the spatial axis of the "
                 "dataset. Defaults to 'mean'. (str)"),
     "save": ("Save the plot to as an image to file. Default is False. "
@@ -78,7 +80,7 @@ class Timeseries:
             scale = find_scale(data)
             units = self._get_units(file, dataset)
             if len(data.shape) == 2:
-                series = data[time[0]: time[1], :] / scale
+                series = data[self.time[0]: self.time[1], :] / scale
                 series = fun(series, axis=1)
             else:
                 raise ValueError(dataset + " is not a time series.")
@@ -104,12 +106,12 @@ class Timeseries:
 
         # Set up the y-axis
         name = os.path.splitext(os.path.basename(file))[0]
-        ax.set_ylabel(dataset + self.units[dataset][name])
+        ax.set_ylabel(dataset + " - " + self.units[dataset][name])
 
         # Finally Plot
         ax.plot(x, array)
 
-    def plot(self, save, save_path=None):
+    def plot(self, save_path=None):
         """Plot all timeseries requested."""
         # Retrieve all arrays
         data = self.data
@@ -136,8 +138,10 @@ class Timeseries:
                 self.plot_single(ax, array, dataset, name)
         fig.legend(handles=handles, framealpha=1)
         fig.tight_layout()
-        if save:
+        if save_path:
             plt.savefig(save_path)
+        else:
+            plt.show()
 
     @property
     def time_index(self):
@@ -152,32 +156,32 @@ class Timeseries:
         """Retrieve a dictionary of each timeseries data requested."""
         # Create a container
         timeseries = {
-            dataset: {},
+            self.dataset: {},
         }
-        if dataset2:
-            timeseries[dataset2] = {}
+        if self.dataset2:
+            timeseries[self.dataset2] = {}
 
         # First file/first dataset
-        name = os.path.splitext(os.path.basename(file))[0]
-        series = self.get_data(file, dataset)
-        timeseries[dataset][name] = series
+        name = os.path.splitext(os.path.basename(self.file))[0]
+        series = self.get_data(self.file, self.dataset)
+        timeseries[self.dataset][name] = series
 
         # First file/second dataset
-        if dataset2:
-            series = self.get_data(file, dataset2)
-            timeseries[dataset2][name] = series
+        if self.dataset2:
+            series = self.get_data(self.file, self.dataset2)
+            timeseries[self.dataset2][name] = series
 
         # Second file
-        if file2:
+        if self.file2:
             # First Dataset
-            name = os.path.splitext(os.path.basename(file2))[0]
-            series = self.get_data(file2, dataset)
-            timeseries[dataset][name] = series
+            name = os.path.splitext(os.path.basename(self.file2))[0]
+            series = self.get_data(self.file2, self.dataset)
+            timeseries[self.dataset][name] = series
 
             # Second dataset
-            if dataset2:
-                series = self.get_data(file2, dataset2)
-                timeseries[dataset2][name] = series
+            if self.dataset2:
+                series = self.get_data(self.file2, self.dataset2)
+                timeseries[self.dataset2][name] = series
 
         return timeseries
 
@@ -204,22 +208,23 @@ class Timeseries:
 
 
 @click.command()
-@click.option("--file", "-f", required=True, help=HELP["file"])
-@click.option("--dataset", "-d", required=True, help=HELP["dataset"])
-@click.option("--time_indices", "-t", required=True, help=HELP["time"])
-@click.option("--agg_fun", "-a", required=True, help=HELP["agg_fun"])
+@click.argument("file", required=True)
+@click.argument("dataset", required=True)
+@click.option("--time_1", "-t1", default=0, help=HELP["time_1"])
+@click.option("--time_2", "-t2", default=500, help=HELP["time_2"])
+@click.option("--agg_fun", "-a", default="mean", help=HELP["agg_fun"])
 @click.option("--file2", "-f2", default=None, help=HELP["file2"])
 @click.option("--dataset2", "-d2", default=None, help=HELP["dataset2"])
-@click.option("--save", "-s", default=None, help=HELP["save"])
 @click.option("--save_path", "-sp", default=None, help=HELP["save_path"])
-def main(file, dataset, time, agg_fun, file2, dataset2, save):
+def main(file, dataset, time_1, time_2, agg_fun, file2, dataset2, save_path):
     """REVRUNS - RRPROFILES.
 
     Generate a line plot of sampled timeseries for a reV generated
     timeseries.
     """
+    time = [int(time_1), int(time_2)]
     plotter = Timeseries(file, dataset, time, agg_fun, file2, dataset2)
-    plotter.plot()
+    plotter.plot(save_path)
 
 
 if __name__ == "__main__":
