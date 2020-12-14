@@ -14,6 +14,8 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 
+from revruns.rr import isint
+
 
 HELP = {
     "file": ("The HDF5 file containing the target dataset. (str)"),
@@ -27,12 +29,35 @@ HELP = {
     "time_2": ("The second time index position of the timeseries sample to "
                "display. Defaults to 500. (int)"),
     "agg_fun": ("The aggregation function to apply to the spatial axis of the "
-                "dataset. Defaults to 'mean'. (str)"),
-    "save": ("Save the plot to as an image to file. Default is False. "
-             "(boolean)"),
+                "dataset.  Defaults to 'mean'. (str)"),
+    "save": ("Save the plot to as an image to file. If no save_path is "
+             "provided it will generate a file name using the other arguments. "
+             "Default is False. (boolean)"),
     "save_path": ("The file name to use if saving image. (str)")
 }
 COLORS = ["blue", "orange"]
+
+
+def sample_args():
+    """Return a set of sample arguments.
+    
+    Run locals().update(kwargs) for named objects.
+    """
+    kwargs = dict(
+        file = ("/shared-projects/rev/projects/perform/wind/results/perform/"
+                "day_ahead_2018_rf16_gen.h5"),
+        file2 = ("/shared-projects/rev/projects/perform/wind/results/era5/"
+                 "ercot_2017.h5"),
+        dataset = "cf_profile",
+        dataset2 = "gen_profile",
+        time_1 = 0,
+        time_2 = 500,
+        agg_fun = "mean",
+        save = True,
+        save_path = None
+    )
+    args = list(kwargs.values())
+    return args, kwargs
 
 
 def find_scale(data):
@@ -55,7 +80,32 @@ def find_scale(data):
     return scale
 
 
-class Timeseries:
+def make_path(*args):
+    """Make a file name from the rrprofiles arguments."""
+    elements = []
+    for arg in args:
+        if arg:
+            if not isinstance(arg, bool):
+                try:
+                    arg = os.path.basename(arg).replace(".h5", "")
+                    arg_pieces = []
+                    for s in arg.split("_"):
+                        numbers = "".join([i for i in s if isint(i)])
+                        alpha = "".join([i for i in s if not isint(i)])
+                        if alpha:
+                            alpha = alpha[0]
+                        piece = alpha + numbers
+                        arg_pieces.append(piece)
+                    reduced_arg = "".join(arg_pieces)
+                    elements.append(reduced_arg)
+                except TypeError:
+                    arg = str(arg)
+                    elements.append(arg)
+    path = "_".join(elements) + ".png"
+    return path
+
+
+class Profiles:
     """Plot a set of sample timeseries profiles from reV output."""
 
     def __init__(self, file, dataset, time, agg_fun="mean", file2=None,
@@ -111,7 +161,7 @@ class Timeseries:
         # Finally Plot
         ax.plot(x, array)
 
-    def plot(self, save_path=None):
+    def plot(self, save, save_path=None):
         """Plot all timeseries requested."""
         # Retrieve all arrays
         data = self.data
@@ -138,7 +188,12 @@ class Timeseries:
                 self.plot_single(ax, array, dataset, name)
         fig.legend(handles=handles, framealpha=1)
         fig.tight_layout()
-        if save_path:
+        if save or save_path:
+            if not save_path:
+                save_path = make_path(self.file, self.file2, self.dataset,
+                                      self.dataset2, self.time[0], self.time[0])
+            if os.path.exists(save_path):
+                os.remove(save_path)
             plt.savefig(save_path)
         else:
             plt.show()
@@ -215,16 +270,18 @@ class Timeseries:
 @click.option("--agg_fun", "-a", default="mean", help=HELP["agg_fun"])
 @click.option("--file2", "-f2", default=None, help=HELP["file2"])
 @click.option("--dataset2", "-d2", default=None, help=HELP["dataset2"])
+@click.option("--save", "-s", is_flag=True, help=HELP["save"])
 @click.option("--save_path", "-sp", default=None, help=HELP["save_path"])
-def main(file, dataset, time_1, time_2, agg_fun, file2, dataset2, save_path):
-    """REVRUNS - RRPROFILES.
+def main(file, dataset, time_1, time_2, agg_fun, file2, dataset2, save,
+         save_path):
+    """REVRUNS - Timeseries profile check.
 
     Generate a line plot of sampled timeseries for a reV generated
     timeseries.
     """
     time = [int(time_1), int(time_2)]
-    plotter = Timeseries(file, dataset, time, agg_fun, file2, dataset2)
-    plotter.plot(save_path)
+    plotter = Profiles(file, dataset, time, agg_fun, file2, dataset2)
+    plotter.plot(save, save_path)
 
 
 if __name__ == "__main__":
