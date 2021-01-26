@@ -61,37 +61,33 @@ def mode(x):
     return max(set(x), key=x.count)
 
 
-def point_line(arg):
-    """Find the closest transmission line to a point.
+def par_apply(df, field, fun):
+    """Apply a function in parallel to a pandas data frame field."""
+    import numpy as np
+    import pathos.multiprocessing as mp
 
-    Parameters
-    ----------
-    row : pd.
-        A pandas series with a "geometry" column.
-    linedf : geopandas.geodataframe.GeoDataFrame
-        A geodataframe with a trans_line_gid and shapely geometry objects.
+    from tqdm import tqdm
 
-    Returns
-    -------
-    tuple
-        A tuple with the transmission gid, the distance from the point to it,
-        and the category of the transmission connection structure.
-    """
-    df, linedf = arg
+    def single_apply(arg):
+        """Apply a function to a pandas data frame field."""
+        cdf, field, fun = arg
+        try:
+            values = cdf[field].apply(fun)
+        except Exception:
+            raise
+        return values
 
-    # Find the closest point on the closest line to the target point
-    def single_row(point, linedf):
-        distances = [point.distance(l) for l in linedf["geometry"]]
-        dmin = np.min(distances)
-        idx = np.where(distances == dmin)[0][0]
+    ncpu = mp.cpu_count()
+    cdfs = np.array_split(df, ncpu)
+    args = [(cdf, field, fun) for cdf in cdfs]
 
-        # We need this gid and this category
-        gid = linedf.index[idx]
-        category = linedf["category"].iloc[idx]
+    values = []
+    with mp.Pool(ncpu) as pool:
+        for value in tqdm(pool.imap(single_apply, args), total=ncpu):
+            values.append(value)
+    values = [v for sv in values for v in sv]
 
-        return gid, dmin, category
-
-    return df.shape
+    return values
 
 
 def write_config(config_dict, path):
@@ -105,9 +101,11 @@ class Data_Path:
 
     def __init__(self, data_path, mkdir=False):
         """Initialize Data_Path."""
+        data_path = os.path.abspath(os.path.expanduser(data_path))
         self.data_path = data_path
         self.last_path = os.getcwd()
-        self._expand_check(mkdir)
+        self._exist_check(data_path, mkdir)
+        self._expand_check()
 
     def __repr__(self):
         """Print the data path."""
@@ -119,8 +117,7 @@ class Data_Path:
     def join(self, *args, mkdir=False):
         """Join a file path to the root directory path."""
         path = os.path.join(self.data_path, *args)
-        if mkdir:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
+        self._exist_check(path, mkdir)
         return path
 
     def contents(self, *args):
@@ -160,17 +157,24 @@ class Data_Path:
         os.chdir(self.last_path)
         print(self.last_path)
 
-    def _expand_check(self, mkdir):
+    def _exist_check(self, path, mkdir=False):
+        """Check if the directory of a path exists, and make it if not."""
+        if "." in os.path.basename(path):
+            directory = os.path.dirname(path)
+        else:
+            directory = path
+        if not os.path.exists(directory):
+            if mkdir:
+                print("Warning: " + directory + " did not exist, creating "
+                      "directory.")
+                os.makedirs(directory, exist_ok=True)
+            else:
+                print("Warning: " + directory + " does not exist.")
+
+    def _expand_check(self):
         # Expand the user path if a tilda is present in the root folder path.
         if "~" in self.data_path:
             self.data_path = os.path.expanduser(self.data_path)
-
-        # Check if data path exists
-        if not os.path.exists(self.data_path):
-            if mkdir:
-                os.makedirs(self.data_path, exist_ok=True)
-            else:
-                print("Warning: " + self.data_path + " does not exist.")
 
 
 class Exclusions:
@@ -433,6 +437,11 @@ class PandasExtension:
                 weights = gdf[weight].values
                 x[g] = self.np.average(values, weights=weights)
         return x
+
+    def bmap(self):
+        """Show a map of the data frame with a basemap if possible."""
+        if not isintance(self._obj, gpd.geodataframe.GeoDataFrame):
+            print("Data frame is not a GeoDataFrame")
 
     def decode(self):
         """Decode the columns of a meta data object from a reV output."""

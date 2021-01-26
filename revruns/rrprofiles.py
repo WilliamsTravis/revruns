@@ -44,10 +44,10 @@ def sample_args():
     Run locals().update(kwargs) for named objects.
     """
     kwargs = dict(
-        file = ("/shared-projects/rev/projects/perform/wind/results/perform/"
+        file = ("/shared-projects/rev/projects/perform/wind/wind_results/perform/"
                 "day_ahead_2018_rf16_gen.h5"),
-        file2 = ("/shared-projects/rev/projects/perform/wind/results/era5/"
-                 "ercot_2017.h5"),
+        file2 = ("/shared-projects/rev/projects/perform/wind/wind_results/era5/"
+                 "ercot_2018.h5"),
         dataset = "cf_profile",
         dataset2 = "gen_profile",
         time_1 = 0,
@@ -279,6 +279,9 @@ def main(file, dataset, time_1, time_2, agg_fun, file2, dataset2, save,
     Generate a line plot of sampled timeseries for a reV generated
     timeseries.
     """
+    file = os.path.abspath(os.path.expanduser(file))
+    if file2:
+        file2 = os.path.abspath(os.path.expanduser(file2))
     time = [int(time_1), int(time_2)]
     plotter = Profiles(file, dataset, time, agg_fun, file2, dataset2)
     plotter.plot(save, save_path)

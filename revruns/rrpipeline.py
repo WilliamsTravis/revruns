@@ -5,8 +5,8 @@ Created on Sat Sep  5 17:03:21 2020
 
 @author: twillia2
 """
-
 import click
+import json
 import os
 import shlex
 import subprocess as sp
@@ -28,25 +28,27 @@ def check_status(pdir):
     """Check if a status file exists and is fully successful."""
     try:
         status_file, status = find_status(pdir)
+        pipeline_file = os.path.join(os.path.dirname(status_file),
+                                                     "config_pipeline.json")
+        pipeline = json.load(open(pipeline_file, "r"))
     except TypeError:
         pass
     if status:
-        modules = status.keys()
-        statuses = []
-        for m in modules:
-            entry = status[m]
-            try:
-                jobname = list(entry.keys())[1]
-                jobstatus = status[m][jobname]["job_status"]
-            except IndexError:
-                jobstatus = "not submitted"
-            statuses.append(jobstatus)
-        if all([s == "successful" for s in statuses]):
-            successful = True
-        else:
-            successful = False
-    else:
         successful = False
+        modules = [list(p.keys())[0] for p in pipeline["pipeline"]]
+        if len(status) == len(modules):
+            statuses = []
+            for m in modules:
+                entry = status[m]
+
+                try:
+                    jobname = list(entry.keys())[1]
+                    jobstatus = status[m][jobname]["job_status"]
+                except IndexError:
+                    jobstatus = "not submitted"
+                statuses.append(jobstatus)
+            if all([s == "successful" for s in statuses]):
+                successful = True
     return successful
 
 

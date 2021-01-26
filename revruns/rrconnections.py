@@ -1,5 +1,14 @@
 # -*- coding: utf-8 -*-
-"""Create a transmission connection table for an aggregation factor."""
+"""Create a transmission connection table for an aggregation factor.
+
+To Do:
+    - Implement SLURM submission
+    - Catch missing line dependencies and add them to the table.
+    - Refactor into class methods
+
+@author travis
+"""
+import ast
 import click
 import copy
 import json
@@ -15,12 +24,13 @@ import pandas as pd
 import pgpasslib
 import psycopg2 as pg
 import rasterio as rio
-from revruns import rr
 
 from pyproj import Proj
 from rasterio.sample import sample_gen
+from reV.handlers.transmission import TransmissionFeatures
 from reV.pipeline import Pipeline
 from revruns.constants import TEMPLATES
+from revruns import rr
 from rex.utilities.hpc import SLURM
 from scipy.spatial import cKDTree
 from tqdm import tqdm
@@ -34,7 +44,7 @@ tqdm.pandas()
 
 AEA_CRS = ("+proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 "
            "+ellps=GRS80 +datum=NAD83 +units=m +no_defs ")
-
+DISTANCE_BUFFER = 5000
 GEN_PATH = "/projects/rev/data/transmission/build/sample_gen_2013.h5"
 RES_PATH = "/datasets/WIND/conus/v1.0.0/wtk_conus_2013.h5"
 TM_DSET = "techmap_wtk"
@@ -278,7 +288,7 @@ def single_dist(row, linedf, simple=False):
     # Find the distance of the closest PCA load center and add 5km
     pcadf = linedf[linedf["category"] == "PCALoadCen"]
     pcadists = [point.distance(line) for line in pcadf["geometry"]]
-    pcadist = min(pcadists) + 5000
+    pcadist = min(pcadists) + DISTANCE_BUFFER
 
     # We are only searching for transmission features within this radius
     buffer = row["geometry"].buffer(pcadist)
@@ -327,10 +337,97 @@ def par_dist(arg):
     return condf
 
 
-def connections(ppath, tpath, simple=False):
-    """Find distances to nearby transmission lines or stations."""
-    # Don't run twice
-    if not os.path.exists(tpath):
+# Make sure all line dependencies are present
+def fix_missing_dependencies(condf, linedf, scdf, simple=False):
+    """Check for and find fix missing feature line dependencies.
+
+    Parameters
+    ----------
+    condf: pd.core.frame.DataFrame
+        A data frame of supply curve point to transmission line connections.
+    linedf:  pd.core.frame.DataFrame
+        A data frame of transmission line features.
+
+    Returns
+    -------
+    pd.core.frame.DataFrame
+        The same data frame with added entries if missing line dependencies
+        were found.
+    """
+    # This requires an extra function
+    def find_point(row, scdf):
+        """Find the closest supply curve point to a line."""
+        # Find all distances to this line
+        line = row["geometry"]
+        scdists = [point.distance(line) for point in scdf["geometry"]]
+
+        # Find the closest point from the distances
+        dist_m = np.min(scdists)
+        point_idx = np.where(scdists == dist_m)[0][0]
+        point_row = scdf.iloc[point_idx]
+
+        # These have different field names
+        fields = {
+            "sc_point_gid": "sc_point_gid",
+            "sc_row_ind": "sc_point_row_id",
+            "sc_col_ind": "sc_point_col_id"
+        }
+
+        # We need that points identifiers
+        for key, field in fields.items():
+            row[field] = point_row[key]
+
+        # Finally add in distance in miles
+        row["dist_mi"] = dist_m / 1609.34
+
+        # We only need these fields
+        keepers = ['ac_cap', 'cap_left', 'category', 'trans_gids',
+                   'trans_line_gid', 'dist_mi', 'sc_point_gid',
+                   'sc_point_row_id', 'sc_point_col_id']
+        row = row[keepers]
+
+        return row
+
+    # Get missings dependencies - catching error, how do they do this so fast?
+    missing_dependencies = []
+    try:
+        TransmissionFeatures(condf)._check_feature_dependencies()
+    except RuntimeError as e:
+        error = str(e)
+        missing_str = error[error.index("dependencies:") + 14:]
+        missing_dict = ast.literal_eval(missing_str)
+        for gids in missing_dict.values():
+            for gid in gids:
+                missing_dependencies.append(gid)
+
+    # Find those features and reformat (distance, sc_points, etc don't matter)
+    mdf = linedf[linedf["gid"].isin(missing_dependencies)]
+    mdf = mdf.replace("null", np.nan)
+    mdf = mdf.apply(find_point, scdf=scdf, axis=1)
+
+    # Append these to the table
+    condf = pd.concat([condf, mdf])
+
+    return condf
+
+
+def connections(ppath, dst, simple=False):
+    """Find distances to nearby transmission features.
+
+    Parameters
+    ----------
+    ppath : str
+        Path to input supply curve point file.
+    dst : str
+        Path to output transmission feature file.
+    simple : logical
+        Use simple connection method
+
+    Returns
+    -------
+    None
+    """
+    if not os.path.exists(dst):
         # Get the supply curve points
         scdf = pd.read_csv(ppath)
         linedf = get_linedf()
@@ -354,13 +451,31 @@ def connections(ppath, tpath, simple=False):
         condf = condf.drop(["geometry", "bgid", "egid", "gid", "voltage"],
                            axis=1)
 
+        # There might be missing dependencies
+        condf = fix_missing_dependencies(condf, linedf, scdf, simple)
+
         # Save to file
-        print("Saving connections table to " + tpath)
-        condf.to_csv(tpath, index=False)
+        print("Saving connections table to " + dst)
+        condf.to_csv(dst, index=False)
 
 
-def multipliers(ppath, dst, country):
-    """Use the connection data frame to create the regional multipliers."""
+def multipliers(ppath, dst, country="conus"):
+    """Use the connection data frame to create the regional multipliers.
+
+    Parameters
+    ----------
+    ppath : str
+        Path to input supply curve point file.
+    dst : str
+        Path to output multiplier file.
+    country : str
+        String representation for the country the point path represents. So far
+        only 'conus' is available.
+
+    Returns
+    -------
+    None
+    """
     # Get supply curve points and multipliers
     pnts = pd.read_csv(ppath)
     mult_lkup = pd.read_csv(MULTIPLIER_PATHS[country])
@@ -403,7 +518,8 @@ def multipliers(ppath, dst, country):
 
     # Save
     cols = ['sc_point_gid', 'trans_multiplier']
-    pnts_mults[cols].to_csv(dst)
+    df = pnts_mults[cols]
+    df.to_csv(dst)
 
 
 def slurm(resolution, allocation, time, memory, country, dstdir):

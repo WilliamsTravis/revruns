@@ -279,8 +279,13 @@ def find_runtime(job):
             time = line.split()[3][:8]
             break
 
+    # There might not be any values here
+    try:
+        time_string = " ".join([date, time])
+    except NameError:
+        return "na"
+
     # Format the start time from these
-    time_string = " ".join([date, time])
     stime = dt.datetime.strptime(time_string, "%Y-%m-%d %H:%M:%S")
 
     # Get the modification time from the file stats
@@ -388,46 +393,6 @@ def module_status_dataframe(status, module="gen"):
     return mdf
 
 
-def rrlogs(args):
-    """Print status and job pids for a single project directory."""
-    folder, sub_folder, module, status, error, out = args
-
-    # Expand folder path
-    sub_folder = os.path.abspath(os.path.expanduser(sub_folder))
-
-    # Convert module status to data frame
-    status_df = status_dataframe(sub_folder, module)
-
-    # This might return None
-    if status_df is not None:
-        # Now return the requested return type
-        if status:
-            status_df = check_entries(status_df, status)
-
-        if not error and not out:
-            print_folder = os.path.relpath(sub_folder, folder)
-            color_print(status_df, print_folder)
-
-        # If a specific status was requested
-        if error or out:
-            # Find the logging directoy
-            try:
-                logdir = find_logs(sub_folder)
-            except:
-                print(Fore.YELLOW
-                      + "Could not find log directory"
-                      + Style.RESET_ALL)
-                return
-            if error:
-                checkout(logdir, error, output="error")
-            if out:
-                checkout(logdir, out, output="stdout")
-    else:
-        print(Fore.RED + "No status file found for " + sub_folder
-              + Style.RESET_ALL)
-    return sub_folder
-
-
 def status_dataframe(sub_folder, module=None):
     """Convert a status entr into dataframe."""
     import pandas as pd
@@ -469,6 +434,46 @@ def status_dataframe(sub_folder, module=None):
         return None
 
 
+def rrlogs(args):
+    """Print status and job pids for a single project directory."""
+    folder, sub_folder, module, status, error, out = args
+
+    # Expand folder path
+    sub_folder = os.path.abspath(os.path.expanduser(sub_folder))
+
+    # Convert module status to data frame
+    status_df = status_dataframe(sub_folder, module)
+
+    # This might return None
+    if status_df is not None:
+        # Now return the requested return type
+        if status:
+            status_df = check_entries(status_df, status)
+
+        if not error and not out:
+            print_folder = os.path.relpath(sub_folder, folder)
+            color_print(status_df, print_folder)
+
+        # If a specific status was requested
+        if error or out:
+            # Find the logging directoy
+            try:
+                logdir = find_logs(sub_folder)
+            except:
+                print(Fore.YELLOW
+                      + "Could not find log directory"
+                      + Style.RESET_ALL)
+                return
+            if error:
+                checkout(logdir, error, output="error")
+            if out:
+                checkout(logdir, out, output="stdout")
+    else:
+        print(Fore.RED + "No status file found for " + sub_folder
+              + Style.RESET_ALL)
+    return sub_folder
+
+
 @click.command()
 @click.option("--folder", "-f", default=".", help=FOLDER_HELP)
 @click.option("--module", "-m", default=None, help=MODULE_HELP)
@@ -496,6 +501,7 @@ def main(folder, module, status, error, out, walk):
     # If walk find all project directories with a
     if walk or error or out:
         folders = [os.path.dirname(f) for f in find_files(folder, file="logs")]
+        folders.sort()
     else:
         folders = [folder]
 
@@ -506,9 +512,9 @@ def main(folder, module, status, error, out, walk):
         folders = find_pid_dirs(folders, out)
 
     # Run rrlogs for each
-    args = [(folder, f, module, status, error, out) for f in folders]
-    for arg in args:
-        _ = rrlogs(arg)
+    arg_list = [(folder, f, module, status, error, out) for f in folders]
+    for args in arg_list:
+        _ = rrlogs(args)
 
 
 if __name__ == "__main__":

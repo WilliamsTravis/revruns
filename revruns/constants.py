@@ -14,11 +14,11 @@ import os
 ROOT = os.path.abspath(os.path.dirname(__file__))
 
 # For filtering COUNS
-CONUS_FIPS = ['54', '12', '17', '27', '24', '44', '16', '33', '37', '50', '09',
-              '10', '35', '06', '34', '55', '41', '31', '42', '53', '22', '13',
-              '01', '49', '39', '48', '08', '45', '40', '47', '56', '38', '21',
-              '23', '36', '32', '26', '05', '28', '29', '30', '20', '18', '46',
-              '25', '51', '11', '19', '04']
+CONUS_FIPS = ["54", "12", "17", "27", "24", "44", "16", "33", "37", "50", "09",
+              "10", "35", "06", "34", "55", "41", "31", "42", "53", "22", "13",
+              "01", "49", "39", "48", "08", "45", "40", "47", "56", "38", "21",
+              "23", "36", "32", "26", "05", "28", "29", "30", "20", "18", "46",
+              "25", "51", "11", "19", "04"]
 
 # For checking if a requested output requires economic treatment.
 ECON_MODULES = ["flip_actual_irr",
@@ -89,8 +89,8 @@ RESOURCE_LABELS = {
 
 # Target geographic coordinate system identifiers.
 TARGET_CRS = ["+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ",
-              {'init': 'epsg:4326'},
-              {'type': 'EPSG', 'properties': {'code': 4326}}]
+              {"init": "epsg:4326"},
+              {"type": "EPSG", "properties": {"code": 4326}}]
 
 GEN_TEMPLATE = {
     "directories": {
