@@ -11,6 +11,7 @@ Created on Wed Dec  4 07:58:42 2019
 """
 import json
 import os
+import pathlib
 
 from glob import glob
 
@@ -159,17 +160,21 @@ class Data_Path:
 
     def _exist_check(self, path, mkdir=False):
         """Check if the directory of a path exists, and make it if not."""
+        # If this is a file name, get the directory
         if "." in os.path.basename(path):
             directory = os.path.dirname(path)
         else:
             directory = path
-        if not os.path.exists(directory):
-            if mkdir:
-                print("Warning: " + directory + " did not exist, creating "
-                      "directory.")
-                os.makedirs(directory, exist_ok=True)
-            else:
-                print("Warning: " + directory + " does not exist.")
+
+        # Don't try this with glob patterns
+        if "*" not in directory:
+            if not os.path.exists(directory):
+                if mkdir:
+                    print("Warning: " + directory + " did not exist, creating "
+                          "directory.")
+                    os.makedirs(directory, exist_ok=True)
+                else:
+                    print("Warning: " + directory + " does not exist.")
 
     def _expand_check(self):
         # Expand the user path if a tilda is present in the root folder path.
