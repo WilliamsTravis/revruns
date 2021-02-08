@@ -11,7 +11,6 @@ Created on Wed Dec  4 07:58:42 2019
 """
 import json
 import os
-import pathlib
 
 from glob import glob
 
