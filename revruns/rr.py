@@ -21,6 +21,17 @@ pd.set_option('display.max_rows', 20)
 pd.options.mode.chained_assignment = None
 
 
+def crs_match(crs1, crs2):
+    """Check if two coordinate reference systems match."""
+    from pyproj import CRS
+
+    try:
+        assert CRS(crs1) == CRS(crs2)
+        return True
+    except AssertionError:
+        return False
+
+
 def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=True):
     """Read in/check available sheets from an excel spreadsheet file."""
     from xlrd import XLRDError
@@ -99,7 +110,7 @@ def write_config(config_dict, path):
 class Data_Path:
     """Data_Path joins a root directory path to data file paths."""
 
-    def __init__(self, data_path, mkdir=False):
+    def __init__(self, data_path=".", mkdir=False):
         """Initialize Data_Path."""
         data_path = os.path.abspath(os.path.expanduser(data_path))
         self.data_path = data_path
@@ -225,7 +236,7 @@ class Exclusions:
             if dname in keys:
                 if overwrite:
                     del hdf[dname]
-                    keys.pop(dname)
+                    keys.remove(dname)
 
             if dname not in keys:
                 hdf.create_dataset(name=dname, data=array, dtype=dtype,
@@ -269,9 +280,9 @@ class Exclusions:
                         del desc_dict[key]
 
         # Should we parallelize this?
-        for key, file in tqdm(file_dict.items(), total=len(file_dict)):
-            description = desc_dict[key]
-            self.add_layer(key, file, description, overwrite=overwrite)
+        for dname, file in tqdm(file_dict.items(), total=len(file_dict)):
+            description = desc_dict[dname]
+            self.add_layer(dname, file, description, overwrite=overwrite)
 
     def techmap(self, res_fpath, dname, max_workers=None, map_chunk=2560,
                 distance_upper_bound=None, save_flag=True):
@@ -311,40 +322,34 @@ class Exclusions:
         # Check new layers against the first added raster
         with self.h5py.File(self.excl_fpath, "r") as hdf:
 
-            # Find any existing layers (these will have profiles)
-            lyrs = [k for k in hdf.keys() if hdf[k] and "profile" in
-                    hdf[k].attrs.keys()]
-            if lyrs:
-                key = lyrs[0]
-                old = json.loads(hdf[key].attrs["profile"])
-                new = json.loads(profile)
+            # Find the exisitng profile
+            old = json.loads(hdf.attrs["profile"])
+            new = json.loads(profile)
 
-                # Check the CRS
-                try:
-                    assert old["crs"] == new["crs"]
-                except:
-                    raise AssertionError("CRS for " + dname + " does not match"
-                                         " exisitng CRS.")
+            # Check the CRS
+            if not crs_match(old["crs"], new["crs"]):
+                raise AssertionError("CRS for " + dname + " does not match"
+                                     " exisitng CRS.")
 
-                # Check the transform
-                try:
-                    # Standardize these
-                    old_trans = old["transform"][:6]
-                    new_trans = new["transform"][:6]
+            # Check the transform
+            try:
+                # Standardize these
+                old_trans = old["transform"][:6]
+                new_trans = new["transform"][:6]
 
-                    assert old_trans == new_trans
-                except:
-                    raise AssertionError("Geotransform for " + dname + " does "
-                                         "not match geotransform.")
+                assert old_trans == new_trans
+            except:
+                raise AssertionError("Geotransform for " + dname + " does "
+                                     "not match geotransform.")
 
-                # Check the dimesions
-                try:
-                    assert old["width"] == new["width"]
-                    assert old["height"] == new["height"]
-                except:
-                    raise AssertionError("Width and/or height for " + dname +
-                                         " does not match exisitng " +
-                                         "dimensions.")
+            # Check the dimesions
+            try:
+                assert old["width"] == new["width"]
+                assert old["height"] == new["height"]
+            except:
+                raise AssertionError("Width and/or height for " + dname +
+                                     " does not match exisitng " +
+                                     "dimensions.")
 
     def _get_coords(self, profile):
         # Get x and y coordinates (One day we'll have one transform order!)
