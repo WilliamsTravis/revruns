@@ -1,17 +1,41 @@
 # -*- coding: utf-8 -*-
-"""
-Constants from revruns. Things like template configurations or variable checks.
+"""Constants for revruns.
 
 Created on Wed Jun 24 20:52:25 2020
 
 @author: twillia2
 """
-
 import os
 
+from osgeo import gdal
 
-# For package data
-ROOT = os.path.abspath(os.path.dirname(__file__))
+
+# GDAL
+GDAL_TYPES = {"GDT_Byte": "Eight bit unsigned integer",
+              "GDT_CFloat32": "Complex Float32",
+              "GDT_CFloat64": "Complex Float64",
+              "GDT_CInt16": "Complex Int16",
+              "GDT_CInt32": "Complex Int32",
+              "GDT_Float32": "Thirty two bit floating point",
+              "GDT_Float64": "Sixty four bit floating point",
+              "GDT_Int16": "Sixteen bit signed integer",
+              "GDT_Int32": "Thirty two bit signed integer",
+              "GDT_UInt16": "Sixteen bit unsigned integer",
+              "GDT_UInt32": "Thirty two bit unsigned integer",
+              "GDT_Unknown": "Unknown or unspecified type"}
+
+GDAL_TYPEMAP = {"byte": gdal.GDT_Byte,
+                "cfloat32": gdal.GDT_CFloat32,
+                "cfloat64": gdal.GDT_CFloat64,
+                "cint16": gdal.GDT_CInt16,
+                "cint32": gdal.GDT_CInt32,
+                "float32": gdal.GDT_Float32,
+                "float64": gdal.GDT_Float64,
+                "int16": gdal.GDT_Int16,
+                "int32": gdal.GDT_Int32,
+                "uint16": gdal.GDT_UInt16,
+                "uint32": gdal.GDT_UInt32,
+                "unknown": gdal.GDT_Unknown}
 
 # For filtering COUNS
 CONUS_FIPS = ["54", "12", "17", "27", "24", "44", "16", "33", "37", "50", "09",
@@ -19,6 +43,10 @@ CONUS_FIPS = ["54", "12", "17", "27", "24", "44", "16", "33", "37", "50", "09",
               "01", "49", "39", "48", "08", "45", "40", "47", "56", "38", "21",
               "23", "36", "32", "26", "05", "28", "29", "30", "20", "18", "46",
               "25", "51", "11", "19", "04"]
+
+# For package data
+ROOT = os.path.abspath(os.path.dirname(__file__))
+
 
 # For checking if a requested output requires economic treatment.
 ECON_MODULES = ["flip_actual_irr",
@@ -362,15 +390,15 @@ WIND_SAM_PARAMS = {
         "icing_cutoff_rh": "PLACEHOLDER",
         "low_temp_cutoff": "PLACEHOLDER",
         "system_capacity": "PLACEHOLDER",
-        "variable_operating_cost": "PLACEHOLDER",
-        "turb_generic_loss": "PLACEHOLDER",
-        "wind_farm_wake_model": "PLACEHOLDER",
+        "variable_operating_cost": 0,
+        "turb_generic_loss": 16.7,
+        "wind_farm_wake_model": 0,
         "wind_farm_xCoordinates": [0],
         "wind_farm_yCoordinates": [0],
         "wind_resource_model_choice": "PLACEHOLDER",
-        "wind_resource_shear":"PLACEHOLDER",
-        "wind_resource_turbulence_coeff": "PLACEHOLDER",
-        "wind_turbine_cutin": "PLACEHOLDER",
+        "wind_resource_shear": 0.14,
+        "wind_resource_turbulence_coeff": 0.1,
+        "wind_turbine_cutin": "PLACEHOLDER",  # Isn't this inferred in the pc?
         "wind_turbine_hub_ht": "PLACEHOLDER",
         "wind_turbine_powercurve_powerout": "PLACEHOLDER",
         "wind_turbine_powercurve_windspeeds": "PLACEHOLDER",

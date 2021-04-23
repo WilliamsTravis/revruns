@@ -32,7 +32,7 @@ def crs_match(crs1, crs2):
         return False
 
 
-def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=True):
+def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=0):
     """Read in/check available sheets from an excel spreadsheet file."""
     from xlrd import XLRDError
 
@@ -49,7 +49,7 @@ def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=True):
 
     # Try to open sheet, print options if it fails
     try:
-        table = file.parse(sheet_name=sheet_name)
+        table = file.parse(sheet_name=sheet_name, header=header)
     except XLRDError:
         print(sheet_name + " is not available. Available sheets:\n")
         for s in sheets:
@@ -171,7 +171,7 @@ class Data_Path:
     def _exist_check(self, path, mkdir=False):
         """Check if the directory of a path exists, and make it if not."""
         # If this is a file name, get the directory
-        if "." in os.path.basename(path):
+        if os.path.isfile(path):
             directory = os.path.dirname(path)
         else:
             directory = path
@@ -192,223 +192,26 @@ class Data_Path:
             self.data_path = os.path.expanduser(self.data_path)
 
 
-class Exclusions:
-    """Build or add to an HDF5 Exclusions dataset."""
-
-    import h5py
-    import numpy as np
-    import rasterio as rio
-
-    from rasterio.errors import RasterioIOError
-
-    def __init__(self, excl_fpath):
-        """Initialize Exclusions object."""
-        self.excl_fpath = excl_fpath
-        self._initialize_h5()
-
-    def __repr__(self):
-        """Print the object representation string."""
-        msg = "<Exclusions Object:  excl_fpath={}>".format(self.excl_fpath)
-        return msg
-
-    def add_layer(self, dname, file, description=None, overwrite=False):
-        """Add a raster file and its description to the HDF5 exclusion file."""
-        # Open raster object
-        try:
-            raster = self.rio.open(file)
-        except:
-            raise self.RasterioIOError("file " + file + " does not exist")
-
-        # Get profile information
-        profile = raster.profile
-        profile["crs"] = profile["crs"].to_proj4()
-        dtype = profile["dtype"]
-        profile = json.dumps(dict(profile))
-
-        # Add coordinates and else check that the new file matches everything
-        self._set_coords(profile)
-        self._check_dims(raster, profile, dname)
-
-        # Add everything to target exclusion HDF
-        array = raster.read()
-        with self.h5py.File(self.excl_fpath, "r+") as hdf:
-            keys = list(hdf.keys())
-            if dname in keys:
-                if overwrite:
-                    del hdf[dname]
-                    keys.remove(dname)
-
-            if dname not in keys:
-                hdf.create_dataset(name=dname, data=array, dtype=dtype,
-                                   chunks=(1, 128, 128))
-                hdf[dname].attrs["file"] = os.path.abspath(file)
-                hdf[dname].attrs["profile"] = profile
-                if description:
-                    hdf[dname].attrs["description"] = description
-
-    def add_layers(self, file_dict, desc_dict=None, overwrite=False):
-        """Add multiple raster files and their descriptions."""
-        from tqdm import tqdm
-
-        # Make copies of these dictionaries?
-        file_dict = file_dict.copy()
-        if desc_dict:
-            desc_dict = desc_dict.copy()
-
-        # If descriptions are provided make sure they match the files
-        if desc_dict:
-            try:
-                dninf = [k for k in desc_dict if k not in file_dict]
-                fnind = [k for k in file_dict if k not in desc_dict]
-                assert not dninf
-                assert not fnind
-            except:
-                mismatches = self.np.unique(dninf + fnind)
-                msg = ("File and description keys do not match. "
-                       "Problematic keys: " + ", ".join(mismatches))
-                raise AssertionError(msg)
-        else:
-            desc_dict = {key: None for key in file_dict.keys()}
-
-        # Let's remove existing keys here
-        if not overwrite:
-            with self.h5py.File(self.excl_fpath, "r") as h5:
-                keys = list(h5.keys())
-                for key in keys:
-                    if key in file_dict:
-                        del file_dict[key]
-                        del desc_dict[key]
-
-        # Should we parallelize this?
-        for dname, file in tqdm(file_dict.items(), total=len(file_dict)):
-            description = desc_dict[dname]
-            self.add_layer(dname, file, description, overwrite=overwrite)
-
-    def techmap(self, res_fpath, dname, max_workers=None, map_chunk=2560,
-                distance_upper_bound=None, save_flag=True):
-        """
-        Build a technical resource mapping grid between exclusion rasters cells
-        and resource points.
-
-        Parameters
-        ----------
-        res_fpath : str
-            Filepath to HDF5 resource file.
-        dname : str
-            Dataset name in excl_fpath to save mapping results to.
-        max_workers : int, optional
-            Number of cores to run mapping on. None uses all available cpus.
-            The default is None.
-        distance_upper_bound : float, optional
-            Upper boundary distance for KNN lookup between exclusion points and
-            resource points. None will calculate a good distance based on the
-            resource meta data coordinates. 0.03 is a good value for a 4km
-            resource grid and finer. The default is None.
-        map_chunk : TYPE, optional
-          Calculation chunk used for the tech mapping calc. The default is
-            2560.
-        save_flag : boolean, optional
-            Save the techmap in the excl_fpath. The default is True.
-        """
-        from reV.supply_curve.tech_mapping import TechMapping
-
-        # If saving, does it return an object?
-        arrays = TechMapping.run(self.excl_fpath, res_fpath, dname,
-                                 max_workers=None, distance_upper_bound=None,
-                                 map_chunk=2560, save_flag=save_flag)
-        return arrays
-
-    def _check_dims(self, raster, profile, dname):
-        # Check new layers against the first added raster
-        with self.h5py.File(self.excl_fpath, "r") as hdf:
-
-            # Find the exisitng profile
-            old = json.loads(hdf.attrs["profile"])
-            new = json.loads(profile)
-
-            # Check the CRS
-            if not crs_match(old["crs"], new["crs"]):
-                raise AssertionError("CRS for " + dname + " does not match"
-                                     " exisitng CRS.")
-
-            # Check the transform
-            try:
-                # Standardize these
-                old_trans = old["transform"][:6]
-                new_trans = new["transform"][:6]
-
-                assert old_trans == new_trans
-            except:
-                raise AssertionError("Geotransform for " + dname + " does "
-                                     "not match geotransform.")
-
-            # Check the dimesions
-            try:
-                assert old["width"] == new["width"]
-                assert old["height"] == new["height"]
-            except:
-                raise AssertionError("Width and/or height for " + dname +
-                                     " does not match exisitng " +
-                                     "dimensions.")
-
-    def _get_coords(self, profile):
-        # Get x and y coordinates (One day we'll have one transform order!)
-        profile = json.loads(profile)
-        geom = profile["transform"]
-        xres = geom[0]
-        xrot = geom[1]
-        ulx = geom[2]
-        yrot = geom[3]
-        yres = geom[4]
-        uly = geom[5]
-
-        # Not doing rotations here
-        xs = [ulx + col * xres for col in range(profile["width"])]
-        ys = [uly + row * yres for row in range(profile["height"])]
-
-        return xs, ys
-
-    def _set_coords(self, profile):
-        # Add the lat and lon meshgrids if they aren't already present
-        with self.h5py.File(self.excl_fpath, "r+") as hdf:
-            keys = list(hdf.keys())
-            if "latitude" not in keys or "longitude" not in keys:
-                xs, ys = self._get_coords(profile)
-                xgrid, ygrid = self.np.meshgrid(xs, ys)
-                hdf.create_dataset(name="longitude", data=xgrid)
-                hdf.create_dataset(name="latitude", data=ygrid)
-
-    def _initialize_h5(self):
-        import datetime as dt
-
-        # Create an empty hdf file if one doesn't exist
-        date = format(dt.datetime.today(), "%Y-%m-%d %H:%M")
-        self.excl_fpath = os.path.expanduser(self.excl_fpath)
-        self.excl_fpath = os.path.abspath(self.excl_fpath)
-        if not os.path.exists(self.excl_fpath):
-            os.makedirs(os.path.dirname(self.excl_fpath), exist_ok=True)
-            with self.h5py.File(self.excl_fpath, "w") as ds:
-                ds.attrs["creation_date"] = date
-
-
 @pd.api.extensions.register_dataframe_accessor("rr")
 class PandasExtension:
-    """Making dealing with reV output objects easier."""
+    """Accessing useful pandas functions directly from a data frame object."""
+
+    import warnings
 
     from json import JSONDecodeError
 
     import geopandas as gpd
+    import pandas as pd
     import numpy as np
 
     from scipy.spatial import cKDTree
     from shapely.geometry import Point
 
     def __init__(self, pandas_obj):
-        """Initialize pandas object."""
-        import geopandas as gpd
-
-        if type(pandas_obj) != pd.core.frame.DataFrame:
-            if type(pandas_obj) != gpd.geodataframe.GeoDataFrame:
+        """Initialize PandasExtension object."""
+        self.warnings.simplefilter(action='ignore', category=UserWarning)
+        if type(pandas_obj) != self.pd.core.frame.DataFrame:
+            if type(pandas_obj) != self.gpd.geodataframe.GeoDataFrame:
                 raise TypeError("Can only use .rr accessor with a pandas or "
                                 "geopandas data frame.")
         self._obj = pandas_obj
@@ -449,18 +252,27 @@ class PandasExtension:
 
     def bmap(self):
         """Show a map of the data frame with a basemap if possible."""
-        if not isintance(self._obj, gpd.geodataframe.GeoDataFrame):
+        if not isinstance(self._obj, self.gpd.geodataframe.GeoDataFrame):
             print("Data frame is not a GeoDataFrame")
 
     def decode(self):
         """Decode the columns of a meta data object from a reV output."""
         import ast
+
+        def decode_single(x):
+            """Try to decode a single value, pass if fail."""
+            try:
+                x = x.decode()
+            except UnicodeDecodeError:
+                x = "indecipherable"
+            return x
+
         for c in self._obj.columns:
             x = self._obj[c].iloc[0]
             if isinstance(x, bytes):
                 try:
-                    self._obj[c] = self._obj[c].apply(lambda x: x.decode())
-                except:
+                    self._obj[c] = self._obj[c].apply(decode_single)
+                except Exception:
                     self._obj[c] = None
                     print("Column " + c + " could not be decoded.")
             elif isinstance(x, str):
@@ -470,7 +282,7 @@ class PandasExtension:
                             self._obj[c] = self._obj[c].apply(
                                 lambda x: ast.literal_eval(x).decode()
                                 )
-                        except:
+                        except Exception:
                             self._obj[c] = None
                             print("Column " + c + " could not be decoded.")
                 except:
@@ -487,7 +299,7 @@ class PandasExtension:
         args = [(self._obj.loc[idx], linedf) for idx in chunks]
         distances = []
         with Pool(ncpu) as pool:
-            for dists in tqdm(pool.imap(point_line, args),
+            for dists in tqdm(pool.imap(self.point_line, args),
                               total=len(args)):
                 distances.append(dists)
         return distances
@@ -795,3 +607,514 @@ class PandasExtension:
             return json.loads(string)
         except (TypeError, self.JSONDecodeError):
             return string
+
+
+class Reformatter:
+    """Reformat raster or shapefile files into a reV-shaped raster."""
+
+    import multiprocess as mp
+    import os
+    import subprocess as sp
+
+    import geopandas as gpd
+    import h5py
+    import numpy as np
+    import rasterio as rio
+
+    from rasterio import features
+    from revruns.constants import GDAL_TYPEMAP
+    from tqdm import tqdm
+
+    def __init__(self, data_path, template, target_dir=None,
+                 raster_dir="rasters", shapefile_dir="shapefiles",
+                 warp_threads=1):
+        """Initialize Reformatter object.
+
+        Parameters
+        ----------
+        data_path : str
+            Path to directory containing 'shapefile' and/or 'raster' folders
+            containing files to be reformatting
+        template : str
+            Path to either a GeoTiff or HDF5 reV exclusion file to use as a
+            template for reformatting target files. The HDF5 file requires
+            a top level attribute containing a rasterio profile describing the
+            arrays it contains.
+        target_dir : str
+            Target directory for output rasters. Will default to a folder
+            named "exclusions" within the given data_path.
+        raster_dir : str
+            Path to folder containing rasters to reformat (relative to
+            data_path). Defaults to "rasters".
+        shapefile_dir : str
+            Path to folder containing shapefiles to reformat (relative to
+            data_path). Defaults to "shapefiles".
+        warp_threads : int
+            Number of threads to use for rasterio warp functions. Defaults to
+            1.
+        """
+        self.dp = Data_Path(data_path)
+        self.template = template
+        self.raster_dir = raster_dir
+        self.shapefile_dir = shapefile_dir
+        self.warp_threads = warp_threads
+        self._preflight(target_dir)
+
+    def __repr__(self):
+        """Print Reformatter object attributes."""
+        tmplt = "<rr.Reformatter Object: data_path={}, template={}>"
+        msg = tmplt.format(self.dp.data_path, self.template)
+        return msg
+
+    def key(self, file):
+        """Create a key from a file name."""
+        fname = os.path.basename(file)
+        key = os.path.splitext(fname)[0]
+        return key
+
+    def reformat_all(self):
+        """Reformat all files."""
+        print("Reformatting shapefiles...")
+        self.reformat_shapefiles()
+
+        print("Reformatting rasters...")
+        self.reformat_rasters()
+
+    def reformat_raster(self, file, overwrite=False):
+        """Resample and reproject a raster."""
+        # Create a target file path (should ask user though)
+        dst = self.target_dir.join(os.path.basename(file), mkdir=True)
+
+        # Read source file
+        if os.path.exists(dst) and not overwrite:
+            print(dst + " exists, skipping...")
+            return
+
+        # Open dataset and get source meta and array
+        with self.rio.open(file) as src:
+            array = src.read(1)
+            profile = src.profile
+
+        # Warp the array
+        nx = self.meta["width"]
+        ny = self.meta["height"]
+        narray, _ = self.rio.warp.reproject(
+                            source=array,
+                            destination=self.np.empty((ny, nx)),
+                            src_transform=profile["transform"],
+                            src_crs=profile["crs"],
+                            dst_transform=self.meta["transform"],
+                            dst_crs=self.meta["crs"],
+                            resampling=0,  # nearest needed for binary
+                            num_threads=self.warp_threads
+                        )
+
+        # Write to file
+        meta = self.meta.copy()
+        dtype = narray.dtype
+        meta["dtype"] = dtype
+        with self.rio.open(dst, "w", **meta) as trgt:
+            trgt.write(narray, 1)
+
+    def reformat_rasters(self, overwrite=False):
+        """Resample and reproject rasters."""
+        files = self.rasters
+
+        # ncpu = self.os.cpu_count()
+        # with self.mp.Pool(ncpu) as pool:
+        #     for _ in self.tqdm(pool.imap(self.reformat_raster, files),
+        #                        total=len(files)):
+        #         pass
+
+        for file in self.tqdm(files):
+            self.reformat_raster(file, overwrite=overwrite)
+
+    def reformat_shapefile(self, file, field_dict=None, overwrite=False):
+        """Reproject and rasterize a vector."""
+        # Create dataset key and destination path
+        key = self.key(file)
+        dst = self.target_dir.join(key + ".tif")
+
+        # Handle overwrite option
+        if os.path.exists(dst) and not overwrite:
+            return
+        else:
+            print(f"Processing {dst}...")
+
+        # Read in shapefile and meta data
+        gdf = self.gpd.read_file(file)
+
+        # This requires a specific field to indicate which values to use
+        if not field_dict:
+            if "raster_value" not in gdf.columns:
+                raise KeyError(f"{file} requires a 'raster_value' field "
+                               "or a dictionary with file name, field "
+                               "name pairs.")
+            else:
+                field = "raster_value"
+        else:
+            field = field_dict[os.path.basename(file)]
+
+        # The values might be strings
+        if isinstance(gdf[field].iloc[0], str):
+            gdf = gdf.sort_values(field).reset_index(drop=True)
+            values = gdf[field].unique()
+            string_values = {i + 1: v for i, v in enumerate(values)}
+            map_values = {v: k for k, v in string_values.items()}
+            gdf[field] = gdf[field].map(map_values)
+            self.string_values[key] = string_values
+        else:
+            self.string_values[key] = {}
+
+        # Match CRS
+        crs = self.meta["crs"]
+        if not crs_match(crs, self.meta["crs"]):
+            gdf = gdf.to_crs(crs)
+
+        # Get shapes and values and rasterize
+        gdf = gdf[["geometry", field]]
+        shapes = [(geom, value) for geom, value in gdf.values]
+        with self.rio.Env():
+            array = self.features.rasterize(
+                        shapes=shapes,
+                        out_shape=(self.meta["height"],
+                                   self.meta["width"]),
+                        transform=self.meta["transform"],
+                        all_touched=True
+                    )
+
+        # We can't have float16 (maybe others)
+        # array = self._recast(array)
+
+        # Write to file
+        dtype = str(array.dtype)
+        meta = self.meta.copy()
+        meta["dtype"] = dtype
+        with self.rio.Env():
+            with self.rio.open(dst, "w", **meta) as file:
+                file.write(array, 1)
+
+    def reformat_shapefiles(self, field_dict=None, overwrite=False):
+        """Reproject and rasterize vectors."""
+        files = self.shapefiles
+
+        # Run in parallel
+        # ncpu = self.os.cpu_count()
+        # with self.mp.Pool(ncpu) as pool:
+        #     for _ in self.tqdm(pool.imap(self.reformat_shapefile, files),
+        #                        total=len(files)):
+        #        pass
+
+        # Run serially
+        for file in files:
+            self.reformat_shapefile(file,
+                                    field_dict=field_dict,
+                                    overwrite=overwrite)
+
+        # Write updated string value dictionary
+        with open(self.string_path, "w") as file:
+            file.write(json.dumps(self.string_values, indent=4))
+
+    @property
+    def meta(self):
+        """Return the meta information from the template file."""
+        # Extract profile from HDF or raster file
+        try:
+            with self.h5py.File(self.template) as h5:
+                meta = h5.attrs["profile"]
+                if isinstance(meta, str):
+                    meta = json.loads(meta)
+        except OSError:
+            with self.rio.open(self.template) as raster:
+                meta = dict(raster.profile)
+
+        # Make sure the file is tiled and compressed
+        meta["blockxsize"] = 128
+        meta["blockysize"] = 128
+        meta["tiled"] = True
+        meta["compress"] = "lzw"
+
+        return meta
+
+    @property
+    def rasters(self):
+        """Return list of all rasters in project rasters folder."""
+        rasters = self.dp.contents(self.raster_dir, "*tif")
+        rasters.sort()
+        return rasters
+
+    @property
+    def shapefiles(self):
+        """Return list of all shapefiles in project shapefiles folder."""
+        shps = self.dp.contents(self.shapefile_dir, "*shp")
+        gpkgs = self.dp.contents(self.shapefile_dir, "*gpkg")
+        shapefiles = shps + gpkgs
+        shapefiles.sort()
+        return shapefiles
+
+    def _preflight(self, target_dir):
+        """Run preflight checks and setup."""
+        # Check that the template file exists
+        try:
+            assert os.path.exists(self.template)
+        except AssertionError:
+            print(f"Warning: {self.template} does not exist.")
+
+        # Create target directory.
+        if not target_dir:
+            target_dir = self.dp.join("exclusions", mkdir=True)
+        self.target_dir = Data_Path(target_dir, mkdir=True)
+
+        # Create a dictionary for a value - string lookup
+        self.string_path = self.dp.join("string_values.json")
+        if os.path.exists(self.string_path):
+            with open(self.string_path, "r") as file:
+                self.string_values = json.load(file)
+        else:
+            self.string_values = {}
+
+    def _recast(self, array):
+        """Recast an array to an acceptable GDAL data type."""
+        dtype = array.dtype
+        if dtype == "float16": # <--------------------------------------------- Are there other data types it can't handle?
+            dtype = "float32"  # <--------------------------------------------- How to choose?
+            array = array.astype(dtype)
+        return array, dtype
+
+
+class Exclusions(Reformatter):
+    """Build or add to an HDF5 Exclusions dataset."""
+
+    import h5py
+    import numpy as np
+    import rasterio as rio
+
+    from pyproj import Transformer
+    from rasterio.errors import RasterioIOError
+
+    def __init__(self, excl_fpath, lookup_path=None):
+        """Initialize Exclusions object.
+
+        Parameters
+        ----------
+            excl_fpath : str
+                Path to target HDF5 reV exclusion file.
+            lookup_path : str
+                Path to json file containing a lookup dictionary for raster
+                values derived from shapefiles containing string values
+                (optional).
+        """
+        self.excl_fpath = excl_fpath
+        self.lookup_path = lookup_path
+        self._initialize_h5()
+
+    def __repr__(self):
+        """Print the object representation string."""
+        msg = "<Exclusions Object:  excl_fpath={}>".format(self.excl_fpath)
+        return msg
+
+    def add_layer(self, dname, file, description=None, overwrite=False):
+        """Add a raster file and its description to the HDF5 exclusion file."""
+        # Open raster object
+        try:
+            raster = self.rio.open(file)
+        except Exception:
+            raise self.RasterioIOError("file " + file + " does not exist")
+
+        # Get profile information
+        profile = raster.profile
+        profile["crs"] = profile["crs"].to_proj4()
+        dtype = profile["dtype"]
+        profile = json.dumps(dict(profile))
+
+        # Add coordinates and else check that the new file matches everything
+        self._set_coords(profile)
+        self._check_dims(raster, profile, dname)
+
+        # Add everything to target exclusion HDF
+        array = raster.read()
+        with self.h5py.File(self.excl_fpath, "r+") as hdf:
+            keys = list(hdf.keys())
+            if dname in keys:
+                if overwrite:
+                    del hdf[dname]
+                    keys.remove(dname)
+
+            if dname not in keys:
+                hdf.create_dataset(name=dname, data=array, dtype=dtype,
+                                   chunks=(1, 128, 128))
+                hdf[dname].attrs["file"] = os.path.abspath(file)
+                hdf[dname].attrs["profile"] = profile
+                if description:
+                    hdf[dname].attrs["description"] = description
+                if dname in self.lookup:
+                    lookup = json.dumps(self.lookup[dname])
+                    hdf[dname].attrs["string_values"] = lookup
+
+    def add_layers(self, file_dict, desc_dict=None, overwrite=False):
+        """Add multiple raster files and their descriptions."""
+        from tqdm import tqdm
+
+        # Make copies of these dictionaries?
+        file_dict = file_dict.copy()
+        if desc_dict:
+            desc_dict = desc_dict.copy()
+
+        # If descriptions are provided make sure they match the files
+        if desc_dict:
+            try:
+                dninf = [k for k in desc_dict if k not in file_dict]
+                fnind = [k for k in file_dict if k not in desc_dict]
+                assert not dninf
+                assert not fnind
+            except Exception:
+                mismatches = self.np.unique(dninf + fnind)
+                msg = ("File and description keys do not match. "
+                       "Problematic keys: " + ", ".join(mismatches))
+                raise AssertionError(msg)
+        else:
+            desc_dict = {key: None for key in file_dict.keys()}
+
+        # Let's remove existing keys here
+        if not overwrite:
+            with self.h5py.File(self.excl_fpath, "r") as h5:
+                keys = list(h5.keys())
+                for key in keys:
+                    if key in file_dict:
+                        del file_dict[key]
+                        del desc_dict[key]
+
+        # Should we parallelize this?
+        for dname, file in tqdm(file_dict.items(), total=len(file_dict)):
+            description = desc_dict[dname]
+            self.add_layer(dname, file, description, overwrite=overwrite)
+
+    def techmap(self, res_fpath, dname, max_workers=None, map_chunk=2560,
+                distance_upper_bound=None, save_flag=True):
+        """Build a mapping grid between exclusion resource data.
+
+        Parameters
+        ----------
+        res_fpath : str
+            Filepath to HDF5 resource file.
+        dname : str
+            Dataset name in excl_fpath to save mapping results to.
+        max_workers : int, optional
+            Number of cores to run mapping on. None uses all available cpus.
+            The default is None.
+        distance_upper_bound : float, optional
+            Upper boundary distance for KNN lookup between exclusion points and
+            resource points. None will calculate a good distance based on the
+            resource meta data coordinates. 0.03 is a good value for a 4km
+            resource grid and finer. The default is None.
+        map_chunk : TYPE, optional
+          Calculation chunk used for the tech mapping calc. The default is
+            2560.
+        save_flag : boolean, optional
+            Save the techmap in the excl_fpath. The default is True.
+        """
+        from reV.supply_curve.tech_mapping import TechMapping
+
+        # If saving, does it return an object?
+        arrays = TechMapping.run(self.excl_fpath, res_fpath, dname,
+                                 max_workers=None, distance_upper_bound=None,
+                                 map_chunk=2560, save_flag=save_flag)
+        return arrays
+
+    @property
+    def lookup(self):
+        "Return dictionary with raster, string value pairs for reference."""
+        with open(self.lookup_path, "r") as file:
+            lookup = json.load(file)
+        return lookup
+
+    def _check_dims(self, raster, profile, dname):
+        # Check new layers against the first added raster
+        with self.h5py.File(self.excl_fpath, "r") as hdf:
+
+            # Find the exisitng profile
+            old = json.loads(hdf.attrs["profile"])
+            new = json.loads(profile)
+
+            # Check the CRS
+            if not crs_match(old["crs"], new["crs"]):
+                raise AssertionError("CRS for " + dname + " does not match"
+                                     " exisitng CRS.")
+
+            # Check the transform
+            try:
+                # Standardize these
+                old_trans = old["transform"][:6]
+                new_trans = new["transform"][:6]
+
+                assert old_trans == new_trans
+            except Exception:
+                raise AssertionError("Geotransform for " + dname + " does "
+                                     "not match geotransform.")
+
+            # Check the dimesions
+            try:
+                assert old["width"] == new["width"]
+                assert old["height"] == new["height"]
+            except Exception:
+                raise AssertionError("Width and/or height for " + dname +
+                                     " does not match exisitng " +
+                                     "dimensions.")
+
+    def _convert_coords(self, xs, ys):
+        # Convert projected coordinates into WGS84
+        transformer = self.Transformer.from_crs(self.profile["crs"],
+                                                "epsg:4326", always_xy=True)
+        lons, lats = transformer.transform(xs, ys)
+        return lons, lats
+
+    def _get_coords(self, profile):
+        # Get x and y coordinates (One day we'll have one transform order!)
+        profile = json.loads(profile)
+        geom = profile["transform"]  # Ensure its in the right order
+        xres = geom[0]
+        ulx = geom[2]
+        yres = geom[4]
+        uly = geom[5]
+
+        # Not doing rotations here
+        xs = [ulx + col * xres for col in range(profile["width"])]
+        ys = [uly + row * yres for row in range(profile["height"])]
+
+        return xs, ys
+
+    def _initialize_h5(self):
+        import datetime as dt
+
+        # Create an empty hdf file if one doesn't exist
+        date = format(dt.datetime.today(), "%Y-%m-%d %H:%M")
+        self.excl_fpath = os.path.expanduser(self.excl_fpath)
+        self.excl_fpath = os.path.abspath(self.excl_fpath)
+        if not os.path.exists(self.excl_fpath):
+            os.makedirs(os.path.dirname(self.excl_fpath), exist_ok=True)
+            with self.h5py.File(self.excl_fpath, "w") as ds:
+                ds.attrs["creation_date"] = date
+
+    def _set_coords(self, profile):
+        # Add the lat and lon meshgrids if they aren't already present
+        with self.h5py.File(self.excl_fpath, "r+") as hdf:
+            keys = list(hdf.keys())
+            attrs = hdf.attrs.keys()
+
+            # Set profile if needed
+            if "profile" not in attrs:
+                hdf.attrs["profile"] = json.dumps(profile)
+            self.profile = profile
+
+            # Set coordinates if needed
+            if "latitude" not in keys or "longitude" not in keys:
+                # Get the original crs coordinates
+                xs, ys = self._get_coords(profile)
+
+                # Convert to geographic coordinates
+                lons, lats = self._convert_coords(xs, ys)
+
+                # Create grid and upload
+                longrid, latgrid = self.np.meshgrid(lons, lats)
+                hdf.create_dataset(name="longitude", data=longrid)
+                hdf.create_dataset(name="latitude", data=latgrid)
