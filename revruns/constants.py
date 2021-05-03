@@ -132,7 +132,7 @@ GEN_TEMPLATE = {
         "nodes": 10,
         "option": "eagle",
         "sites_per_worker": 100,
-        "walltime": 1.0
+        "walltime": 4.0
     },
 
     "log_level": "INFO",
@@ -178,19 +178,18 @@ COLLECT_TEMPLATE = {
     "dsets": "PLACEHOLDER",
     "file_prefixes": "PIPELINE",
     "log_level": "INFO",
-    "parallel": False,
     "project_points": "PLACEHOLDER"
 }
 
 ECON_TEMPLATE = {
   "analysis_years": [
     2007,
-	2008,
-	2009,
+	  2008,
+	  2009,
     2010,
     2011,
-	2012,
-	2013
+  	2012,
+  	2013
   ],
   "append": True,
   "cf_file": "PLACEHOLDER",
@@ -207,7 +206,7 @@ ECON_TEMPLATE = {
     "nodes": 10,
     "option": "eagle",
     "sites_per_worker": 100,
-    "walltime": 1.0
+    "walltime": 3.0
   },
   "log_level": "INFO",
   "output_request": [
@@ -230,7 +229,7 @@ MULTIYEAR_TEMPLATE = {
     "feature": "--qos=normal",
     "memory": 179,
     "option": "eagle",
-    "walltime": 1.0
+    "walltime": 2.0
   },
   "groups": {
     "none": {
@@ -395,7 +394,7 @@ WIND_SAM_PARAMS = {
         "wind_farm_wake_model": 0,
         "wind_farm_xCoordinates": [0],
         "wind_farm_yCoordinates": [0],
-        "wind_resource_model_choice": "PLACEHOLDER",
+        "wind_resource_model_choice": 0,
         "wind_resource_shear": 0.14,
         "wind_resource_turbulence_coeff": 0.1,
         "wind_turbine_cutin": "PLACEHOLDER",  # Isn't this inferred in the pc?

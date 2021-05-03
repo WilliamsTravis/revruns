@@ -49,8 +49,12 @@ GEN_PATH = "/projects/rev/data/transmission/build/sample_gen_2013.h5"
 RES_PATH = "/datasets/WIND/conus/v1.0.0/wtk_conus_2013.h5"
 TM_DSET = "techmap_wtk"
 
-ALLCONNS_PATH = ("/projects/rev/data/transmission/shapefiles/"
-                 "conus_allconns.gpkg")
+ALLCONNS_PATHS = {
+    "onshore": ("/projects/rev/data/transmission/shapefiles/"
+                "conus_allconns.gpkg"),
+    "offshore": ("/projects/rev/data/transmission/shapefiles/"
+                 "conus_allconns_offshore.gpkg")
+}
 MULTIPLIER_PATHS = {
     "conus": ("/projects/rev/data/transmission/transmults/"
               "conus_trans_multipliers.csv")
@@ -83,8 +87,35 @@ TIME_HELP = ("The amount of time in hours needed to generate the supply "
              "curve points used in the connection table. Defaults to 1. (int)")
 
 
-def get_allconns(dst, country="conus"):
+def agg_factor(area_sqkm, resolution=90):
+    """Return the closest integer aggregation factor needed for a given area.
+
+    Parameters
+    ----------
+    area_sqkm : int | float
+        An area in square kilometers.
+    resolution : int
+        The x/y resolution of the grid being aggregated.
+    """
+    area_sqm = area_sqkm * 1_000_000
+    ag_factor = np.sqrt(area_sqm) / resolution
+    ag_factor = int(np.round(ag_factor, 0))
+
+    # Now whats the resulting area after rounding
+    area = ((resolution * ag_factor) ** 2) / 1_000_000
+    print(f"Closest agg factor:{ag_factor} \nResulting area: {area}")
+    return ag_factor
+
+
+def get_allconns(country="conus", offshore=False):
     """Get file stored on the PostGres data base."""
+    # Get destination file
+    if offshore:
+        key = "offshore"
+    else:
+        key = "onshore"
+    dst = ALLCONNS_PATHS[key]
+
     # Write to file for later
     if not os.path.exists(dst):
         os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -100,20 +131,25 @@ def get_allconns(dst, country="conus"):
         if not pw:
             msg = ("No password found for the PostGres database needed to "
                    "retrieve the transmission lines dataset. Please install "
-                   "pgpasslib and add this line to ~/.pgpass: \n "
+                   "pgpasslib (pip) and add this line to ~/.pgpass: \n "
                    "gds_edit.nrel.gov:5432:tech_potential:<user_name>:"
                    "<password>")
             raise LookupError(msg)
 
-        # Open a connection
+        # Get the right table
+        if country.lower() == "canada" and offshore:
+            raise LookupError("No offshore table available for Canada.")
+        elif country.lower() == "canada":
+            table = "rev_can_trans_lines"
+        elif country.lower() == "conus" and offshore:
+            table = "rev_conus_trans_lines_offsh"
+        else:
+            table = "rev_conus_trans_lines"
+
+        # Open a connection and retrieve dataset
         con = pg.connect(user=user, host=host, database=dbase, password=pw,
                          port=port)
-
-        # Retrieve dataset
-        if country.lower() == "conus":
-            cmd = """select * from transmission.rev_conus_trans_lines;"""
-        elif country.lower() == "canada":
-            cmd = """select * from transmission.rev_can_trans_lines;"""
+        cmd = f"""select * from transmission.{table};"""
         df = gpd.GeoDataFrame.from_postgis(cmd, con, geom_col="geom",
                                            crs=AEA_CRS)
         con.close()
@@ -127,11 +163,9 @@ def get_allconns(dst, country="conus"):
         # Save
         df.to_file(dst, driver="GPKG")
 
-        return df
-
     else:
         df = gpd.read_file(dst)
-        return df
+    return df
 
 
 def get_reeds(dst):
@@ -183,10 +217,10 @@ def get_reeds(dst):
         return df
 
 
-def get_linedf():
+def get_linedf(offshore=False):
     """Return the transmission line data frame."""
     # Get the transmission table and set ids
-    transdf = get_allconns(ALLCONNS_PATH)
+    transdf = get_allconns(offshore)
     transdf["trans_line_gid"] = transdf["gid"]
 
     # Apply point_line to each row in the dataframe

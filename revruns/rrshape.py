@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Make a quick shape file or geopackage out of the outputs from reV.
-"""
-
+"""Make a quick shape file or geopackage out of the outputs from reV."""
 import os
 
 import click
@@ -146,7 +144,6 @@ def h5_to_shape(src, dst=None, driver="gpkg", dataset=None, layer=0,
     layer = 1
     epsg = 4326
     """
-
     # Select driver
     driver_str = DRIVERS[driver]
 
@@ -217,9 +214,7 @@ def h5_to_shape(src, dst=None, driver="gpkg", dataset=None, layer=0,
 @click.option("--layer", "-l", default=0, help=LAYER_HELP)
 @click.option("--driver", "-d", default="GPKG", help=DRIVER_HELP)
 def main(src, dst, dataset, layer, driver):
-    """ Take a csv or hdf5 output from reV and write a shapefile or geopackage.
-    """
-
+    """Take a csv or hdf5 from reV and write a shapefile or geopackage."""
     # Expand this path in case we need to set dst
     src = os.path.expanduser(src)
     src = os.path.abspath(src)

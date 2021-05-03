@@ -171,7 +171,7 @@ class Data_Path:
     def _exist_check(self, path, mkdir=False):
         """Check if the directory of a path exists, and make it if not."""
         # If this is a file name, get the directory
-        if os.path.isfile(path):
+        if "." in path:  # Will break if you use "."'s in your directories
             directory = os.path.dirname(path)
         else:
             directory = path
@@ -1024,8 +1024,11 @@ class Exclusions(Reformatter):
     @property
     def lookup(self):
         "Return dictionary with raster, string value pairs for reference."""
-        with open(self.lookup_path, "r") as file:
-            lookup = json.load(file)
+        if self.lookup_path:
+            with open(self.lookup_path, "r") as file:
+                lookup = json.load(file)
+        else:
+            lookup = {}
         return lookup
 
     def _check_dims(self, raster, profile, dname):
