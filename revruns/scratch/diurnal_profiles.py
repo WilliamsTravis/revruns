@@ -16,6 +16,9 @@ from tqdm import tqdm
 
 DP = rr.Data_Path("/shared-projects/rev/projects/weto/fy21/transition/rev")
 SAMPLE_H5 = DP.join("scenario_01/scenario_01_multi-year.h5")
+SAMPLE_H5 = ("/projects/rev/new_projects/reeds_solar/outputs/"
+             "outputs_multi-year.h5")
+
 SAMPLE_STATES = ["Rhode Island"]
 
 
@@ -25,6 +28,7 @@ class Diurnal:
     def __init__(self, file):
         """Initialize Diurnal object."""
         self.file = file
+        self._set_timestep()
 
     def __repr__(self):
         """Print representation for a Diurnal object."""
@@ -34,19 +38,17 @@ class Diurnal:
     def build(self, dst, states=None):
         """Write a sample dataset of a resource file with a subset of US states."""
         # Open the source datset
-        # with h5py.File(self.file, "r") as ds:
         ds = h5py.File(self.file, "r")
-        smeta = self._state_meta(ds, states)
-        idx = np.array(smeta.index)
+        meta = self._meta(ds, states)
+        idx = np.array(meta.index)
 
         # Get top level attributes
-        # with h5py.File(dst, "w") as trgt:
         trgt = h5py.File(dst, "w")
         for key, attr in ds.attrs.items():
             trgt.attrs[key] = attr
 
         # Our possibly subetted meta is our new meta
-        smeta = smeta.reset_index(drop=True)
+        smeta = meta.reset_index(drop=True)
         smeta, dtypes = smeta.rr.to_sarray()
         trgt.create_dataset(name="meta", data=smeta, dtype=dtypes)
 
@@ -59,10 +61,13 @@ class Diurnal:
                     trgt[key].attrs[akey] = attrs
 
         # Now build the mult-year dirunal profiles
-        # diurnal_sets = self._diurnal_sets(ds, idx)
+        self._diurnal_sets(ds, trgt, idx)
 
+        # Close datasets
+        ds.close()
+        trgt.close()
 
-    def _diurnal_sets(self, ds, idx):
+    def _diurnal_sets(self, ds, trgt, idx):
         """Convert full timeseries to daily averages by hour."""
         # Filter out the non-2d dataset keys
         keys = list(ds.keys())
@@ -81,15 +86,17 @@ class Diurnal:
 
         # Build the diurnal array for each 3D group
         for skey, skeys in profile_groups.items():
-            data = self._diurnal_set(ds, idx, skeys)
+            if len(ds[skeys[0]].shape) == 2:
+                data = self._diurnal_set(ds, idx, skeys)
+                trgt.create_dataset(name=skey, data=data)
 
     def _diurnal_set(self, ds, idx, skeys):
         """Convert a full timeseries to daily averages by hour."""
-        n = len(skeys)
-        arg_list = [(ds, skey, idx) for skey in skeys]
         profiles = []
+        # arg_list = [(ds, skey, idx) for skey in skeys]
         # with mp.Pool(n) as pool:
-        #     for profile in tqdm(pool.imap(self._subset, arg_list), total=n):
+        #     for profile in tqdm(pool.imap(self._subset, arg_list),
+        #                         total=len(arg_list)):
         #         profiles.append(profile)
         for skey in tqdm(skeys):
             profile = ds[skey][:, idx]
@@ -102,31 +109,35 @@ class Diurnal:
     def _diurnal(self, profiles):
         """Return the average hourly value."""
         # Make sure this is a numpy array
-        profiles = np.array(profiles)
+        array = np.vstack(profiles)
 
-        # Let's start with a single time series
-        profiles = np.vstack(profiles)
-
-        # We want 24-hour averages at each location  # <----------------------- Indexing will change depending on timestep here
+        # We want the time step resoltuion averages each location for each day
         hour_layers = []
-        for hour in range(0, 24):
-            avg = np.mean(profiles[hour::23], axis=0)
+        for hour in range(0, self.nsteps):
+            avg = np.mean(array[hour::self.nsteps], axis=0)
             hour_layers.append(avg)
-        hour_profiles = np.vstack(hour_layers)
+        data = np.vstack(hour_layers)
 
-        return hour_profiles
+        return data
 
-    def _state_meta(self, ds, states=None):
-        """Return the index position associated with a single or list of states."""
+    def _meta(self, ds, states=None):
+        """Format meta object."""
         meta = pd.DataFrame(ds["meta"][:])
         meta.rr.decode()
         if states:
             meta = meta[meta["state"].isin(states)]
         return meta
 
+    def _set_timestep(self):
+        """Set the right timestep based on the time index."""
+        with h5py.File(self.file, "r") as ds:
+            time = [t for t in ds.keys() if "time" in t][0]
+            self.nsteps = int(ds[time].shape[0] / 8760) * 24
+
 
 if __name__ == "__main__":
     file = SAMPLE_H5
     states = SAMPLE_STATES
-    dst = "/scratch/twillia2/scenario_01_utco.h5"
+    dst = "/scratch/twillia2/reeds_solar_ri.h5"
     self = Diurnal(file)
+    self.build(dst, states)
