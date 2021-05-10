@@ -7,14 +7,9 @@ Created on Tue Apr 27 16:47:10 2021
 
 @author: twillia2
 """
-from revruns import rr
-
-
-DP = rr.Data_Path("/shared-projects/rev/projects/weto/fy21/atb")
-TEMPLATE = "/projects/rev/data/conus/wind_deployment_potential/albers.tif"
-FILE = DP.join("data/shapefiles/tl_2020_us_mil.shp")
-DST = ("/projects/rev/data/conus/wind_deployment_potential/"
-       "tl_2020_us_mil.tif")
+TEMPLATE = "/home/travis/nrel/lbnl_char/rasters/template.tif"
+FILE = "/home/travis/nrel/transmission/federal_transmission_barriers.gpkg"
+DST = "/home/travis/nrel/transmission/federal_transmission_barriers.tif"
 
 
 class Reformatter:
@@ -37,6 +32,12 @@ class Reformatter:
         """
         self.template = template
         self.string_lookup = {}
+
+    def __repr__(self):
+        """Return object representation string."""
+        name = self.__module__
+        msg = f"<{name}: template={self.template}>"
+        return msg
 
     def raster(self, file, dst):
         """Resample and reproject a raster."""
@@ -85,7 +86,7 @@ class Reformatter:
 
         # Account for string values
         if isinstance(gdf["raster_value"].iloc[0], str):
-            gdf = self._map_string(gdf)
+            gdf = self._map_strings(file, gdf, field)
 
         # Reduce to two fields
         gdf = gdf[["raster_value", "geometry"]]
@@ -97,7 +98,7 @@ class Reformatter:
 
         return gdf
 
-    def _map_strings(gdf, field):
+    def _map_strings(self, file, gdf, field):
         """Map string values to integers and save a lookup dictionary."""
         # Assing integers to unique string values
         strings = gdf["raster_value"].unique()
@@ -118,4 +119,4 @@ if __name__ == "__main__":
     file = FILE
     dst = DST
     self = Reformatter(TEMPLATE)
-    self.shapefile(FILE, DST)
+    # self.shapefile(FILE, DST)

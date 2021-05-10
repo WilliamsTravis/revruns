@@ -5,11 +5,15 @@ Created on Mon May 10 11:34:06 2021
 
 @author: twillia2
 """
+import os
+
 from qgis.core import QgsProject
 
 
-QGZ = "/Users/twillia2/Desktop/weto/transmission/transmission_barriers.qgz"
+QGZ = "~/nrel/transmission/transmission_barriers.qgz"
 LAYER = "HIFLD Open Federal_Lands"
+FILE = "~/nrel/transmission/transmission_barriers.qgz"
+TEMPLATE = "~/nrel/lbnl_char/data/rasters/template.tif"
 
 
 class QProject:
@@ -17,7 +21,7 @@ class QProject:
 
     def __init__(self, path):
         """Initialize revruns QProject object."""
-        self.path = path
+        self.path = os.path.expanduser(path)
 
     def __repr__(self):
         """Return QProject representation string."""
@@ -31,29 +35,51 @@ class QProject:
         project.read(self.path)
         return project
 
-    def shown_fields(self, layer):
-        """Open the qgis project file and subset data for shown features."""
-        # These are all our map layers
-        layers = self.project.layerStore().mapLayers()
+    @property
+    def layers(self):
+        """Return all map layer objects."""
+        # Get layer dict with original instance keys
+        original_layers = self.project.layerStore().mapLayers()
 
-        # Make comprehensible keys for these layers
-        layers_dict = {}
-        for value in layers.values():
+        # Make comprehensible keys
+        layers = {}
+        for value in original_layers.values():
             name = value.name()
-            layers_dict[name] = value
+            layers[name] = value
 
-        # Select our target layer and get all rendering information
-        layer = layers_dict[layer]
-        renderer = layer.renderer()
-        symbology = renderer.dump().split("\n")
+        return layers      
 
-        # Whether or not a field is displayed is knowable from the rgb string
+    @property
+    def displayed(self):
+        """Open the qgis project file and subset data for shown features."""
+        # Create holder for all layers and features
         shown = {}
-        for field in symbology:
-            if "color" in field:
+        for name, layer in self.layers.items():
+            shown[name] = {}
+            shown[name]["features"] = {}
+
+            # Select our target layer and get all rendering information
+            renderer = layer.renderer()
+            symbology = renderer.dump().split("\n")
+    
+            # Get the field (data frame column) displayed from the first item
+            if ": idx " in symbology[0]:
+                column = symbology[0].split(": idx ")[-1]
+                symbology = symbology[1:]
+            else:
+                column = None
+            shown[name]["field"] = column
+
+            # Whether a field is displayed is knowable from the rgb string
+            for field in symbology:
                 key = field.split("::")[0]
-                displayed = field.split(":")[-1]
-                shown[key] = int(displayed)
+                if key != "":
+                    
+                    try:
+                        displayed = int(field.split(":")[-1])
+                    except:
+                        displayed = 0
+                    shown[name]["features"][key] = int(displayed)
 
         return shown
 
