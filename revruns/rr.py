@@ -612,7 +612,7 @@ class PandasExtension:
 class Reformatter:
     """Reformat raster or shapefile files into a reV-shaped raster."""
 
-    import multiprocess as mp
+    import multiprocessing as mp
     import os
     import subprocess as sp
 
