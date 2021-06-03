@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Reconfigure a reV run to rerun from a specified point in the pipeline."""
+
 import json
 import os
 import subprocess as sp
@@ -18,8 +19,8 @@ FOLDER_HELP = ("A folder containing configurations and results "
 MODULE_HELP = ("A module in the reV pipeline. Options include 'generation', "
                "'collect', 'multi-year', 'aggregation', 'supply-curve', or "
                "'rep_profiles'. rrerun will overwrite all results in the "
-               "pipeline starting  at this point (the results of this module "
-               "included).(str)")
+               "pipeline after this step (the results of this module "
+               "not included).(str)")
 RUN_HELP = ("Rerun reV pipeline. Without this, the logging and status "
             "files will be updated and you must rerun manually. (Boolean)")
 MODULES = ["generation", "collect", "econ", "offshore", "multi-year",

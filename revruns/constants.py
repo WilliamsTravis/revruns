@@ -120,6 +120,23 @@ TARGET_CRS = ["+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ",
               {"init": "epsg:4326"},
               {"type": "EPSG", "properties": {"code": 4326}}]
 
+# Template config files
+BATCH_TEMPLATE = {
+  "pipeline_config": "./config_pipeline.json",
+  "sets": [
+    {
+      "args": {
+        "PLACEHOLDER": "PLACEHOLDER",
+        "PLACEHOLDER": "PLACEHOLDER"
+      },
+      "files": [
+        "./sam_configs/default.json"
+      ],
+      "set_tag": "set1"
+    }
+  ]
+}
+
 GEN_TEMPLATE = {
     "directories": {
         "log_directory": "./logs",
@@ -146,20 +163,56 @@ GEN_TEMPLATE = {
     "resource_file": "PLACEHOLDER"
 }
 
-BATCH_TEMPLATE = {
-  "pipeline_config": "./config_pipeline.json",
-  "sets": [
-    {
-      "args": {
-        "PLACEHOLDER": "PLACEHOLDER",
-        "PLACEHOLDER": "PLACEHOLDER"
-      },
-      "files": [
-        "./sam_configs/default.json"
-      ],
-      "set_tag": "set1"
-    }
-  ]
+OFFSHORE_TEMPLATE = {
+  "directories": {
+      "log_directory": "./logs/",
+      "output_directory": "./"
+  },
+  "execution_control": {
+      "allocation": "PLACEHOLDER",
+      "option": "eagle",
+      "walltime": 1
+  },
+  "gen_fpath": "PIPELINE",
+  "log_level": "INFO",
+  "offshore_fpath": "PLACEHOLDER",
+  "offshore_meta_cols": [
+      "depth",
+      "dist_p_to_a",
+      "dist_a_to_s",
+      "dist_op_to_s",
+      "dist_p_to_s",
+      "dist_p_to_s_nolimit",
+      "dist_s_to_l",
+      "hs_average",
+      "fixed_downtime",
+      "floating_downtime"
+  ],
+  "offshore_nrwal_keys": [
+      "depth",
+      "dist_p_to_a",
+      "dist_a_to_s",
+      "dist_op_to_s",
+      "dist_p_to_s",
+      "dist_p_to_s_nolimit",
+      "dist_s_to_l",
+      "hs_average",
+      "fixed_downtime",
+      "floating_downtime",
+      "capital_cost",
+      "fixed_operating_cost",
+      "variable_operating_cost",
+      "fixed_charge_rate",
+      "system_capacity"
+  ],
+  "project_points": "PLACEHOLDER",
+  "sam_files": {
+      "fixed": "PLACEHOLDER",
+      "floating": "PLACEHOLDER"
+  },
+  "nrwal_configs": {
+      "offshore": "PLACEHOLDER"
+  }
 }
 
 COLLECT_TEMPLATE = {
@@ -348,9 +401,9 @@ PIPELINE_TEMPLATE = {
     "pipeline": []
 }
 
-
 TEMPLATES = {
     "gen": GEN_TEMPLATE,
+    "off": OFFSHORE_TEMPLATE,
     "co": COLLECT_TEMPLATE,
     "econ": ECON_TEMPLATE,
     "my": MULTIYEAR_TEMPLATE,
