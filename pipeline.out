@@ -1,4 +1,0 @@
-Usage: reV [OPTIONS] COMMAND [ARGS]...
-Try 'reV --help' for help.
-
-Error: Invalid value for '--config_file' / '-c': Path 'config_pipeline.json' does not exist.
