@@ -1133,3 +1133,42 @@ class Exclusions(Reformatter):
     #             longrid, latgrid = self.np.meshgrid(lons, lats)
                 hdf.create_dataset(name="longitude", data=lons)
                 hdf.create_dataset(name="latitude", data=lats)
+
+
+class RRNrwal():
+    """Helper functions for using NRWAL."""
+
+    def variables(self, readme="~/github/NRWAL/README.rst"):
+        """Build a nice variable dictionary."""
+        # Read in text lines
+        with open(os.path.expanduser(readme)) as file:
+            lines = file.readlines()
+
+        # Find the table part
+        lines = lines[lines.index("    * - Variable Name\n"):]
+        lines = lines[:lines.index("\n")]
+        lines = [line.replace("\n", "") for line in lines]
+
+        # Chunk on the *
+        idxs = []
+        for l in lines:
+            if "*" in l:
+                idx = [lines.index(l), lines.index(l) + 4]
+                idxs.append(idx)
+
+        # Pluck out the needed parts
+        variables = {}
+        for idx in idxs[1:]:
+            chunk = lines[idx[0]: idx[1]]
+            elements = []
+            for c in chunk:
+                c = c.replace("`", "")
+                c = c[c.index("- ") + 2:]
+                elements.append(c)
+            name = elements[0]
+            variables[name] = {}
+            variables[name]["long_name"] = elements[1]
+            variables[name]["source"] = elements[2]
+            variables[name]["units"] = elements[3]
+
+        return variables
