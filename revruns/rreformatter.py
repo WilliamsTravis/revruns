@@ -17,6 +17,7 @@ class Reformatter:
     import os
     import subprocess as sp
 
+    import numpy as np
     import geopandas as gpd
     import rasterio as rio
 
@@ -35,36 +36,52 @@ class Reformatter:
 
     def __repr__(self):
         """Return object representation string."""
-        name = self.__module__
-        msg = f"<{name}: template={self.template}>"
-        return msg
+        return f"<Reformatter: template={self.template}>"
 
-    def raster(self, file, dst):
+    def raster(self, file, dst):  # <------------------------------------------ Use rio python bindings here, the compression isnt' working
         """Resample and reproject a raster."""
         self.sp.call(["rio", "warp", file, dst,
                       "--like", self.template,
+                      "--co", "compress=lzw",  # <----------------------------- Might not be working?
                       "--co", "blockysize=128",
                       "--co", "blockxsize=128",
                       "--co", "tiled=yes"])
 
-    def shapefile(self, file, dst, field=None, buffer=None):
+    def shapefile(self, file, dst, field=None, buffer=None, overwrite=False):
         """Preprocess, reproject, and rasterize a vector."""
         # Read and process file
         gdf = self._process_shapefile(file, field, buffer)
+        meta = self.meta
 
-        # Rasterize
-        shapes = [(g, r) for r, g in gdf[["raster_value", "geometry"]].values]
-        shape = [self.meta["height"], self.meta["width"]]
-        transform = self.meta["transform"]
-        with self.rio.Env():
-            array = self.features.rasterize(shapes, shape, transform=transform)
+        # Skip if overwrite
+        if not overwrite and self.os.path.exists(dst):
+            return
+        else:
+            # Rasterize
+            elements = gdf[["raster_value", "geometry"]].values
+            shapes = [(g, r) for r, g in elements]
+            shape = [meta["height"], meta["width"]]
+            transform = meta["transform"]
+            with self.rio.Env():
+                array = self.features.rasterize(shapes, shape,
+                                                transform=transform)
 
-        # Save
-        with self.rio.Env():
-            with self.rio.open(dst, "w", **self.meta) as file:
-                file.write(array, 1)
+            # Update meta
+            dtype = str(array.dtype)
+            if "int" in dtype:
+                nodata = self.np.iinfo(dtype).max
+            else:
+                nodata = self.np.finfo(dtype).max
+            meta["dtype"] = dtype
+            meta["nodata"] = nodata
 
-        return dst
+            # Write
+            with self.rio.Env():
+                with self.rio.open(dst, "w", **meta) as file:
+                    file.write(array, 1)
+
+    def guided(self, dirname="."):
+        """Guide the processing of shapefiles with prompts and user inputs."""
 
     @property
     def meta(self):
@@ -115,9 +132,9 @@ class Reformatter:
         return gdf
 
 
-if __name__ == "__main__":
-    file = FILE
-    dst = DST
-    # self = Reformatter(TEMPLATE)
-    # self.shapefile(FILE, DST)
-    # self.raster(FILE, DST)
+# if __name__ == "__main__":
+#     file = FILE
+#     dst = DST
+#     self = Reformatter(TEMPLATE)
+#     # self.shapefile(FILE, DST)
+#     # self.raster(FILE, DST)

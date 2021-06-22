@@ -8,6 +8,8 @@ from functools import lru_cache
 
 
 HOME = "."  # Will be click main argument
+ONSHORE_FULL = ("/projects/rev/data/transmission/build/agtables/"
+                "build_{:03d}_agg.csv")
 REGIONS = {
     "Pacific": ["Oregon",   "Washington"],
     "Mountain": ["Colorado", "Idaho", "Montana", "Wyoming"],
@@ -79,7 +81,7 @@ class Process:
 
     af = addfips.AddFIPS()
 
-    def __init__(self, home=".", file_pattern="*_sc.csv",
+    def __init__(self, home=".", file_pattern="*_sc.csv", files=None,
                  pixel_sum_fields=PIXEL_SUM_FIELDS, resolution=90):
         """Initialize Post_Process object.
 
@@ -98,6 +100,7 @@ class Process:
             The resolution in meters of the exclusion/characterization raster.
         """
         self.home = self.rr.Data_Path(home)
+        self._files = files
         self.file_pattern = file_pattern
         self.pixel_sum_fields = pixel_sum_fields
 
@@ -179,17 +182,26 @@ class Process:
 
     def assign_county(self, file):
         """Assign the nearest county FIPS to each offshore point."""
-        if "fips" not in self._cols(file):
+        cols = self._cols(file)
+        if "fips" not in cols and "offshore" in cols and "county" in cols:
             df = self.pd.read_csv(file)
 
-            ondf = df[df["offshore"] == 0]
+            if df[df["offshore"] == 0].shape[0] == 0:
+                ondf = self.pd.read_csv(ONSHORE_FULL.format(128))  # <------------- This should technicall depend on config agg factor
+            else:
+                ondf = df[df["offshore"] == 0]
+
             ondf["fips"] = ondf.apply(self._fips, axis=1)
 
             offdf = df[df["offshore"] == 1]
-            offdf = offdf.rr.nearest(ondf, fields=["fips"])
+            offdf = offdf.rr.nearest(ondf, fields=["fips", "state"])
             del offdf["dist"]
+            del offdf["geometry"]
 
-            df = self.pd.concat([ondf, offdf])
+            if df[df["offshore"] == 0].shape[0] == 0:
+                df = offdf
+            else:
+                df = self.pd.concat([ondf, offdf])
             df = df.sort_values("sc_gid")
             df.to_csv(file, index=False)
 
@@ -219,8 +231,12 @@ class Process:
     @property
     def files(self):
         """Return all supply-curve files in home directory."""
-        rpattern = f"**/{self.file_pattern}"
-        return self.home.files(rpattern, recursive=True)
+        if self._files is None:
+            rpattern = f"**/{self.file_pattern}"
+            files = self.home.files(rpattern, recursive=True)
+        else:
+            files = self._files
+        return files
 
     @property
     def nrel_regions(self):
@@ -249,8 +265,3 @@ class Process:
     def _cols(self, file):
         """Return only the columns of a csv file."""
         return self.pd.read_csv(file, index_col=0, nrows=0).columns
-
-
-if __name__ == "__main__":
-    self = Process(file_pattern="*.csv")
-    self.process()

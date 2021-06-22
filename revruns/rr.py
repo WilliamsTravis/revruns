@@ -1138,10 +1138,15 @@ class Exclusions(Reformatter):
 class RRNrwal():
     """Helper functions for using NRWAL."""
 
-    def variables(self, readme="~/github/NRWAL/README.rst"):
+    def __init__(self, readme="~/github/NRWAL/README.rst"):
+        """Initialize RRNrwal object."""
+        self.readme = readme
+
+    @property
+    def variables(self):
         """Build a nice variable dictionary."""
         # Read in text lines
-        with open(os.path.expanduser(readme)) as file:
+        with open(os.path.expanduser(self.readme)) as file:
             lines = file.readlines()
 
         # Find the table part
@@ -1172,3 +1177,9 @@ class RRNrwal():
             variables[name]["units"] = elements[3]
 
         return variables
+
+    @property
+    def definitions(self):
+        """Print the definitions of NRWAL variables."""
+        for var, elements in self.variables.items():
+            print(var + ": " + elements["long_name"])
