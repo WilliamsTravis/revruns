@@ -4,12 +4,16 @@ Created on Fri May 21, 2021
 
 @author: twillia2
 """
+import os
+
 from functools import lru_cache
 
 
 HOME = "."  # Will be click main argument
 ONSHORE_FULL = ("/projects/rev/data/transmission/build/agtables/"
                 "build_{:03d}_agg.csv")
+# ONSHORE_FULL = ("/Users/twillia2/Desktop/review_datasets/"
+#                 "build_128_agg.csv")
 REGIONS = {
     "Pacific": ["Oregon",   "Washington"],
     "Mountain": ["Colorado", "Idaho", "Montana", "Wyoming"],
@@ -23,7 +27,7 @@ REGIONS = {
     "Southwest": ["Arizona", "Nevada", "New Mexico", "Utah"],
     "South Central": ["Arkansas", "Louisiana", "Oklahoma", "Texas"],
     "Southeast": ["Alabama", "Delaware", "District of Columbia", "Florida",
-                  "Georgia","Kentucky", "Maryland", "Mississippi",
+                  "Georgia", "Kentucky", "Maryland", "Mississippi",
                   "North Carolina", "South Carolina", "Tennessee", "Virginia",
                   "West Virginia"]
 }
@@ -111,10 +115,11 @@ class Process:
 
     def process(self):
         """Run all post-processing steps on all files."""
-        self.assign_counties()
         self.assign_regions()
         self.assign_classes()
         self.assign_areas()
+        if os.path.exists(ONSHORE_FULL):
+            self.assign_counties()
 
     def assign_area(self, file):
         """Assign area to pixel summed characterizations for a file."""  # Some what inefficient, reading and saving twice but covers all cases
