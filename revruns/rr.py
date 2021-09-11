@@ -11,13 +11,19 @@ Created on Wed Dec  4 07:58:42 2019
 """
 import json
 import os
+import shutil
 
 from glob import glob
 
+import gdal
+import h5py
+import numpy as np
 import pandas as pd
 
-pd.set_option('display.max_columns', 500)
-pd.set_option('display.max_rows', 20)
+from tqdm import tqdm
+
+pd.set_option("display.max_columns", 500)
+pd.set_option("display.max_rows", 20)
 pd.options.mode.chained_assignment = None
 
 
@@ -25,11 +31,22 @@ def crs_match(crs1, crs2):
     """Check if two coordinate reference systems match."""
     from pyproj import CRS
 
-    try:
-        assert CRS(crs1) == CRS(crs2)
-        return True
-    except AssertionError:
-        return False
+    # Using strings and CRS objects directly is not consistent enough
+    check = False
+    crs1 = CRS(crs1).to_dict()
+    crs2 = CRS(crs2).to_dict()
+    for key, value in crs1.items():
+        if key in crs2:
+            try:
+                assert value == crs2[key]
+                check = True
+            except AssertionError:
+                print(".")
+        else:
+            check = True
+            print(f"crs2 is missing the {key} key...")
+
+    return check
 
 
 def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=0):
@@ -56,6 +73,52 @@ def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=0):
             print("   " + s)
 
     return table
+
+
+def h5_to_csv(src, dst, dataset):
+    """Reformat a reV outpur HDF5 file/dataset to a csv."""
+    # Read in meta, time index, and data
+    # with h5py.File(src, "r") as ds:
+    ds = h5py.File(src, "r")
+    # Get an good time index
+    if "multi" in src:
+        time_key = [ti for ti in ds.keys() if "time_index" in ti][0]
+        data = [ds[d][:] for d in ds.keys() if dataset in d]
+        data = np.array(data)
+    else:
+        time_key = "time_index"
+        data = ds[dataset][:]
+
+    # Read in needed elements
+    meta = pd.DataFrame(ds["meta"][:])
+    time_index = [t.decode()[:-9] for t in ds[time_key][:]]
+
+    # Decode meta, use as base
+    meta.rr.decode()
+
+    # If its 1-D just give just append the data to meta
+    if len(data.shape) == 1:
+        meta[dataset] = data
+        df = meta.copy()
+
+    # If its more than 1-D, label the array and use that as the table
+    elif len(data.shape) > 1:
+        # If its 3-D, its a mult-year, find the mean profile first
+        if len(data.shape) == 3:
+            time_index = [t[5:] for t in time_index]
+            data = np.mean(data, axis=0)
+
+        # Now its def 2-D
+        df = pd.DataFrame(data)
+        df["time_index"] = time_index
+        cols = [str(c) for c in df.columns]
+        df.columns = cols
+        cols = ["time_index"] + cols[:-1]
+        df = df[cols]
+
+    df.to_csv(dst, index=False)
+
+    return 0
 
 
 def isint(x):
@@ -132,7 +195,13 @@ class Data_Path:
             items = glob(self.join(*args, "*"), recursive=recursive)
         else:
             items = glob(self.join(*args), recursive=recursive)
+        items.sort()
         return items
+
+    def extend(self, path, mkdir=False):
+        """Return a new Data_Path object with an extended home directory."""
+        new = Data_Path(os.path.join(self.data_path, path), mkdir)
+        return new
 
     def folders(self, *args, recursive=False):
         """List folders in the data_path or in sub directories."""
@@ -171,10 +240,6 @@ class Data_Path:
         os.chdir(self.data_path)
         print(self.data_path)
 
-    def extend(self, path, mkdir=False):
-        """Return a new Data_Path object with an extended home directory."""
-        new = Data_Path(os.path.join(self.data_path, path), mkdir)
-        return new
 
     def _exist_check(self, path, mkdir=False):
         """Check if the directory of a path exists, and make it if not."""
@@ -206,6 +271,7 @@ class Data_Path:
 class PandasExtension:
     """Accessing useful pandas functions directly from a data frame object."""
 
+    import multiprocessing as mp
     import warnings
 
     from json import JSONDecodeError
@@ -504,6 +570,32 @@ class PandasExtension:
 
         return df
 
+    # def papply(self, func, **kwargs):
+    #     """Apply a function to a dataframe in parallel chunks."""
+    #     from pathos import multiprocessing as mp
+
+    #     from itertools import product
+
+    #     df = self._obj.copy()
+    #     cdfs = np.array_split(df, os.cpu_count() - 1)
+    #     pool = mp.Pool(mp.cpu_count() - 1)
+    #     args = [(cdf, kwargs) for cdf in cdfs]
+    #     out = pool.starmap(cfunc, args)
+
+    def scatter(self, x="capacity", y="mean_lcoe", z=None, color="mean_lcoe",
+                size=None):
+        """Create a plotly scatterplot."""
+        import plotly.express as px
+
+        df = self._obj.copy()
+
+        if z is None:
+            fig = px.scatter(df, x, y, color=color, size=size)
+        else:
+            fig = px.scatter_3d(df, x, y, z, color=color, size=size)
+
+        fig.show()
+
     def to_bbox(self, bbox):
         """Return points within a bounding box [xmin, ymin, xmax, ymax]."""
         df = self._obj.copy()
@@ -620,12 +712,13 @@ class PandasExtension:
 
 
 class Reformatter:
-    """Reformat raster or shapefile files into a reV-shaped raster."""
+    """Reformat reV inputs/outputs."""
 
     import multiprocessing as mp
     import os
     import subprocess as sp
 
+    import gdalmethods as gm
     import geopandas as gpd
     import h5py
     import numpy as np
@@ -636,9 +729,11 @@ class Reformatter:
     from tqdm import tqdm
 
     def __init__(self, data_path, template, target_dir=None,
-                 raster_dir="rasters", shapefile_dir="shapefiles",
-                 warp_threads=1):
+                 raster_dir=None, shapefile_dir=None, warp_threads=1):
         """Initialize Reformatter object.
+
+        Here, I'd like to implement GDAL methods rather than relying on
+        in-memory python methods.
 
         Parameters
         ----------
@@ -654,17 +749,24 @@ class Reformatter:
             Target directory for output rasters. Will default to a folder
             named "exclusions" within the given data_path.
         raster_dir : str
-            Path to folder containing rasters to reformat (relative to
-            data_path). Defaults to "rasters".
+            Path to folder containing rasters to reformat. Defaults to
+            `data_path` argument.
         shapefile_dir : str
-            Path to folder containing shapefiles to reformat (relative to
-            data_path). Defaults to "shapefiles".
+            Path to folder containing shapefiles to reformat. Defaults to
+            `data_path` argument.
         warp_threads : int
             Number of threads to use for rasterio warp functions. Defaults to
             1.
         """
         self.dp = Data_Path(data_path)
         self.template = template
+        if not raster_dir:
+            raster_dir = data_path
+        if not shapefile_dir:
+            shapefile_dir = data_path
+        if not target_dir:
+            target_dir = data_path
+        self.target_dir = Data_Path(target_dir)
         self.raster_dir = raster_dir
         self.shapefile_dir = shapefile_dir
         self.warp_threads = warp_threads
@@ -719,7 +821,7 @@ class Reformatter:
                             num_threads=self.warp_threads
                         )
 
-        # Write to file
+        # Write to filearray
         meta = self.meta.copy()
         dtype = narray.dtype
         meta["dtype"] = dtype
@@ -739,7 +841,8 @@ class Reformatter:
         for file in self.tqdm(files):
             self.reformat_raster(file, overwrite=overwrite)
 
-    def reformat_shapefile(self, file, field_dict=None, overwrite=False):
+    def reformat_shapefile(self, file, dtype="byte", field_dict=None,
+                           overwrite=False):
         """Reproject and rasterize a vector."""
         # Create dataset key and destination path
         key = self.key(file)
@@ -751,72 +854,68 @@ class Reformatter:
         else:
             print(f"Processing {dst}...")
 
-        # Read in shapefile and meta data
-        gdf = self.gpd.read_file(file)
+        # Read in shapefile shell for meta information
+        gdf_meta = self.gpd.read_file(file, rows=1)
 
         # This requires a specific field to indicate which values to use
         if not field_dict:
-            if "raster_value" not in gdf.columns:
-                raise KeyError(f"{file} requires a 'raster_value' field "
+            fields = [col for col in gdf_meta.columns if "raster" in col]
+            
+            if not any(fields) or len(fields) > 1:
+                raise KeyError(f"{file} requires a single 'raster' field "
                                "or a dictionary with file name, field "
                                "name pairs.")
             else:
-                field = "raster_value"
+                field = fields[0]
         else:
             field = field_dict[os.path.basename(file)]
 
         # The values might be strings
-        if isinstance(gdf[field].iloc[0], str):
+        if isinstance(gdf_meta[field].iloc[0], str):
+            gdf = self.gpd.read_file(file)
             gdf = gdf.sort_values(field).reset_index(drop=True)
             values = gdf[field].unique()
             string_values = {i + 1: v for i, v in enumerate(values)}
             map_values = {v: k for k, v in string_values.items()}
             gdf[field] = gdf[field].map(map_values)
+            del gdf 
             self.string_values[key] = string_values
         else:
             self.string_values[key] = {}
 
         # Match CRS
-        crs = self.meta["crs"]
-        if not crs_match(crs, self.meta["crs"]):
-            gdf = gdf.to_crs(crs)
+        crs1 = gdf_meta.crs
+        crs2 = self.meta["crs"]
+        if not crs_match(crs1, crs2):
+            print("Reprojecting...")
+            file2 = file.replace(".gpkg", "2.gpkg")
+            self.gm.reproject_polygon(src=file, dst=file2, t_srs=crs2)
 
-        # Get shapes and values and rasterize
-        gdf = gdf[["geometry", field]]
-        shapes = [(geom, value) for geom, value in gdf.values]
-        with self.rio.Env():
-            array = self.features.rasterize(
-                        shapes=shapes,
-                        out_shape=(self.meta["height"],
-                                   self.meta["width"]),
-                        transform=self.meta["transform"],
-                        all_touched=True
-                    )
+            gdf = self.gpd.read_file(file2, rows=10)
+            
+            os.remove(file)
+            shutil.move(file2, file)
 
-        # We can't have float16 (maybe others)
-        # array = self._recast(array)
+        # Call GDAL
+        try:
+            self.gm.rasterize(src=file, dst=dst, template_path=self.template,
+                              attribute=field, dtype=dtype, all_touch=True)
+        except Exception:
+            raise("Rasterization failed.")
 
-        # Write to file
-        dtype = str(array.dtype)
-        meta = self.meta.copy()
-        meta["dtype"] = dtype
-        with self.rio.Env():
-            with self.rio.open(dst, "w", **meta) as file:
-                file.write(array, 1)
 
     def reformat_shapefiles(self, field_dict=None, overwrite=False):
         """Reproject and rasterize vectors."""
-        files = self.shapefiles
-
         # Run in parallel
         # ncpu = self.os.cpu_count()
         # with self.mp.Pool(ncpu) as pool:
-        #     for _ in self.tqdm(pool.imap(self.reformat_shapefile, files),
+        #     for _ in self.tqdm(pool.imap(self.reformat_shapefile,
+        #                                  self.shapefiles),
         #                        total=len(files)):
         #        pass
 
         # Run serially
-        for file in files:
+        for file in self.shapefiles:
             self.reformat_shapefile(file,
                                     field_dict=field_dict,
                                     overwrite=overwrite)
@@ -870,11 +969,6 @@ class Reformatter:
         except AssertionError:
             print(f"Warning: {self.template} does not exist.")
 
-        # Create target directory.
-        if not target_dir:
-            target_dir = self.dp.join("exclusions", mkdir=True)
-        self.target_dir = Data_Path(target_dir, mkdir=True)
-
         # Create a dictionary for a value - string lookup
         self.string_path = self.dp.join("string_values.json")
         if os.path.exists(self.string_path):
@@ -882,14 +976,6 @@ class Reformatter:
                 self.string_values = json.load(file)
         else:
             self.string_values = {}
-
-    def _recast(self, array):
-        """Recast an array to an acceptable GDAL data type."""
-        dtype = array.dtype
-        if dtype == "float16": # <--------------------------------------------- Are there other data types it can't handle?
-            dtype = "float32"  # <--------------------------------------------- How to choose?
-            array = array.astype(dtype)
-        return array, dtype
 
 
 class Exclusions(Reformatter):
@@ -902,20 +988,20 @@ class Exclusions(Reformatter):
     from pyproj import Transformer
     from rasterio.errors import RasterioIOError
 
-    def __init__(self, excl_fpath, lookup_path=None):
+    def __init__(self, excl_fpath, string_values={}):
         """Initialize Exclusions object.
 
         Parameters
         ----------
             excl_fpath : str
                 Path to target HDF5 reV exclusion file.
-            lookup_path : str
-                Path to json file containing a lookup dictionary for raster
-                values derived from shapefiles containing string values
-                (optional).
+            string_values : str | dict
+                Dictionary or path dictionary of raster value, key pairs
+                derived from shapefiles containing string values (optional).
         """
         self.excl_fpath = excl_fpath
-        self.lookup_path = lookup_path
+        self.string_values = string_values
+        self._preflight()
         self._initialize_h5()
 
     def __repr__(self):
@@ -957,9 +1043,9 @@ class Exclusions(Reformatter):
                 hdf[dname].attrs["profile"] = json.dumps(profile)
                 if description:
                     hdf[dname].attrs["description"] = description
-                if dname in self.lookup:
-                    lookup = json.dumps(self.lookup[dname])
-                    hdf[dname].attrs["string_values"] = lookup
+                if dname in self.string_values:
+                    string_value = json.dumps(self.string_values[dname])
+                    hdf[dname].attrs["string_values"] = string_value
 
     def add_layers(self, file_dict, desc_dict=None, overwrite=False):
         """Add multiple raster files and their descriptions."""
@@ -1031,46 +1117,41 @@ class Exclusions(Reformatter):
                                  map_chunk=2560, save_flag=save_flag)
         return arrays
 
-    @property
-    def lookup(self):
-        "Return dictionary with raster, string value pairs for reference."""
-        if self.lookup_path:
-            with open(self.lookup_path, "r") as file:
-                lookup = json.load(file)
-        else:
-            lookup = {}
-        return lookup
+    def _preflight(self):
+        """More initializing steps."""
+        if self.string_values:
+            if not isinstance(self.string_values, dict):
+                with open(self.string_values, "r") as file:
+                    self.string_values = json.load(file)
 
     def _check_dims(self, raster, profile, dname):
         # Check new layers against the first added raster
-        with self.h5py.File(self.excl_fpath, "r") as hdf:
-            # Find the exisitng profile
-            old = self.profile
-            new = profile
+        old = self.profile
+        new = profile
 
-            # Check the CRS
-            if not crs_match(old["crs"], new["crs"]):
-                raise AssertionError("CRS for " + dname + " does not match"
-                                     " exisitng CRS.")
+        # Check the CRS
+        if not crs_match(old["crs"], new["crs"]):
+            raise AssertionError("CRS for " + dname + " does not match"
+                                 " exisitng CRS.")
 
-            # Check the transform
-            try:
-                # Standardize these
-                old_trans = old["transform"][:6]
-                new_trans = new["transform"][:6]
-                assert old_trans == new_trans
-            except Exception:
-                raise AssertionError("Geotransform for " + dname + " does "
-                                     "not match geotransform.")
+        # Check the transform
+        try:
+            # Standardize these
+            old_trans = old["transform"][:6]
+            new_trans = new["transform"][:6]
+            assert old_trans == new_trans
+        except Exception:
+            raise AssertionError("Geotransform for " + dname + " does "
+                                 "not match geotransform.")
 
-            # Check the dimesions
-            try:
-                assert old["width"] == new["width"]
-                assert old["height"] == new["height"]
-            except Exception:
-                raise AssertionError("Width and/or height for " + dname +
-                                     " does not match exisitng " +
-                                     "dimensions.")
+        # Check the dimesions
+        try:
+            assert old["width"] == new["width"]
+            assert old["height"] == new["height"]
+        except Exception:
+            raise AssertionError("Width and/or height for " + dname +
+                                 " does not match exisitng " +
+                                 "dimensions.")
 
     def _convert_coords(self, xs, ys):
         # Convert projected coordinates into WGS84
@@ -1130,9 +1211,178 @@ class Exclusions(Reformatter):
                 lons, lats = self._convert_coords(xs, ys)
 
                 # Create grid and upload
-    #             longrid, latgrid = self.np.meshgrid(lons, lats)
                 hdf.create_dataset(name="longitude", data=lons)
                 hdf.create_dataset(name="latitude", data=lats)
+
+
+class Profiles:
+    """Methods for manipulating generation profiles."""
+
+    import json
+
+    import h5py
+    import numpy as np
+
+    def __init__(self, gen_fpath):
+        """Initialize Profiles object.
+
+        Parameters
+        ----------
+        gen_fpath : str
+            Path to a reV generation or representative profile file.
+        """
+        self.gen_fpath = gen_fpath
+
+    def __repr__(self):
+        """Return representation string for Profiles object."""
+        return f"<Profiles: gen_fpath={self.gen_fpath}"
+
+    def _best(self, row, gen_fpath, variable, lowest):
+        """Find the best generation point in a supply curve table row.
+
+        Parameters
+        ----------
+        row : pd.core.series.Series
+            A row from a reV suuply curve table.
+        ds : h5py._hl.files.File
+            An open h5py file
+
+
+        Returns
+        -------
+        int
+            The index position of the best profile.
+        """
+        idx = self.json.loads(row["gen_gids"])  # Don't forget to add res_gid
+        idx.sort()
+        with self.h5py.File(gen_fpath) as ds:
+            if lowest:
+                gid = idx[self.np.argmin(ds[variable][idx])]
+            else:
+                gid = idx[self.np.argmax(ds[variable][idx])]
+            value = ds[variable][gid]
+        row["best_gen_gid"] = gid
+        row[self._best_name(variable, lowest)] = value
+        return row
+
+    def _all(self, idx, gen_fpath, variable):
+        """Find the best generation point in a supply curve table row.
+
+        Parameters
+        ----------
+        row : pd.core.series.Series
+            A row from a reV suuply curve table.
+        ds : h5py._hl.files.File
+            An open h5py file
+
+
+        Returns
+        -------
+        int
+            The index position of the best profile.
+        """
+        idx = json.loads(idx)
+        idx.sort()
+        with self.h5py.File(gen_fpath) as ds:
+            values = ds[variable][idx]
+        return values
+
+    def _best_name(self, variable, lowest):
+        """Return the column name of the best value column."""
+        if lowest:
+            name = f"{variable}_min"
+        else:
+            name = f"{variable}_max"
+        return name
+
+    def _derepeat(self, df):
+        master_gids = []
+        df["gen_gids"] = df["gen_gids"].apply(json.loads)
+        for i, row in tqdm(df.iterrows(), total=df.shape[0]):
+            gids = row["gen_gids"]
+            for g in gids:
+                if g in master_gids:
+                    break
+                    gids.remove(g)
+                else:
+                    master_gids.append(g)
+
+    def get_table(self, sc_fpath, variable, lowest):
+        """Apply the _best function in parallel."""
+        from pathos import multiprocessing as mp
+
+        # Function to apply to each chunk defined below
+        def cfunc(args):
+            cdf, gen_fpath, variable, lowest = args
+            out = cdf.apply(self._best, gen_fpath=gen_fpath, variable=variable,
+                            lowest=lowest, axis=1)
+            return out
+
+        # The supply curve data frame
+        df = pd.read_csv(sc_fpath)
+
+        # Split the data frame up into chunkcs
+        ncpu = mp.cpu_count() - 1
+        cdfs = np.array_split(df, ncpu)
+        arg_list = [(cdf, self.gen_fpath, variable, lowest) for cdf in cdfs]
+
+        # Apply the chunk function in parallel
+        outs = []
+        with mp.Pool(ncpu) as pool:
+            for out in pool.imap(cfunc, arg_list):
+                outs.append(out)
+
+        # Concat the outputs back into a single dataframe and sort
+        df = pd.concat(outs)
+        df = df.sort_values("best_gen_gid")
+
+        return df
+
+    def main(self, sc_fpath, dst, variable="lcoe_fcr-means", lowest=True):
+        """Write a dataset of the 'best' profiles within each sc point.
+
+        Parameters
+        ----------
+        sc_fpath : str
+            Path to a supply-curve output table.
+        dst : str
+            Path to the output HDF5 file.
+        variable : str
+            Variable to use as selection criteria.
+        lowest : boolean
+            Select based on the lowest criteria value.
+        """
+        # Read in the expanded gen value table
+        df = pd.read_csv(sc_fpath)
+        df["values"] = df["gen_gids"].apply(self._all,
+                                            gen_fpath=self.gen_fpath,
+                                            variable=variable)
+
+        # Choose which gids to keep to avoid overlap
+        tdf = df[["sc_point_gid", "gen_gids", "values"]]
+
+        # Read in the preset table
+        df = self.get_table(sc_fpath, variable=variable, lowest=lowest)
+
+        # Subset for common set of fields
+        # ...
+
+        # Convert the supply curve table a structure, will use as meta
+        sdf, dtypes = df.rr.to_sarray()
+
+        # Create new dataset
+        ods = h5py.File(self.gen_fpath, "r")
+        nds = h5py.File(dst, "w")
+
+        # One or multiple years?
+        keys = [key for key in ods.keys() if "cf_profile" in key]
+
+        # Build the array
+        arrays = []
+        gids = df["best_gen_gid"].values
+        for key in keys:
+            break
+            gen_array = ods[key][:, gids]
 
 
 class RRNrwal():

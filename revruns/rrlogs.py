@@ -1,12 +1,21 @@
 # -*- coding: utf-8 -*-
 """Check with reV status, output, and error logs.
 
-Catch the scenario when a run just starts and it's time is INVALID
+TODO:
+    - Catch the scenario when a run just starts and it's time is INVALID
 
-See if we can't use pyslurm to speed up the squeue call
+    - See if we can't use pyslurm to speed up the squeue call
 
-rrpipeline is outputting all logs to the working directory, fix that or handle
-it here.
+    - rrpipeline is outputting all logs to the working directory, fix that or
+      handle it here.
+
+    - Runtimes for failed runs.
+
+    - Datetime stamps
+
+    - This was made in a rush before i was fast enough to build properly. Also,
+       This is probably the most frequently used revrun cli, so this should
+       definitely be a top candidate for a major refactor.
 """
 import json
 import os
@@ -252,6 +261,9 @@ def find_pid_dirs(folders, target_pid):
 
 def find_runtime(job):
     """Find the runtime for a specific job (dictionary entry)."""
+    if "fout" not in job:
+        return "nan"
+
     import datetime as dt
 
     dirout = job["dirout"]
@@ -369,7 +381,10 @@ def module_status_dataframe(status, module="gen"):
     mkey = MODULE_NAMES[module]
 
     # Get the module entry
-    mstatus = status[mkey]
+    if mkey in status:
+        mstatus = status[mkey]
+    else:
+        return None
 
     # The first entry is the pipeline index
     mindex = mstatus["pipeline_index"]
@@ -404,11 +419,11 @@ def status_dataframe(sub_folder, module=None):
     if status:
         # If just one module
         if module:
-            try:
-                df = module_status_dataframe(status, module)
-            except KeyError:
-                print(module + " not found in status file.\n")
-                raise
+            df = module_status_dataframe(status, module)
+            if df is None:
+                msg = (f"{module} not found in status file.\n")
+                print(Fore.RED + msg + Style.RESET_ALL)
+                return
 
         # Else, create a single data frame with everything
         else:
@@ -518,4 +533,9 @@ def main(folder, module, status, error, out, walk):
 
 
 if __name__ == "__main__":
-    main()
+    folder = "."
+    module = None
+    status = None
+    error = None
+    out = None
+    walk = False

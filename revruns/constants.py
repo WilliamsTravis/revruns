@@ -378,7 +378,7 @@ REPPROFILES_TEMPLATE = {
     "memory": 179,
     "nodes": 10,
     "option": "eagle",
-    "site_per_worker": 100,
+    "sites_per_worker": 100,
     "walltime": 2.0
   },
   "gen_fpath": "PIPELINE",

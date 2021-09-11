@@ -26,15 +26,17 @@ PRINT_HELP = "Print the path to all pipeline configs found instead. (boolean)"
 
 def check_status(pdir):
     """Check if a status file exists and is fully successful."""
+    successful = False
+
     try:
         status_file, status = find_status(pdir)
         pipeline_file = os.path.join(os.path.dirname(status_file),
                                                      "config_pipeline.json")
         pipeline = json.load(open(pipeline_file, "r"))
     except TypeError:
-        pass
+        status = None
+
     if status:
-        successful = False
         modules = [list(p.keys())[0] for p in pipeline["pipeline"]]
         if len(status) == len(modules):
             statuses = []
@@ -49,6 +51,7 @@ def check_status(pdir):
                 statuses.append(jobstatus)
             if all([s == "successful" for s in statuses]):
                 successful = True
+
     return successful
 
 
@@ -61,11 +64,13 @@ def rrpipeline(dirpath, walk, file, print_paths):
     """Run one or all reV pipelines in a directory."""
     dirpath = os.path.expanduser(dirpath)
     dirpath = os.path.abspath(dirpath)
-    print("Running rrpipeline for " + dirpath + "...")
+    print(Fore.CYAN + f"Running rrpipeline for {dirpath}..." + Style.RESET_ALL)
     if walk:
         config_paths = find_files(dirpath, file)
     else:
         config_paths = [find_file(dirpath, file)]
+
+    config_paths.sort()
 
     for path in config_paths:
         pdir = os.path.dirname(path)
@@ -83,13 +88,13 @@ def rrpipeline(dirpath, walk, file, print_paths):
                 print(Fore.CYAN + "Submitting " + rpath + "..."
                       + Style.RESET_ALL)
                 name = "_".join(os.path.dirname(path).split("/")[-3:])
-                cmd = ("nohup reV -c " + path + " -n " + name
-                       + " pipeline --monitor")
+                cmd = ("nohup reV -c " + path + " -n " + name +
+                       " pipeline --monitor")
                 cmd = shlex.split(cmd)
                 output = os.path.join(os.path.dirname(path), "pipeline.out")
                 process = sp.Popen(cmd,
-                                   stdout=open(output, "a"),
-                                   stderr=open(output, "a"),
+                                   stdout=open(output, "w"),
+                                   stderr=open(output, "w"),
                                    preexec_fn=os.setpgrp)
                 if process.returncode == 1:
                     raise OSError("Submission failed: check {}".format(output))
@@ -100,4 +105,7 @@ def rrpipeline(dirpath, walk, file, print_paths):
 
 
 if __name__ == "__main__":
-    rrpipeline()
+    dirpath = "."
+    walk = True
+    file = "config_pipeline.json"
+    print_paths = False

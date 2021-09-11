@@ -244,7 +244,7 @@ class Features:
         # Build kwargs
         kwargs = {"user": user, "host": host, "dbname": dbname, "user": user,
                  "password": password, "port": port}
-            
+
         return kwargs
 
     @property
@@ -532,6 +532,8 @@ class Connections(Build_Points, Features):
             return row
 
         # Get missings dependencies - catching error
+        from reV.handlers.transmission import TransmissionFeatures
+
         missing_dependencies = []
         try:
             TransmissionFeatures(condf)._check_feature_dependencies()
@@ -545,75 +547,6 @@ class Connections(Build_Points, Features):
 
         # Find those features and reformat
         mdf = linedf[linedf["gid"].isin(missing_dependencies)]
-        mdf = mdf.replace("null", np.nan)
-        mdf = mdf.apply(find_point, scdf=scdf, axis=1)
-
-        # Append these to the table
-        condf = pd.concat([condf, mdf])
-
-        return condf
-
-    def fix_missing_dependencies(self, condf, scdf, simple=False):
-        """Check for and find fix missing feature line dependencies.
-        Parameters
-        ----------
-        condf: pd.core.frame.DataFrame
-            A data frame of supply curve point to transmission line connections.
-
-        Returns
-        -------
-        pd.core.frame.DataFrame
-            The same data frame with added entries if missing line dependencies
-            were found.
-        """
-        # This requires an extra function
-        def find_point(row, scdf):
-            """Find the closest supply curve point to a line."""
-            # Find all distances to this line
-            line = row["geometry"]
-            scdists = [point.distance(line) for point in scdf["geometry"]]
-
-            # Find the closest point from the distances
-            dist_m = np.min(scdists)
-            point_idx = np.where(scdists == dist_m)[0][0]
-            point_row = scdf.iloc[point_idx]
-
-            # These have different field names
-            fields = {
-                "sc_point_gid": "sc_point_gid",
-                "sc_row_ind": "sc_point_row_id",
-                "sc_col_ind": "sc_point_col_id"
-            }
-
-            # We need that points identifiers
-            for key, field in fields.items():
-                row[field] = point_row[key]
-
-            # Finally add in distance in miles
-            row["dist_mi"] = dist_m / 1609.34
-
-            # We only need these fields
-            keepers = ['ac_cap', 'cap_left', 'category', 'trans_gids',
-                       'trans_line_gid', 'dist_mi', 'sc_point_gid',
-                       'sc_point_row_id', 'sc_point_col_id']
-            row = row[keepers]
-
-            return row
-
-        # Get missings dependencies - catching error
-        missing_dependencies = []
-        try:
-            TransmissionFeatures(condf)._check_feature_dependencies()
-        except RuntimeError as e:
-            error = str(e)
-            missing_str = error[error.index("dependencies:") + 14:]
-            missing_dict = ast.literal_eval(missing_str)
-            for gids in missing_dict.values():
-                for gid in gids:
-                    missing_dependencies.append(gid)
-
-        # Find features and reformat (distance, sc_points, etc don't matter)
-        mdf = self.linedf[self.linedf["gid"].isin(missing_dependencies)]
         mdf = mdf.replace("null", np.nan)
         mdf = mdf.apply(find_point, scdf=scdf, axis=1)
 
