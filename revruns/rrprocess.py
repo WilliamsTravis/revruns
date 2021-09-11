@@ -147,7 +147,6 @@ class Process:
         col = f"{field}_class"
         cols = self._cols(file)
         if col not in cols:
-            print("Adding " + field + " class to " + file + "...")
             df = self.pd.read_csv(file, low_memory=False)
             rfield = self.resource_field(file, field)
             onmap = RESOURCE_CLASSES[field]["onshore"]
@@ -261,6 +260,12 @@ class Process:
             if all([self.np.isnan(v) for v in df["mean_res"]]):
                 if "mean_ws_mean-means" in df.columns:
                     field = "mean_ws_mean-means"
+                elif "mean_ws_mean" in df.columns:
+                    field = "mean_ws_mean"
+                else:
+                    field = "mean_res"
+            else:
+                field = "mean_res"
         return field
 
     def _fips(self, row):
