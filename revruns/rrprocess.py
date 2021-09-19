@@ -73,6 +73,41 @@ RESOURCE_CLASSES = {
 PIXEL_SUM_FIELDS = ["shadow_flicker_120m", "shadow_flicker_135m"]
 
 
+# Implement this to calculate capex and unit capex if possible
+def capex(df):
+    """Recalculate capital costs if needed input columns are present."""
+    capacity = df["capacity"]
+    capacity_kw = capacity * 1000
+
+    fcr = df["mean_fixed_charge_rate"]
+
+    unit_om = df["mean_fixed_operating_cost"] / df["mean_system_capacity"]
+    om = unit_om * capacity_kw
+
+    mean_cf = df["mean_cf"]
+    lcoe = df["mean_lcoe"]
+    if "raw_lcoe" in df:
+        raw_lcoe = df["raw_lcoe"]
+    else:
+        raw_lcoe = lcoe.copy()
+
+    cc = ((lcoe * (capacity * mean_cf * 8760)) - om) / fcr  # Watch out for economies of scale here
+    unit_cc = cc / capacity_kw  # $/kw
+
+    raw_cc = ((raw_lcoe * (capacity * mean_cf * 8760)) - om) / fcr  # Watch out for economies of scale here
+    raw_unit_cc = raw_cc / capacity_kw  # $/kw
+
+    df["capex"] = cc
+    df["unit_capex"] = unit_cc
+    df["raw_capex"] = raw_cc
+    df["raw_unit_capex"] = raw_unit_cc
+
+    return df
+
+
+
+
+
 class Process:
     """Methods for performing standard post-processing steps on reV outputs."""
 

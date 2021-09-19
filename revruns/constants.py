@@ -336,6 +336,7 @@ AGGREGATION_TEMPLATE = {
 }
 
 SUPPLYCURVE_TEMPLATE = {
+  "avail_cap_frac": "PLACEHOLDER",
   "directories": {
     "log_directory": "./logs",
     "output_directory": "./"
@@ -356,7 +357,6 @@ SUPPLYCURVE_TEMPLATE = {
   "trans_table": ("/projects/rev/data/transmission/" +
                   "conus_trans_lines_cache_offsh_064_sj_infsink.csv"),
   "transmission_costs": {
-    "available_capacity": "PLACEHOLDER",
     "center_tie_in_cost": "PLACEHOLDER",
     "line_cost": "PLACEHOLDER",
     "line_tie_in_cost": "PLACEHOLDER",

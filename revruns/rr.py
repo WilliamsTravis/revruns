@@ -1113,8 +1113,7 @@ class Exclusions(Reformatter):
 
         # If saving, does it return an object?
         arrays = TechMapping.run(self.excl_fpath, res_fpath, dname,
-                                 max_workers=None, distance_upper_bound=None,
-                                 map_chunk=2560, save_flag=save_flag)
+                                 max_workers=None, sc_resolution=2560)
         return arrays
 
     def _preflight(self):

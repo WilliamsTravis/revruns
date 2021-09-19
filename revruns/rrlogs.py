@@ -215,6 +215,10 @@ def find_outputs(folder):
     # Check each json till you find it
     config_files = glob(os.path.join(folder, "*.json"))
     outdir = None
+
+    if not config_files:
+        print(Fore.RED + "No reV outputs found." + Style.RESET_ALL)
+        return
     try:
         for file in config_files:
             if not outdir:
@@ -329,11 +333,14 @@ def find_status(sub_folder):
         file = [f for f in files if "_status.json" in f][0]
     except IndexError:
         outdir = find_outputs(sub_folder)
-        files = glob(os.path.join(outdir, "*.json"))
-        file = [f for f in files if "_status.json" in f]
-        if not file:
+        if outdir:
+            files = glob(os.path.join(outdir, "*.json"))
+            file = [f for f in files if "_status.json" in f]
+            if not file:
+                return None, None
+        else:
             return None, None
-
+        
     # Return the dictionary
     with open(file, "r") as f:
         status = json.load(f)
