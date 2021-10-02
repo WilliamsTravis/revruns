@@ -17,6 +17,7 @@ TODO:
        This is probably the most frequently used revrun cli, so this should
        definitely be a top candidate for a major refactor.
 """
+import datetime as dt
 import json
 import os
 import warnings
@@ -122,7 +123,7 @@ def checkout(logdir, pid, output="error"):
         print(Fore.YELLOW + "cat " + log + Style.RESET_ALL)
 
 
-def color_print(df, print_folder):
+def color_print(df, print_folder, logdir):
     """Color the status portion of the print out."""
     from tabulate import tabulate
 
@@ -137,11 +138,26 @@ def color_print(df, print_folder):
             string = Fore.YELLOW + string + Style.RESET_ALL
         return string
 
-    name = "\n" + Fore.CYAN + "/" + print_folder + Style.RESET_ALL + ":"
+    name = "\n" + Fore.CYAN + print_folder + Style.RESET_ALL + ":"
     df["job_status"] = df["job_status"].apply(color_string)
     pdf = tabulate(df, showindex=False, headers=df.columns, tablefmt="simple")
     print(name)
+    if logdir:
+        print("  logs: " + logdir + Style.RESET_ALL)
+    else:
+        print(Fore.YELLOW + "Could not find log directory." + Style.RESET_ALL)
     print(pdf)
+
+
+def find_date(file):
+    """Return the modification date of a file."""
+    try:
+        seconds = os.path.getmtime(file)
+        date = dt.datetime.fromtimestamp(seconds)
+        sdate = dt.datetime.strftime(date, "%Y-%m-%d %H:%M")
+    except FileNotFoundError:
+        sdate = "NA"
+    return sdate
 
 
 def find_file(folder, file="config_pipeline.json"):
@@ -202,10 +218,11 @@ def find_logs(folder):  # <---------------------------------------------------- 
                 logdir = config["directories"]["logging_directory"]
 
     # Expand log directory
-    if logdir[0] == ".":
-        logdir = logdir[2:]
-        logdir = os.path.join(folder, logdir)
-    logdir = os.path.expanduser(logdir)
+    if logdir:
+        if logdir[0] == ".":
+            logdir = logdir[2:]
+            logdir = os.path.join(folder, logdir)
+        logdir = os.path.expanduser(logdir)
 
     return logdir
 
@@ -266,7 +283,7 @@ def find_pid_dirs(folders, target_pid):
 def find_runtime(job):
     """Find the runtime for a specific job (dictionary entry)."""
     if "fout" not in job:
-        return "nan"
+        return "NA"
 
     import datetime as dt
 
@@ -280,36 +297,39 @@ def find_runtime(job):
 
     # Find all the output logs for this jobname
     logdir = find_logs(dirout)
-    stdout = os.path.join(logdir, "stdout")
-    logs = glob(os.path.join(stdout, "*{}*.o".format(jobname)))
+    if logdir:
+        stdout = os.path.join(logdir, "stdout")
+        logs = glob(os.path.join(stdout, "*{}*.o".format(jobname)))
+    
+        # Take the last, will also work if there were multiple attempts
+        logpath = logs[-1]
+    
+        # We can't get file creation in Linux
+        with open(logpath, "r") as file:
+            loglines = [line.replace("\n", "") for line in file.readlines()]
+        for line in loglines:
+            if "INFO" in line or "DEBUG" in line:
+                date = line.split()[2]
+                time = line.split()[3][:8]
+                break
+    
+        # There might not be any values here
+        try:
+            time_string = " ".join([date, time])
+        except NameError:
+            return "NA"
+    
+        # Format the start time from these
+        stime = dt.datetime.strptime(time_string, "%Y-%m-%d %H:%M:%S")
 
-    # Take the last, will also work if there were multiple attempts
-    logpath = logs[-1]
-
-    # We can't get file creation in Linux
-    with open(logpath, "r") as file:
-        loglines = [line.replace("\n", "") for line in file.readlines()]
-    for line in loglines:
-        if "INFO" in line or "DEBUG" in line:
-            date = line.split()[2]
-            time = line.split()[3][:8]
-            break
-
-    # There might not be any values here
-    try:
-        time_string = " ".join([date, time])
-    except NameError:
-        return "na"
-
-    # Format the start time from these
-    stime = dt.datetime.strptime(time_string, "%Y-%m-%d %H:%M:%S")
-
-    # Get the modification time from the file stats
-    fstats = os.stat(logpath)
-    etime = dt.datetime.fromtimestamp(fstats.st_mtime)
-
-    # Take the difference
-    minutes = round((etime - stime).seconds / 60, 3)
+        # Get the modification time from the file stats
+        fstats = os.stat(logpath)
+        etime = dt.datetime.fromtimestamp(fstats.st_mtime)
+    
+        # Take the difference
+        minutes = round((etime - stime).seconds / 60, 3)
+    else:
+        minutes = "NA"
     return minutes
 
 
@@ -381,8 +401,8 @@ def module_status_dataframe(status, module="gen"):
     import pandas as pd
 
     # Target columns
-    tcols = ["job_id", "hardware", "fout", "dirout", "job_status", "finput",
-             "runtime"]
+    tcols = ["job_id", "pipeline_index", "hardware", "fout", "dirout",
+             "job_status", "finput", "runtime", "date"]
 
     # Get the module key
     mkey = MODULE_NAMES[module]
@@ -395,8 +415,6 @@ def module_status_dataframe(status, module="gen"):
 
     # The first entry is the pipeline index
     mindex = mstatus["pipeline_index"]
-
-    # The rest is another dictionary for each sub job
     del mstatus["pipeline_index"]
 
     # If incomplete:
@@ -411,6 +429,12 @@ def module_status_dataframe(status, module="gen"):
     # Create data frame
     mdf = pd.DataFrame(mstatus).T
     mdf["pipeline_index"] = mindex
+
+    # Add date
+    mdf["file"] = mdf.apply(lambda x: os.path.join(x["dirout"], x["fout"]),
+                            axis=1)
+    mdf["date"] = mdf["file"].apply(find_date)
+    mdf = mdf[tcols]
 
     return mdf
 
@@ -448,8 +472,9 @@ def status_dataframe(sub_folder, module=None):
 
         # And refine this down for the printout
         df["job_name"] = df.index
-        df = df[['job_id', 'job_name', 'job_status', 'pipeline_index',
-                 'runtime']]
+        df = df[["job_id", "job_name", "job_status", "pipeline_index",
+                 "runtime", "date"]]
+        df["runtime"] = df["runtime"].apply(lambda x: round(x, 2))
 
         return df
     else:
@@ -468,22 +493,22 @@ def rrlogs(args):
 
     # This might return None
     if status_df is not None:
+        logdir = find_logs(sub_folder)
+
         # Now return the requested return type
         if status:
             status_df = check_entries(status_df, status)
 
         if not error and not out:
             print_folder = os.path.relpath(sub_folder, folder)
-            color_print(status_df, print_folder)
+            color_print(status_df, print_folder, logdir)
 
         # If a specific status was requested
         if error or out:
             # Find the logging directoy
-            try:
-                logdir = find_logs(sub_folder)
-            except:
+            if not logdir:
                 print(Fore.YELLOW
-                      + "Could not find log directory"
+                      + "Could not find log directory."
                       + Style.RESET_ALL)
                 return
             if error:
@@ -504,7 +529,7 @@ def rrlogs(args):
 @click.option("--out", "-o", default=None, help=OUT_HELP)
 @click.option("--walk", "-w", is_flag=True, help=WALK_HELP)
 def main(folder, module, status, error, out, walk):
-    """REVRUNS - Check Logs.
+    r"""REVRUNS - Check Logs.
 
     Check log files of a reV run directory. Assumes certain standard
     naming conventions:
@@ -534,9 +559,14 @@ def main(folder, module, status, error, out, walk):
         folders = find_pid_dirs(folders, out)
 
     # Run rrlogs for each
-    arg_list = [(folder, f, module, status, error, out) for f in folders]
-    for args in arg_list:
+    if len(folders) > 1:
+        arg_list = [(folder, f, module, status, error, out) for f in folders]
+        for args in arg_list:
+            _ = rrlogs(args)
+    else:
+        args = (folder, folders[0], module, status, error, out)
         _ = rrlogs(args)
+
 
 
 if __name__ == "__main__":

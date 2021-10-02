@@ -105,9 +105,6 @@ def capex(df):
     return df
 
 
-
-
-
 class Process:
     """Methods for performing standard post-processing steps on reV outputs."""
 

@@ -9,7 +9,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import rasterio as rio
-import revruns
+from revruns import rr
 
 from scipy.spatial import cKDTree
 
@@ -128,6 +128,7 @@ def rasterize(gdf, res, dst, fillna):
              tmp_src, dst,
              "-l", layer_name,
              "-a", attribute,
+             "-a_nodata", "0",
              "-at",
              "-tr", str(res), str(res)])
 
@@ -222,11 +223,11 @@ def to_grid(gdf, variable, res):
 def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna):
     """REVRUNS - RRASTER - Rasterize a reV output.
 
-    src = "/shared-projects/rev/projects/weto/fy20/task_1/generation/3_2030_midcost_medinnov/outputs/outputs_multi-year.h5"
-    dst = "/shared-projects/rev/projects/weto/fy20/task_1/generation/3_2030_midcost_medinnov/outputs/3_2030_midcost_medinnov_2007_2013_cf.tif"
+    src = "/lustre/eaglefs/shared-projects/rev/projects/weto/fy21/atb/rev/generation/onshore/1_moderate/1_moderate_multi-year.h5"
+    dst = "/lustre/eaglefs/shared-projects/rev/projects/weto/fy21/atb/rev/generation/onshore/1_moderate/1_moderate_multi-year_cf.tif"
     dataset = "cf_mean-means"
-    res = 2000
-    crs = "esri:102008"
+    resolution = 2000
+    crs = "esri:102003"
     agg_fun = "mean"
     layer = None
     fltr = None

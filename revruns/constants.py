@@ -79,7 +79,7 @@ RESOURCE_DIMS = {
 
 # The Eagle HPC path to each resource data set. Brackets indicate years.
 RESOURCE_DATASETS = {
-        "nsrdb_v3": "/datasets/NSRDB/v3.0.1/nsrdb_{}.h5",
+        "nsrdb_v3": "/datasets/NSRDB/v3/nsrdb_{}.h5",
         "nsrdb_india": "/datasets/NSRDB/india/nsrdb_india_{}.h5",
         "wtk_conus_v1": "/datasets/WIND/conus/v1.0.0/wtk_conus_{}.h5",
         "wtk_canada_v1": "/datasets/WIND/canada/v1.0.0/wtk_canada_{}.h5",
