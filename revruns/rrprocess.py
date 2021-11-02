@@ -1,14 +1,15 @@
-"""Standard post processing steps for reV supply-curve runs.
-
-Created on Fri May 21, 2021
-
-@author: twillia2
-"""
+"""Standard post processing steps for reV supply-curve runs."""
 import os
 
 from functools import lru_cache
 
+import geopandas as gpd
+import pandas as pd
 
+COUNTIES = ("https://www2.census.gov/geo/tiger/TIGER2021/COUNTY/"
+            "tl_2021_us_county.zip")  # Update this periodically, or just grab whatever is in the folder each time
+STATES = ("https://www2.census.gov/geo/tiger/TIGER2021/STATE/"
+          "tl_2021_us_state.zip")  # Update this periodically
 HOME = "."  # Will be click main argument
 ONSHORE_FULL = ("/projects/rev/data/transmission/build/agtables/"
                 "build_{:03d}_agg.csv")
@@ -109,13 +110,12 @@ class Process:
     """Methods for performing standard post-processing steps on reV outputs."""
 
     import addfips
+    import geopandas as gpd
     import numpy as np
     import pandas as pd
 
     from revruns import rr
     from tqdm import tqdm
-
-    af = addfips.AddFIPS()
 
     def __init__(self, home=".", file_pattern="*_sc.csv", files=None,
                  pixel_sum_fields=PIXEL_SUM_FIELDS, resolution=90):
@@ -217,29 +217,34 @@ class Process:
                 self.assign_class(file, field)
 
     def assign_county(self, file):
-        """Assign the nearest county FIPS to each offshore point."""
-        cols = self._cols(file)
-        if "fips" not in cols and "offshore" in cols and "county" in cols:
-            df = self.pd.read_csv(file)
+        """Assign the appropriate county FIPS to each point."""
+        df = self.pd.read_csv(file)
 
-            if df[df["offshore"] == 0].shape[0] == 0:
-                ondf = self.pd.read_csv(ONSHORE_FULL.format(128))  # <------------- This should technicall depend on config agg factor
-            else:
-                ondf = df[df["offshore"] == 0]
+        # Split in on/offshore
+        offdf = df[df["offshore"] == 1]
+        ondf = df[df["offshore"] == 0]
 
-            ondf["fips"] = ondf.apply(self._fips, axis=1)
+        # Fix onshore state/counties assign fips
+        if ondf.shape[0] > 0:
+            ondf = self._fix_fips(ondf)
 
-            offdf = df[df["offshore"] == 1]
-            offdf = offdf.rr.nearest(ondf, fields=["fips", "state"])
+        # Assign offshore states, counties, and fips
+        if offdf.shape[0] > 0:
+            fdf = self.pd.read_csv(ONSHORE_FULL.format(128))  # <-------------- This should technically depend on config agg factor
+            fdf = self._fix_fips(fdf)
+
+            offdf = offdf.rr.nearest(fdf,
+                                     fields=["cnty_fips", "state", "county"])
             del offdf["dist"]
             del offdf["geometry"]
 
-            if df[df["offshore"] == 0].shape[0] == 0:
-                df = offdf
-            else:
-                df = self.pd.concat([ondf, offdf])
-            df = df.sort_values("sc_gid")
-            df.to_csv(file, index=False)
+        df = self.pd.concat([ondf, offdf])
+        df = df.sort_values("sc_gid")
+        if "geometry" in df:
+            del df["geometry"]
+            df = pd.DataFrame(df)
+
+        df.to_csv(file, index=False)
 
     def assign_counties(self):
         """Assign the nearest county FIPS to each point for each file."""
@@ -257,6 +262,25 @@ class Process:
         """Assign each point an NREL region for each file."""
         for file in self.files:
             self.assign_region(file)
+
+    @property
+    @lru_cache()
+    def counties(self):
+        """Read in and format county dataframe."""
+        dst = "/projects/rev/data/conus/shapefiles/counties_2021.gpkg"  # This is not future-proof
+        if not os.path.exists(dst):
+            df = self.gpd.read_file(COUNTIES)
+            sdf = self.gpd.read_file(STATES)
+            statefps = dict(zip(sdf["STATEFP"], sdf["NAME"]))
+            df["county"] = df["NAME"]
+            df["state"] = df["STATEFP"].map(statefps)
+            df["cnty_fips"] = df["STATEFP"] + df["COUNTYFP"]
+            df = df[["county", "state", "cnty_fips", "geometry"]]
+            df = df.to_crs("epsg:4326")
+            df.to_file(dst, "GPKG")
+        else:
+            df = self.gpd.read_file(dst)
+        return df
 
     def map_range(self, x, range_dict):
         """Return class for a given value."""
@@ -300,10 +324,27 @@ class Process:
                 field = "mean_res"
         return field
 
-    def _fips(self, row):
-        """Return county FIPS code."""
-        return self.af.get_county_fips(row["county"], state=row["state"])
+    def _fix_fips(self, df):
+        """Reassign counties, states, and fips to fix bug."""
+        counties = self.counties
+        if not isinstance(df, gpd.GeoDataFrame):
+            if "geometry" in df:
+                del df["geometry"]
+            df = df.rr.to_geo()
+        if "cnty_fips" in df:
+            del df["cnty_fips"]
+        columns = list(df.columns) + ["cnty_fips"]
+        del df["state"]
+        del df["county"]
+        df = self.gpd.sjoin(df, counties)
+        df = df[columns]
+        return df
 
     def _cols(self, file):
         """Return only the columns of a csv file."""
         return self.pd.read_csv(file, index_col=0, nrows=0).columns
+
+
+if __name__ == "__main__":
+    file = "/shared-projects/rev/projects/weto/fy21/atb/rev/aggregation/onshore/fips_run/fips_run_agg.csv"
+    self = Process()

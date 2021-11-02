@@ -12,7 +12,7 @@ import shlex
 import subprocess as sp
 
 from colorama import Fore, Style
-from revruns.rrlogs import find_file, find_files, find_status
+from revruns.rrlogs import RRLogs
 from rex.utilities.execution import SubprocessManager
 
 
@@ -27,9 +27,10 @@ PRINT_HELP = "Print the path to all pipeline configs found instead. (boolean)"
 def check_status(pdir):
     """Check if a status file exists and is fully successful."""
     successful = False
+    rrlogs = RRLogs()
 
     try:
-        status_file, status = find_status(pdir)
+        status_file, status = rrlogs.find_status(pdir)
         pipeline_file = os.path.join(os.path.dirname(status_file),
                                                      "config_pipeline.json")
         pipeline = json.load(open(pipeline_file, "r"))
@@ -64,11 +65,12 @@ def rrpipeline(dirpath, walk, file, print_paths):
     """Run one or all reV pipelines in a directory."""
     dirpath = os.path.expanduser(dirpath)
     dirpath = os.path.abspath(dirpath)
+    rrlogs = RRLogs()
     print(Fore.CYAN + f"Running rrpipeline for {dirpath}..." + Style.RESET_ALL)
     if walk:
-        config_paths = find_files(dirpath, file)
+        config_paths = rrlogs.find_files(dirpath, file)
     else:
-        config_paths = [find_file(dirpath, file)]
+        config_paths = [rrlogs.find_file(dirpath, file)]
 
     config_paths.sort()
 

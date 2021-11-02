@@ -522,8 +522,12 @@ class PandasExtension:
         df1 = self._obj.copy()
         original_type = type(df1)
         if not isinstance(df1, self.gpd.geodataframe.GeoDataFrame):
+            if "geometry" in df1:
+                del df1["geometry"]
             df1 = df1.rr.to_geo(lat, lon)  # <--------------------------------- not necessary, could speed this up just finding the lat/lon columns, we'd also need to reproject for this to be most accurate.
         if not isinstance(df, self.gpd.geodataframe.GeoDataFrame):
+            if "geometry" in df:
+                del df["geometry"]
             df = df.rr.to_geo(lat, lon)
             df = df.reset_index(drop=True)
 
