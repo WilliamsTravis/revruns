@@ -15,11 +15,11 @@ import shutil
 
 from glob import glob
 
-import gdal
 import h5py
 import numpy as np
 import pandas as pd
 
+from osgeo import gdal
 from tqdm import tqdm
 
 pd.set_option("display.max_columns", 500)

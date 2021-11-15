@@ -267,7 +267,7 @@ class RRLogs():
                     except KeyError:
                         pass
         except:
-            print("Could not find 'reV output directory'")
+            print("Could not find reV output directory")
             raise
 
         # Expand log directory
@@ -278,7 +278,7 @@ class RRLogs():
 
         return outdir
 
-    def find_pid_dirs(folders, target_pid):
+    def find_pid_dirs(self, folders, target_pid):
         """Check the log files and find which folder contain the target pid."""
         pid_dirs = []
         for folder in folders:
@@ -294,12 +294,12 @@ class RRLogs():
             raise FileNotFoundError(Fore.RED + msg + Style.RESET_ALL)
         return pid_dirs
 
-    def find_runtime(job):
+    def find_runtime(self, job):
         """Find the runtime for a specific job (dictionary entry)."""
+        import datetime as dt
+
         if "fout" not in job:
             return "NA"
-
-        import datetime as dt
 
         dirout = job["dirout"]
         fout = job["fout"]
@@ -460,6 +460,10 @@ class RRLogs():
 
         if "finput" not in mdf:
             mdf["finput"] = mdf["file"]
+
+        if "runtime" not in mdf:
+            mdf["runtime"] = "na"
+
         mdf = mdf[tcols]
     
         return mdf
@@ -553,6 +557,42 @@ class RRLogs():
                   + Style.RESET_ALL)
         return sub_folder
 
+    def main(self):
+        """Run the appropriate rrlogs functions for a folder."""
+        # Unpack args
+        folder = self.folder
+        error = self.error
+        out = self.out
+        walk = self.walk
+        module = self.module
+        status = self.status
+
+        # If walk find all project directories with a
+        if walk or error or out:
+            folders = self.find_files(folder, file="logs")
+            folders = [os.path.dirname(f) for f in folders]
+            folders.sort()
+        else:
+            folders = [folder]
+
+        # If an error our stdout logs is requested, only run the containing folder
+        if error:
+            folders = self.find_pid_dirs(folders, error)
+        if out:
+            folders = self.find_pid_dirs(folders, out)
+
+        # Run rrlogs for each
+        if len(folders) > 1:
+            arg_list = []
+            for f in folders:
+                args = (folder, f, module, status, error, out)
+                arg_list.append(args)
+            for args in arg_list:
+                _ = self._run(args)
+        else:
+            args = (folder, folders[0], module, status, error, out)
+            _ = self._run(args)
+
 
 @click.command()
 @click.option("--folder", "-f", default=".", help=FOLDER_HELP)
@@ -579,29 +619,7 @@ def main(folder, module, status, error, out, walk):
     "qaqc": "config_qaqc.json" \n
     """
     rrlogs = RRLogs(folder, module, status, error, out, walk)
-
-    # If walk find all project directories with a
-    if walk or error or out:
-        folders = rrlogs.find_files(folder, file="logs")
-        folders = [os.path.dirname(f) for f in folders]
-        folders.sort()
-    else:
-        folders = [folder]
-
-    # If an error our stdout logs is requested, only run the containing folder
-    if error:
-        folders = rrlogs.find_pid_dirs(folders, error)
-    if out:
-        folders = rrlogs.find_pid_dirs(folders, out)
-
-    # Run rrlogs for each
-    if len(folders) > 1:
-        arg_list = [(folder, f, module, status, error, out) for f in folders]
-        for args in arg_list:
-            _ = rrlogs._run(args)
-    else:
-        args = (folder, folders[0], module, status, error, out)
-        _ = rrlogs._run(args)
+    rrlogs.main()
 
 
 if __name__ == "__main__":
@@ -613,10 +631,4 @@ if __name__ == "__main__":
         out=None,
         walk=False,
     )
-    folder = "."
-    module = None
-    status = None
-    error = None
-    out = None
-    walk = False
     self = RRLogs(**args)

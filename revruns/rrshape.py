@@ -21,6 +21,8 @@ SAVE_HELP = ("The path to use for the output file. Defaults to current "
              "directory with the basename of the csvh5 file. (str)")
 LAYER_HELP = ("For HDF5 time series, the time index to render. Defaults to "
               " 0. (int)")
+AG_HELP = ("For HDF5 time series, choose how to aggregate values. Use 'sum'"
+           " for sum and 'mean' for mean. Defautls to '--layer' input.")
 DATASET_HELP = ("For HDF5 files, the data set to render. Defaults to "
                 "all available data sets. (str)")
 DRIVER_HELP = ("Save as a Geopackage ('gpkg') or ESRI Shapefile ('shp'). "
@@ -113,7 +115,7 @@ def csv_to_shape(src, dst=None, driver="gpkg", epsg=4326):
     gdf.to_file(dst, layer=layer, driver=driver_str)
 
 
-def h5_to_shape(src, dst=None, driver="gpkg", dataset=None, layer=0,
+def h5_to_shape(src, dst=None, driver="gpkg", dataset=None, layer=0, ag=None,
                 epsg=4326):
     """For now, this will just take a single time period as an index position
     in the time series.
@@ -131,6 +133,8 @@ def h5_to_shape(src, dst=None, driver="gpkg", dataset=None, layer=0,
         The dataset to write, optional. The default is "cf_mean".
     layer : The , optional
         DESCRIPTION. The default is 0.
+    ag : str
+        How to aggregate time-series. 'mean' or 'sum'.
     epsg : TYPE, optional
         DESCRIPTION. The default is 4326.
 
@@ -171,6 +175,7 @@ def h5_to_shape(src, dst=None, driver="gpkg", dataset=None, layer=0,
         if dataset:
             ds = file[dataset]
             scale = ds.attrs["scale_factor"]
+
             if len(ds.shape) == 1:
                 arrays[dataset] = ds[:] / scale
             else:
@@ -182,6 +187,8 @@ def h5_to_shape(src, dst=None, driver="gpkg", dataset=None, layer=0,
             print("Rendering " + str(len(datasets)) + " datasets: \n  " +
                   "\n  ".join(datasets))
             for k in tqdm(datasets, position=0):
+                if k == "windspeed_100m":
+                    break
                 ds = file[k]
                 scale = ds.attrs["scale_factor"]
                 if len(ds.shape) == 1:
@@ -212,8 +219,9 @@ def h5_to_shape(src, dst=None, driver="gpkg", dataset=None, layer=0,
 @click.argument("dst", required=False, default=None)
 @click.option("--dataset", "-ds", default=None, help=DATASET_HELP)
 @click.option("--layer", "-l", default=0, help=LAYER_HELP)
+@click.option("--agg", "-a", default=None, help=AG_HELP)
 @click.option("--driver", "-d", default="GPKG", help=DRIVER_HELP)
-def main(src, dst, dataset, layer, driver):
+def main(src, dst, dataset, layer, ag, driver):
     """Take a csv or hdf5 from reV and write a shapefile or geopackage."""
     # Expand this path in case we need to set dst
     src = os.path.expanduser(src)
@@ -233,7 +241,8 @@ def main(src, dst, dataset, layer, driver):
     # Two cases, hdf5 or csv - find better way to check for file format
     ext = os.path.splitext(src)[1]
     if ext == ".h5":
-        h5_to_shape(src, dst, driver=driver, dataset=dataset, layer=layer)
+        h5_to_shape(src, dst, driver=driver, dataset=dataset, layer=layer,
+                    ag=ag)
     elif ext == ".csv":
         csv_to_shape(src, dst, driver=driver)
     else:
