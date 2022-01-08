@@ -141,7 +141,7 @@ if __name__ == "__main__":
     shapefile_fields = {
         "2019-2024dppexclusionoptionareas_atlantic.gpkg": "TEXT_LABEL",
         "2019-2024dppexclusionoptionareas_gomr.gpkg": "TEXT_LABEL",
-        "conservation_areas.gpkg": "Design"
+        "conservation_areas.gpkg": "Design",
     }
 
     file = FILE

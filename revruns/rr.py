@@ -1027,6 +1027,9 @@ class Exclusions(Reformatter):
         dtype = profile["dtype"]
         profile = dict(profile)
 
+        # We need a 6 element geotransform, sometimes we recieve three extra
+        profile["transform"] = profile["transform"][:6]
+
         # Add coordinates and else check that the new file matches everything
         self._set_coords(profile)
         self._check_dims(raster, profile, dname)
@@ -1324,7 +1327,7 @@ class Profiles:
         # The supply curve data frame
         df = pd.read_csv(sc_fpath)
 
-        # Split the data frame up into chunkcs
+        # Split the data frame up into chuncks
         ncpu = mp.cpu_count() - 1
         cdfs = np.array_split(df, ncpu)
         arg_list = [(cdf, self.gen_fpath, variable, lowest) for cdf in cdfs]

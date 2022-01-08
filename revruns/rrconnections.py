@@ -40,7 +40,6 @@ from scipy.spatial import cKDTree
 from tqdm import tqdm
 
 warnings.filterwarnings("ignore", category=FutureWarning)
-
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 1000)
 tqdm.pandas()
@@ -646,7 +645,8 @@ def main(resolution, allocation, country, home, memory, time, offshore,
             multipliers(point_path, mult_path)
 
     else:
-        print("A full supply curve point table has been saved to " + ppath)
+        print("A full supply curve point table has been saved to "
+              f"{point_path}")
         print("You may now check out a node to generate a "
               + str(resolution)
               + " resolution connections table.")
@@ -664,6 +664,6 @@ if __name__ == "__main__":
     offshore = True
     just_agg = False
     exclusions = EXCL_PATHS["offshore"][country]
-    self = Connections(allocation, home)
+    # self = Connections(allocation, home)
 
     main()
