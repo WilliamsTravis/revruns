@@ -722,7 +722,7 @@ class Reformatter:
     import os
     import subprocess as sp
 
-    import gdalmethods as gm
+    import revruns.gdalmethods as gm
     import geopandas as gpd
     import h5py
     import numpy as np
