@@ -56,6 +56,7 @@ CONFIG_DICT = {
     "aggregation": "config_aggregation.son",
     "supply-curve": "config_supply-curve.json",
     "rep-profiles": "config_rep-profiles.json",
+    "nrwal": "config_nrwal.json",
     "qaqc": "config_qaqc.json"
 }
 MODULE_NAMES = {
@@ -67,6 +68,7 @@ MODULE_NAMES = {
     "aggregation": "supply-curve-aggregation",
     "supply-curve": "supply-curve",
     "rep-profiles": "rep-profiles",
+    "nrwal": "nrwal",
     "qaqc": "qa-qc"
 }
 
@@ -76,7 +78,6 @@ RUNNING_STRINGS = ["running", "run", "r"]
 SUBMITTED_STRINGS = ["submitted", "submit", "sb"]
 SUCCESS_STRINGS = ["successful", "success", "s"]
 UNSUBMITTED_STRINGS = ["unsubmitted", "unsubmit", "u"]
-
 
 
 class RRLogs():
