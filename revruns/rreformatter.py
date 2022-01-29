@@ -251,68 +251,97 @@ class Exclusions:
                 hdf.create_dataset(name="longitude", data=lons)
                 hdf.create_dataset(name="latitude", data=lats)
 
-class Reformatter(Exclusions):
+class Reformatter:
     """Reformat any file into a reV-shaped raster."""
     import os
     import subprocess as sp
-
     import numpy as np
     import geopandas as gpd
     import rasterio as rio
-
+    from tqdm import tqdm
+    from pathos import multiprocessing as mp
     from rasterio import features
+    import h5py
+    import datetime
 
-    def __init__(self, template, inputs):
+    def __init__(self, template, vectorfile_fields):
         """Initialize Reformatter object.
 
         Parameters
         ----------
         template : str
             Path to a raster to use as a template.
-        inputs: dict
-            Dictionary containing with 
         """
         self.template = template
-        self.shapefile_fields = shapefile_fields
+        self.vectorfile_fields = vectorfile_fields
         self.string_lookup = {}
 
     def __repr__(self):
         """Return object representation string."""
         return f"<Reformatter: template={self.template}>"
 
-    def raster(self, file, dst):  # <------------------------------------------ Use rio python bindings here, the compression isnt' working
-        """Resample and reproject a raster."""
+    def reformat_raster(self, file, dst):  # <------------------------------------------ Use rio python bindings here, the compression isnt' working
+        """Resample and re-project a raster."""
         self.sp.call(["rio", "warp", file, dst,
                       "--like", self.template,
                       "--co", "compress=lzw",  # <----------------------------- Might not be working?
                       "--co", "blockysize=128",
                       "--co", "blockxsize=128",
-                      "--co", "tiled=yes"])
+                      "--co", "tiled=yes"]) # <----------- do we need this function? 
 
-    def shapefile(self, file, dst, field=None, buffer=None, overwrite=False):
-        """Preprocess, reproject, and rasterize a vector."""
+    def reformat_batch_vectorfiles(self,dst_folder):
+        """Batch process the shapefiles indicated by the shapefile_fields"""
+        # get the number of cpu
+        n_cpu = self.os.cpu_count()
+        
+        # create output raster path
+        vectorfile_fields = self.vectorfile_fields
+
+        # sequential processing
+        for key, value_list in vectorfile_fields.items():
+            for value in value_list:
+                # create dst path
+                dst_name  = self.os.path.basename(key).split(".")[0] + "_" + value + ".tif"
+                dst = self.os.path.join(dst_folder,dst_name)
+                
+                # single cpu process
+                raseter_path = self.reformat_vectorfile(file = key,dst = dst,field = value)
+                # print(dst)
+                # h5_path = dst.replace(".tif",".h5")
+                # data_setname = self.os.path.basename(key).split(".")[0] + "_" + value
+                # self.reformat_to_h5(raseter_path,h5_path,data_setname)
+
+
+
+        # parallel process the vector files <-------------------------haven't implemented
+        # dsts=[]
+        # with self.mp.Pool(n_cpu) as pool:
+        #     for t in self.tqdm(pool.map(self.reformat_vectorfile,vector_files,dst,field_names),
+        #                     total=n_cpu):
+        #         dsts.append(t)
+        # return dsts
+    
+    
+    def reformat_vectorfile(self, file, dst, field=None, buffer=None, overwrite=False):
+        """Preprocess, re-project, and rasterize a vector."""
         # Read and process file
-        gdf = self._process_shapefile(file, field, buffer)
+        gdf = self._process_vectorfile(file, field, buffer)
         meta = self.meta
 
         # Skip if overwrite
         if not overwrite and self.os.path.exists(dst):
-            return
+            return dst
         else:
             # Rasterize
-            field = self.shapefile_fields[file]
-            elements = gdf[[field, "geometry"]].values
-            if isinstance(gdf[field].iloc[0], str):
-                elements = self._map_strings(file, gdf, field)
-
+            elements = gdf[["raster_value", "geometry"]].values
             shapes = [(g, r) for r, g in elements]
-            shape = [meta["height"], meta["width"]]
+
+            out_shape = [meta["height"], meta["width"]]
             transform = meta["transform"]
             with self.rio.Env():
-                array = self.features.rasterize(shapes, shape,
+                array = self.features.rasterize(shapes, out_shape,
                                                 transform=transform)
-
-            # Update meta
+            
             dtype = str(array.dtype)
             if "int" in dtype:
                 nodata = self.np.iinfo(dtype).max
@@ -320,11 +349,42 @@ class Reformatter(Exclusions):
                 nodata = self.np.finfo(dtype).max
             meta["dtype"] = dtype
             meta["nodata"] = nodata
-
-            # Write
+            
+            # Write to a raster
             with self.rio.Env():
-                with self.rio.open(dst, "w", **meta) as file:
-                    file.write(array, 1)
+                with self.rio.open(dst, "w", **meta) as rio_dst:
+                    rio_dst.write(array, 1)
+            
+        # reformat to h5
+        h5_file = dst.replace(".tif",".h5")
+        self.reformat_to_h5(file,dst,h5_file)
+
+
+    
+    def reformat_to_h5(self,vector_file,raster_path,h5_path,dataset_name=None):
+        """ reformat a raster to a h5 file"""
+        # open raster
+        with self.rio.open(raster_path) as raster:
+            raster_data = raster.read(1)
+            print(raster_data.dtype)
+            # meta = str(raster.meta.copy())
+
+        # if dataset_name is none, use the input raster name 
+        if dataset_name is None:
+            dataset_name = self.os.path.basename(h5_path).split(".")[0]
+        
+        # create h5 and write dataset
+        with self.h5py.File(h5_path,"w") as h5_f:
+            data_set = h5_f.create_dataset(dataset_name, data=raster_data)
+            # print(self.string_lookup)
+            try:
+                data_set.attrs['value lookup'] =self.string_lookup[self.os.path.basename(vector_file).split["."][0]]
+            except:
+                print("no lookup table")
+            # data_set.attrs['create date'] = self.datetime.date.today()
+            data_set.attrs['projection'] = self.meta
+        h5_f.close()
+    
 
     def guided(self, dirname="."):
         """Guide the processing of shapefiles with prompts and user inputs."""
@@ -344,21 +404,47 @@ class Reformatter(Exclusions):
         value_map = {v: k for k, v in string_map.items()}
 
         # Replace strings with integers
-        gdf[field] = gdf[field].map(value_map)
+        gdf["raster_value"] = gdf[field].map(value_map)
 
-        # Update the string lookup dictionary
-        name = self.os.path.basename(file).split(".")[0]  # <------------------ Adjust incase people use .'s in there file names
-        self.string_lookup[name] = string_map
+        # Update the string lookup dictionary <------- a file may have multiple fields in string type 
+        file_name = self.os.path.basename(file).split(".")[0]  # <------------------ Adjust incase people use .'s in there file names
+        field_map  = {field:string_map}
+        
+        # created a nested string_loopup
+        if file_name not in self.string_lookup:
+            self.string_lookup[file_name] = field_map
+        else:
+            self.string_lookup[file_name].update(field_map)
+        
+        print(self.string_lookup)
 
         return gdf
 
-    def _process_shapefile(self, file, field=None, buffer=None):
-        """Process a single file."""
-        # Read in file
-        gdf = self.gpd.read_file(file)
+    def _process_vectorfile(self, file, field=None, buffer=None):
+        """Process a single file. It includes following steps:
+        1. check if the a field exists in a shapefile;
+            to make sure the field name and its associated shapefile's path is correct; 
+            otherwise raise an error
+        2. check if the shapefile has a the same projetion as the template raster
+            if not, re-project
+        3. if buffer isn't non, then buffer the shapefile 
+         """
 
-        # Assign raster value
+        # Read in file and check the path
+        if not self.os.path.exists(file):
+            raise Exception("This shapefile path doesn't exist:{}".format(file))
+        else:
+            gdf = self.gpd.read_file(file)
+
+        # Check the projection;
+        if str(gdf.crs).upper() != str(self.meta["crs"]).upper():
+            gdf = gdf.to_crs(self.meta["crs"])
+        
+
+        # Check if the field value in the shapefile and Assign raster value
         if field:
+            if field not in gdf.columns:
+                raise Exception("Field '{}' not in '{}'".format(field,file)) 
             gdf["raster_value"] = gdf[field]
         else:
             gdf["raster_value"] = 1
@@ -370,24 +456,57 @@ class Reformatter(Exclusions):
         # Reduce to two fields
         gdf = gdf[["raster_value", "geometry"]]
 
-        # Reproject before buffering
-        gdf = gdf.to_crs(self.meta["crs"])
+        # Buffering
         if buffer:
             gdf["geometry"] = gdf["geometry"].buffer(buffer)
-
         return gdf
+    
+
+        
 
 
 if __name__ == "__main__":
-    shapefile_fields = {
-        "2019-2024dppexclusionoptionareas_atlantic.gpkg": "TEXT_LABEL",
-        "2019-2024dppexclusionoptionareas_gomr.gpkg": "TEXT_LABEL",
-        "conservation_areas.gpkg": "Design"
-    }
+    
+    # shapefile_fields = {
+    #     "/Users/jgu3/GDS/01-Project/02-Luma/01-Rawdata/puerto_rico_wind_hr_2019.gpkg": "boundary_layer_height",
+    #     "/Users/jgu3/GDS/01-Project/02-Luma/01-Rawdata/offshore/PR_Tropical_Cyclone_Wind_Exposure.geojson": "leaseBlock",
+    # }
+    # TEMPLATE = r"/Users/jgu3/GDS/01-Project/02-Luma/01-Rawdata/template/pr_template_32161.tif"
+    # self = Reformatter(TEMPLATE, vectorfile_fields=shapefile_fields)
+    
+    # # single shapefile test
+    # # 1. numerical example
+    # shape_file = "/Users/jgu3/GDS/01-Project/02-Luma/01-Rawdata/puerto_rico_wind_hr_2019.gpkg"
+    # test_field = "boundary_layer_height"
+    # dst = "/Users/jgu3/GDS/01-Project/02-Luma/03-exclusions/outraster/puerto_rico_wind_hr_2019_boundary_layer_height.tif"
+    # self.reformat_vectorfile(shape_file,dst=dst,field = test_field,buffer=100)
+    
+    # # 2. string example
+    # shape_file = "/Users/jgu3/GDS/01-Project/02-Luma/01-Rawdata/offshore/PR_Tropical_Cyclone_Wind_Exposure.geojson"
+    # dst = "/Users/jgu3/GDS/01-Project/02-Luma/03-exclusions/outraster/PR_Tropical_Cyclone_Wind_Exposure_wind_exposure.tif"
+    # self.reformat_vectorfile(shape_file,dst,field = "leaseBlock")
 
-    file = FILE
-    dst = DST
-    self = Reformatter(TEMPLATE, shapefile_fields=shapefile_fields)
-    # self.shapefile(FILE, DST)
-    # self.raster(FILE, DST)
-    # smap = self.string_lookup
+    # multiple shapefiles with multiple fields
+    # vectorfile_fields = {
+    #     "/Users/jgu3/GDS/01-Project/02-Luma/01-Rawdata/offshore/puerto_rico_wind_hr_2019.gpkg": "boundary_layer_height",
+    #     "/Users/jgu3/GDS/01-Project/02-Luma/01-Rawdata/offshore/PR_Tropical_Cyclone_Wind_Exposure.geojson": "leaseBlock",
+    #     "/Users/jgu3/GDS/01-Project/02-Luma/01-Rawdata/offshore/PR_Tropical_Cyclone_Wind_Exposure.geojson": "protractionNumber"
+    # }
+    import pandas as pd
+    from collections import defaultdict
+
+    # read csv
+    input_table = pd.read_csv("/Users/jgu3/GDS/01-Project/02-Luma/01-Rawdata/offshore/rev_input.csv")
+
+    # iterate the table, create a vector_file - field dictionary
+    vectorfile_fields  = defaultdict(list)
+    for index, row in input_table.iterrows():
+        vectorfile_fields[row["file_path"]].append(row["field"])
+    # print(vectorfile_fields)
+    
+
+    # reformat
+    TEMPLATE = "/Users/jgu3/GDS/01-Project/02-Luma/01-Rawdata/template/pr_template_32161.tif"
+    reformat = Reformatter(TEMPLATE, vectorfile_fields=vectorfile_fields)
+    out_folder = "/Users/jgu3/GDS/01-Project/02-Luma/03-exclusions/batch_output"
+    reformat.reformat_batch_vectorfiles(out_folder)
