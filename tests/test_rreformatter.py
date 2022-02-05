@@ -16,7 +16,7 @@ INPUTS = {
         "buffer": 0
     },
     "significant_wave_height_annual": {
-        "path": "cdata/shapefiles/pr_wave_sig_ht_32161.geojson",
+        "path": "data/shapefiles/pr_wave_sig_ht_32161.geojson",
         "field": "ann_ssh",
         "buffer": 0
     }
@@ -25,7 +25,7 @@ INPUTS = {
 
 def test():
     """Test sample refromatting routine."""
+    
 
-
-if __name__ == "__main__":
-    self = rreformatter.Reformatter(TEMPLATE, INPUTS)
+# if __name__ == "__main__":
+#     self = rreformatter.Reformatter(TEMPLATE, INPUTS)

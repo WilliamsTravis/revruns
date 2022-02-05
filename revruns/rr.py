@@ -615,25 +615,28 @@ class PandasExtension:
         df.rr.decode()
 
         # Find coordinate columns
-        if "geometry" not in df.columns:
-            if "geom" not in df.columns:
-                try:
-                    lat, lon = self.find_coords()
-                except ValueError:
-                    pass
+        if not isinstance(df, self.gpd.geodataframe.GeoDataFrame):
+            if "geometry" not in df.columns:
+                if "geom" not in df.columns:
+                    try:
+                        lat, lon = self.find_coords()
+                    except ValueError:
+                        pass
 
-                # For a single row
-                def to_point(x):
-                    return self.Point(tuple(x))
-                df["geometry"] = df[[lon, lat]].apply(to_point, axis=1)
+                    # For a single row
+                    def to_point(x):
+                        return self.Point(x.values)
+                    df["geometry"] = df[[lon, lat]].apply(to_point, axis=1)
 
-        # Create the geodataframe - add in projections
-        if "geometry" in df.columns:
-            gdf = self.gpd.GeoDataFrame(df, crs='epsg:4326',
-                                        geometry="geometry")
-        if "geom" in df.columns:
-            gdf = self.gpd.GeoDataFrame(df, crs='epsg:4326',
-                                        geometry="geom")
+                # Create the geodataframe - add in projections
+                if "geometry" in df.columns:
+                    gdf = self.gpd.GeoDataFrame(df, crs='epsg:4326',
+                                                geometry="geometry")
+                if "geom" in df.columns:
+                    gdf = self.gpd.GeoDataFrame(df, crs='epsg:4326',
+                                                geometry="geom")
+            else:
+                gdf = df
 
         return gdf
 

@@ -9,14 +9,27 @@ Updated in Feb, 2,2022
 
 @author: twillia2
 """
+import glob
 import json
-from pyproj import CRS
+import subprocess as sp
 import os
+
+import geopandas as gpd
+import h5py
+import numpy as np
+import pandas as pd
+import rasterio as rio
+
+from pyproj import CRS, Transformer
+from rasterio.errors import RasterioIOError
+
+from tqdm import tqdm
+from pathos import multiprocessing as mp
+from rasterio import features
+
 
 def crs_match(crs1, crs2):
     """Check if two coordinate reference systems match."""
-    
-
     # Using strings and CRS objects directly is not consistent enough
     check = False
     crs1 = CRS(crs1).to_dict()
@@ -37,13 +50,6 @@ def crs_match(crs1, crs2):
 
 class Exclusions:
     """Build or add to an HDF5 Exclusions dataset."""
-
-    import h5py
-    import numpy as np
-    import rasterio as rio
-
-    from pyproj import Transformer
-    from rasterio.errors import RasterioIOError
 
     def __init__(self, excl_fpath, string_values={}):
         """Initialize Exclusions object.
@@ -70,9 +76,9 @@ class Exclusions:
         """Add a raster file and its description to the HDF5 exclusion file."""
         # Open raster object
         try:
-            raster = self.rio.open(file)
+            raster = rio.open(file)
         except Exception:
-            raise self.RasterioIOError("file " + file + " does not exist")
+            raise RasterioIOError("file " + file + " does not exist")
 
         # Get profile information
         profile = raster.profile
@@ -125,7 +131,7 @@ class Exclusions:
                 assert not dninf
                 assert not fnind
             except Exception:
-                mismatches = self.np.unique(dninf + fnind)
+                mismatches = np.unique(dninf + fnind)
                 msg = ("File and description keys do not match. "
                        "Problematic keys: " + ", ".join(mismatches))
                 raise AssertionError(msg)
@@ -134,7 +140,7 @@ class Exclusions:
 
         # Let's remove existing keys here
         if not overwrite:
-            with self.h5py.File(self.excl_fpath, "r") as h5:
+            with h5py.File(self.excl_fpath, "r") as h5:
                 keys = list(h5.keys())
                 for key in keys:
                     if key in file_dict:
@@ -146,7 +152,7 @@ class Exclusions:
             description = desc_dict[dname]
             self.add_layer(dname, file, description, overwrite=overwrite)
 
-    def techmap(self, res_fpath, dname, max_workers=None, map_chunk=2560,  # <--------not sure what's this used for ? Jianyu
+    def techmap(self, res_fpath, dname, max_workers=None, map_chunk=2560,
                 distance_upper_bound=None, save_flag=True):
         """Build a mapping grid between exclusion resource data.
 
@@ -215,8 +221,8 @@ class Exclusions:
 
     def _convert_coords(self, xs, ys):
         # Convert projected coordinates into WGS84
-        mx, my = self.np.meshgrid(xs, ys)
-        transformer = self.Transformer.from_crs(self.profile["crs"],
+        mx, my = np.meshgrid(xs, ys)
+        transformer = Transformer.from_crs(self.profile["crs"],
                                                 "epsg:4326", always_xy=True)
         lons, lats = transformer.transform(mx, my)
         return lons, lats
@@ -234,8 +240,8 @@ class Exclusions:
         ys = [uly + row * yres for row in range(self.profile["height"])]
 
         # Let's not use float 64
-        xs = self.np.array(xs).astype("float32")
-        ys = self.np.array(ys).astype("float32")
+        xs = np.array(xs).astype("float32")
+        ys = np.array(ys).astype("float32")
 
         return xs, ys
 
@@ -253,7 +259,7 @@ class Exclusions:
 
     def _set_coords(self, profile):
         # Add the lat and lon meshgrids if they aren't already present
-        with self.h5py.File(self.excl_fpath, "r+") as hdf:
+        with h5py.File(self.excl_fpath, "r+") as hdf:
             keys = list(hdf.keys())
             attrs = hdf.attrs.keys()
 
@@ -275,36 +281,8 @@ class Exclusions:
                 hdf.create_dataset(name="latitude", data=lats)
 
 
-"""
-Current issues:
-Background: Reformatter class initiates with a csv file, raster_folder (for output), template and exclusion file.
-This works great for using the reformat_batch_vectorfiles but creates problems for the reformat_rasters.
-
-1. Assumes a scenerio that you only need to input rasters and tranform using reformat_rasters.
-But you still need to create an object using above shapefile parameters, which is not user-friendly.
-
-2. What are the input for reformating rasters other than a raster folder ? for example, do you need
-a csv file like transforming the shapefiles setuping the parameters such as "description". 
-
-my suggestions:
-1. create 3 classes: reforamtter_shapefile, reforamtter_raster, and exclusion
-2. use composition idea to connect them. or create a pipline. 
-
-"""
-
 class Reformatter(Exclusions):
     """Reformat any file into a reV-shaped raster."""
-    import os
-    import subprocess as sp
-    import numpy as np
-    import geopandas as gpd
-    import rasterio as rio
-    from tqdm import tqdm
-    from pathos import multiprocessing as mp
-    from rasterio import features
-    import h5py
-    import pandas as pd
-    import glob
 
     def __init__(self, template, input_table_path,raster_dir,exclusion_file,
                 sheet_name=None,overwrite=False):
@@ -318,8 +296,11 @@ class Reformatter(Exclusions):
             path to a raster 
         """
         self.template = template
-        self.vectorfile_fields = self._format_input(input_table_path, sheet_name)
         self.string_lookup = {}
+        self.vectorfile_fields = self._format_input(
+            input_table_path,
+            sheet_name
+        )
         self.raster_dir = raster_dir
         self.overwrite = overwrite
         super().__init__(exclusion_file, self.string_lookup)
@@ -333,7 +314,7 @@ class Reformatter(Exclusions):
         files = self.rasters
         n_cpu = self.os.cpu_count()
         dsts = []
-        with self.mp.Pool(n_cpu) as pool:
+        with mp.Pool(n_cpu) as pool:
             for dst in self.tqdm(pool.imap(self.reformat_raster, files),
                             total=n_cpu):
                 dsts.append(dst)
@@ -341,13 +322,13 @@ class Reformatter(Exclusions):
     
     def reformat_raster(self, file, dst):
         """Resample and re-project a raster."""
-        dst = os.path.join(dst_dir, os.path.basename(file))
-        self.sp.call(["rio", "warp", file, dst,
-                      "--like", TEMPLATE,
-                      "--co", "blockysize=128",
-                      "--co", "blockxsize=128",
-                      "--co", "compress=lzw",
-                      "--co", "tiled=yes"])
+        dst = os.path.join(dst_dir, os.path.basename(file))  # <--------------- dst_dir not defined, self.raster_output_folder, pull name from input sheet key
+        sp.call(["rio", "warp", file, dst,
+                 "--like", TEMPLATE,
+                 "--co", "blockysize=128",
+                 "--co", "blockxsize=128",
+                 "--co", "compress=lzw",
+                 "--co", "tiled=yes"])
     
     def reformat_batch_vectorfiles(self):
         """Batch process the shapefiles indicated by the shapefile_fields; output are rasters"""
@@ -357,7 +338,7 @@ class Reformatter(Exclusions):
         # print(vectorfile_fields)
 
         # sequential processing
-        for key,value in self.tqdm(vectorfile_fields.items()):
+        for key,value in tqdm(vectorfile_fields.items()):
           
             # get the vector file_path, field and buffer value 
             field_name = value["field"]
@@ -366,11 +347,11 @@ class Reformatter(Exclusions):
             
             # create dst path
             dst_name = key + ".tif"
-            dst = self.os.path.join(self.raster_dir, dst_name)
+            dst = os.path.join(self.raster_dir, dst_name)
 
             # single cpu sequential process
             # if buffer is NaN
-            if self.np.isnan(buffer):
+            if np.isnan(buffer):
                 self.reformat_vectorfile(layer_name = key,file=vector_file_path, dst=dst, field=field_name,buffer=None,overwrite=self.overwrite)
             else:
                 self.reformat_vectorfile(layer_name = key,file=vector_file_path, dst=dst, field=field_name,buffer=buffer,overwrite=self.overwrite)
@@ -385,14 +366,15 @@ class Reformatter(Exclusions):
         #         dsts.append(t)
         # return dsts
     
-    def reformat_vectorfile(self,layer_name,file, dst, field=None, buffer=None, overwrite=False):
+    def reformat_vectorfile(self, layer_name, file, dst, field=None,
+                            buffer=None, overwrite=False):
         """Preprocess, re-project, and rasterize a vector."""
         # Read and process file
         gdf = self._process_vectorfile(layer_name,file, field, buffer)
         meta = self.meta
 
         # Skip if overwrite
-        if not overwrite and self.os.path.exists(dst):
+        if not overwrite and os.path.exists(dst):
             return
         else:
             # Rasterize
@@ -401,38 +383,34 @@ class Reformatter(Exclusions):
 
             out_shape = [meta["height"], meta["width"]]
             transform = meta["transform"]
-            with self.rio.Env():
-                array = self.features.rasterize(shapes, out_shape,
-                                                transform=transform)
+            with rio.Env():
+                array = features.rasterize(shapes, out_shape,
+                                           transform=transform)
 
             dtype = str(array.dtype)
             if "int" in dtype:
-                nodata = self.np.iinfo(dtype).max
+                nodata = np.iinfo(dtype).max
             else:
-                nodata = self.np.finfo(dtype).max
+                nodata = np.finfo(dtype).max
             meta["dtype"] = dtype
             meta["nodata"] = nodata
 
             # Write to a raster
-            with self.rio.Env():
-                with self.rio.open(dst, "w", **meta) as rio_dst:
+            with rio.Env():
+                with rio.open(dst, "w", **meta) as rio_dst:
                     rio_dst.write(array, 1)
 
     def reformat_batch_to_h5(self):
-        raster_files = self.glob.glob(self.os.path.join(self.raster_dir,"*.tif"))
+        raster_files = glob.glob(self.os.path.join(self.raster_dir,"*.tif"))
         for file in raster_files:
-            dataset_name = self.os.path.basename(file).split(".")[0]
+            dataset_name = os.path.basename(file).split(".")[0]
             description = self.vectorfile_fields[dataset_name]["description"]
             self.add_layer(dataset_name,file,description=description)
     
-    def guided(self, dirname="."):
-        """Guide the processing of shapefiles with prompts and user inputs."""
-
-
     @property
     def meta(self):
         """Return the meta information from the template file."""
-        with self.rio.open(self.template) as raster:
+        with rio.open(self.template) as raster:
             meta = raster.meta
         return meta
     
@@ -440,26 +418,24 @@ class Reformatter(Exclusions):
     def rasters(self):
         """Return list of all rasters in project rasters folder."""
         print(self.raster_dir)
-        return self.glob.glob(self.os.path.join(self.raster_dir, "*.tif"))
+        return glob.glob(self.os.path.join(self.raster_dir, "*.tif"))
 
     @property
     def shapefiles(self):
         """Return list of all shapefiles in project shapefiles folder."""
         shps = self.add_layerglob(os.path.join(self.shapefile_dir, "*shp"))
-        gpkgs = self.glob(os.path.join(self.shapefile_dir, "*gpkg"))
-        geojsons = self.glob(os.path.join(self.shapefile_dir, "*geojson"))
+        gpkgs = glob(os.path.join(self.shapefile_dir, "*gpkg"))
+        geojsons = glob(os.path.join(self.shapefile_dir, "*geojson"))
         shapefiles = shps + gpkgs + geojsons
         return shapefiles
 
-    
-    
     def _format_input(self, path, sheet_name):
         """ to format the input csv or excel """
         # read csv or excel
         try:
-            input_table = self.pd.read_csv(path,header=0)
+            input_table = pd.read_csv(path,header=0)
         except:
-            input_table = self.pd.read_excel(path, sheet_name, header=0)
+            input_table = pd.read_excel(path, sheet_name, header=0)
         
         # check the columns required
         column_names = input_table.columns
@@ -491,11 +467,11 @@ class Reformatter(Exclusions):
          """
 
         # Read in file and check the path
-        if not self.os.path.exists(file):
+        if not os.path.exists(file):
             raise Exception(
                 "This shapefile path doesn't exist:{}".format(file))
         else:
-            gdf = self.gpd.read_file(file)
+            gdf = gpd.read_file(file)
 
         # Check the projection;
         if str(gdf.crs).upper() != str(self.meta["crs"]).upper():

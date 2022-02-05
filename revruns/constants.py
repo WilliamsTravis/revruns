@@ -462,3 +462,27 @@ SAM_TEMPLATES = {
     "pvwattsv7": SOLAR_SAM_PARAMS,
     "windpower": WIND_SAM_PARAMS
 }
+
+SLURM_TEMPLATE = (
+"""#!/bin/bash
+
+#SBATCH --account=PLACEHOLDER
+#SBATCH --time=1:00:00
+#SBATCH -o PLACEHOLDER.o
+#SBATCH -e PLACEHOLDER.e
+#SBATCH --job-name=<PLACEHOLDER>
+#SBATCH --nodes=1
+#SBATCH --mail-user=PLACEHOLDER
+#SBATCH --mem=79000
+
+echo Running on: $HOSTNAME, Machine Type: $MACHTYPE
+echo CPU: $(cat /proc/cpuinfo | grep "model name" -m 1 | cut -d:  -f2)
+echo RAM: $(free -h | grep  "Mem:" | cut -c16-21)
+
+source ~/.bashrc
+module load conda
+conda activate /path/to/env/
+
+python script.py
+"""
+)
