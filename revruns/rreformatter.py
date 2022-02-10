@@ -96,7 +96,7 @@ class Exclusions:
 
         # Add everything to target exclusion HDF
         array = raster.read()
-        with self.h5py.File(self.excl_fpath, "r+") as hdf:
+        with h5py.File(self.excl_fpath, "r+") as hdf:
             keys = list(hdf.keys())
             if dname in keys:
                 if overwrite:
@@ -116,7 +116,6 @@ class Exclusions:
 
     def add_layers(self, file_dict, desc_dict=None, overwrite=False):
         """Add multiple raster files and their descriptions."""
-        from tqdm import tqdm
 
         # Make copies of these dictionaries?
         file_dict = file_dict.copy()
@@ -254,7 +253,7 @@ class Exclusions:
         self.excl_fpath = os.path.abspath(self.excl_fpath)
         if not os.path.exists(self.excl_fpath):
             os.makedirs(os.path.dirname(self.excl_fpath), exist_ok=True)
-            with self.h5py.File(self.excl_fpath, "w") as ds:
+            with h5py.File(self.excl_fpath, "w") as ds:
                 ds.attrs["creation_date"] = date
 
     def _set_coords(self, profile):
@@ -308,42 +307,85 @@ class Reformatter(Exclusions):
     def __repr__(self):
         """Return object representation string."""
         return f"<Reformatter: template={self.template}>"
+    
+
+    def reformat_all(self):
+        """ reformat all vectors and rasters listed in the input spreadsheet"""
+        self.reformat_rasters()
+        self.reformat_vectors()
+        self.to_h5()
+
 
     def reformat_rasters(self):
         """Resample and re-project rasters."""
-        files = self.rasters
-        n_cpu = self.os.cpu_count()
-        dsts = []
-        with mp.Pool(n_cpu) as pool:
-            for dst in self.tqdm(pool.imap(self.reformat_raster, files),
-                            total=n_cpu):
-                dsts.append(dst)
-        return dsts
+        # files = self.rasters
+        # n_cpu = self.os.cpu_count()
+        # dsts = []
+        # with mp.Pool(n_cpu) as pool:
+        #     for dst in self.tqdm(pool.imap(self.reformat_raster, files),
+        #                     total=n_cpu):
+        #         dsts.append(dst)
+        # return dsts
+        
+         # create a copy of vectorfile_fields
+        vectorfile_fields = self.vectorfile_fields.copy()
+
+        # remove the raster files from vectorfile_fields
+        for key in list(vectorfile_fields.keys()):
+            vector_file_path = vectorfile_fields[key]["path"]
+            if vector_file_path not in self.rasters:
+                del vectorfile_fields[key]
+        
+        # sequential processing: transform rasters to rasters like a template
+        for key,value in tqdm(vectorfile_fields.items()):
+          
+            # get the raster file_path
+            raster_file_path = value["path"]
+
+            # create dst path
+            dst_name = key + ".tif"
+            dst = os.path.join(self.raster_dir, dst_name)
+
+            # reformat the raster
+            self.reformat_raster(raster_file_path,dst)
+
     
     def reformat_raster(self, file, dst):
         """Resample and re-project a raster."""
-        dst = os.path.join(dst_dir, os.path.basename(file))  # <--------------- dst_dir not defined, self.raster_output_folder, pull name from input sheet key
-        sp.call(["rio", "warp", file, dst,
-                 "--like", TEMPLATE,
-                 "--co", "blockysize=128",
-                 "--co", "blockxsize=128",
-                 "--co", "compress=lzw",
-                 "--co", "tiled=yes"])
+        if os.path.exists(dst) and not self.overwrite:
+            return
+        else:
+            sp.call(["rio", "warp", file, dst,
+                    "--like", self.template,
+                    "--co", "blockysize=128",
+                    "--co", "blockxsize=128",
+                    "--co", "compress=lzw",
+                    "--co", "tiled=yes",
+                    "--overwrite"])
     
-    def reformat_batch_vectorfiles(self):
+    def reformat_vectors(self):
         """Batch process the shapefiles indicated by the shapefile_fields; output are rasters"""
         
-        # create output raster path
-        vectorfile_fields = self.vectorfile_fields
-        # print(vectorfile_fields)
+        # create a copy of vectorfile_fields
+        vectorfile_fields = self.vectorfile_fields.copy()
 
-        # sequential processing
+        # remove the raster files from vectorfile_fields
+        for key in list(vectorfile_fields.keys()):
+            vector_file_path = vectorfile_fields[key]["path"]
+            if vector_file_path not in self.shapefiles:
+                del vectorfile_fields[key]
+
+        # sequential processing: transform vectors into rasters like the template
         for key,value in tqdm(vectorfile_fields.items()):
-          
+            
             # get the vector file_path, field and buffer value 
             field_name = value["field"]
             buffer = value["buffer"]
             vector_file_path = value["path"]
+
+            # # check if it is a vector file
+            # if value["path"] not in self.shapefiles:
+            #     continue
             
             # create dst path
             dst_name = key + ".tif"
@@ -352,10 +394,11 @@ class Reformatter(Exclusions):
             # single cpu sequential process
             # if buffer is NaN
             if np.isnan(buffer):
-                self.reformat_vectorfile(layer_name = key,file=vector_file_path, dst=dst, field=field_name,buffer=None,overwrite=self.overwrite)
+                self.reformat_vector(layer_name = key,file=vector_file_path, dst=dst, field=field_name,buffer=None,overwrite=self.overwrite)
             else:
-                self.reformat_vectorfile(layer_name = key,file=vector_file_path, dst=dst, field=field_name,buffer=buffer,overwrite=self.overwrite)
+                self.reformat_vector(layer_name = key,file=vector_file_path, dst=dst, field=field_name,buffer=buffer,overwrite=self.overwrite)
         
+       
         # get the number of cpu #<-------------------------parallel processing hasn't been implemented ---------<<<<<<<<<<
         # n_cpu = self.os.cpu_count()
         # parallel process the vector files 
@@ -366,7 +409,7 @@ class Reformatter(Exclusions):
         #         dsts.append(t)
         # return dsts
     
-    def reformat_vectorfile(self, layer_name, file, dst, field=None,
+    def reformat_vector(self, layer_name, file, dst, field=None,
                             buffer=None, overwrite=False):
         """Preprocess, re-project, and rasterize a vector."""
         # Read and process file
@@ -400,8 +443,9 @@ class Reformatter(Exclusions):
                 with rio.open(dst, "w", **meta) as rio_dst:
                     rio_dst.write(array, 1)
 
-    def reformat_batch_to_h5(self):
-        raster_files = glob.glob(self.os.path.join(self.raster_dir,"*.tif"))
+    def to_h5(self):
+        """transform all formatted rasters into a h5 file"""
+        raster_files = glob.glob(os.path.join(self.raster_dir,"*.tif"))
         for file in raster_files:
             dataset_name = os.path.basename(file).split(".")[0]
             description = self.vectorfile_fields[dataset_name]["description"]
@@ -417,16 +461,21 @@ class Reformatter(Exclusions):
     @property
     def rasters(self):
         """Return list of all rasters in project rasters folder."""
-        print(self.raster_dir)
-        return glob.glob(self.os.path.join(self.raster_dir, "*.tif"))
+        rasters = []
+        for layer_name,values in self.vectorfile_fields.items():
+            file_format = os.path.basename(values["path"]).split(".")[-1]
+            if file_format =="tif":
+                rasters.append(self.vectorfile_fields[layer_name]["path"])
+        return rasters
 
     @property
     def shapefiles(self):
         """Return list of all shapefiles in project shapefiles folder."""
-        shps = self.add_layerglob(os.path.join(self.shapefile_dir, "*shp"))
-        gpkgs = glob(os.path.join(self.shapefile_dir, "*gpkg"))
-        geojsons = glob(os.path.join(self.shapefile_dir, "*geojson"))
-        shapefiles = shps + gpkgs + geojsons
+        shapefiles = []
+        for layer_name,values in self.vectorfile_fields.items():
+            file_format = os.path.basename(values["path"]).split(".")[-1]
+            if file_format in ["shp","gpkg","geojson"]:
+                shapefiles.append(self.vectorfile_fields[layer_name]["path"])
         return shapefiles
 
     def _format_input(self, path, sheet_name):
@@ -514,21 +563,14 @@ class Reformatter(Exclusions):
 
 
 if __name__ == "__main__":
-    # rev input table
-    table_path = "/Users/jgu3/GDS/01-Project/02-Luma/01-Rawdata/offshore/rev_input.csv"
+    current_w = "/Users/jgu3/GDS/06-Code/rev/revruns"
+    TEMPLATE = os.path.join(current_w,"tests/data/Reformat_Test/Tempelate/pr_template.tif")
+    INPUTS = os.path.join(current_w,"tests/data/Reformat_Test/rev_input.xlsx")
+    rasters_dir  = os.path.join(current_w,"tests/data/Reformat_Test/Reformat_exlusion_output/Reformatted_Rasters")
+    h5_file = os.path.join(current_w,"tests/data/Reformat_Test/Reformat_exlusion_output/Reformatted_h5/PuertoRico_Exclusion.h5")
 
-    # output raster folder
-    raster_out_folder = "/Users/jgu3/GDS/01-Project/02-Luma/03-exclusions/raster_batch_output"
-
-    # output h5 file
-    h5_path = "/Users/jgu3/GDS/01-Project/02-Luma/03-exclusions/h5_output/PR.h5"
-
-    # raster template
-    TEMPLATE = "/Users/jgu3/GDS/01-Project/02-Luma/01-Rawdata/template/pr_template_32161.tif"
     
-    reformat = Reformatter(TEMPLATE, table_path,raster_dir=raster_out_folder,
-                            sheet_name="rev_input",exclusion_file= h5_path)
-    
-    # reformat.reformat_batch_vectorfiles()
-    # reformat.reformat_batch_to_h5()
-    print(reformat.rasters)
+    reformat = Reformatter(TEMPLATE, INPUTS,raster_dir=rasters_dir,
+                            sheet_name="data",exclusion_file=h5_file,overwrite=False)
+
+    reformat.reformat_all()
