@@ -19,6 +19,7 @@ setup(
                        "rrbatch_logs = revruns.rrbatch_logs:main",
                        "rrcheck = revruns.rrcheck:main",
                        "rrconnections = revruns.rrconnections:main",
+                       "rrcomposite = revruns.rrcomposite:main",
                        "rrerun = revruns.rrerun:main",
                        "rrexclusion = revruns.rrexclusion:main",
                        "rrgraphs = revruns.rrgraphs:main",

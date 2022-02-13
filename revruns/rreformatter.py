@@ -20,32 +20,12 @@ import numpy as np
 import pandas as pd
 import rasterio as rio
 
-from pyproj import CRS, Transformer
-from rasterio.errors import RasterioIOError
-
-from tqdm import tqdm
 from pathos import multiprocessing as mp
+from pyproj import CRS, Transformer
 from rasterio import features
-
-
-def crs_match(crs1, crs2):
-    """Check if two coordinate reference systems match."""
-    # Using strings and CRS objects directly is not consistent enough
-    check = False
-    crs1 = CRS(crs1).to_dict()
-    crs2 = CRS(crs2).to_dict()
-    for key, value in crs1.items():
-        if key in crs2:
-            try:
-                assert value == crs2[key]
-                check = True
-            except AssertionError:
-                print(".")
-        else:
-            check = True
-            print(f"crs2 is missing the {key} key...")
-
-    return check
+from rasterio.errors import RasterioIOError
+from revruns.rr import crs_match
+from tqdm import tqdm
 
 
 class Exclusions:
@@ -75,19 +55,15 @@ class Exclusions:
     def add_layer(self, dname, file, description=None, overwrite=False):
         """Add a raster file and its description to the HDF5 exclusion file."""
         # Open raster object
-        try:
-            raster = rio.open(file)
-        except Exception:
-            raise RasterioIOError("file " + file + " does not exist")
+        raster = rio.open(file)
 
         # Get profile information
         profile = raster.profile
-        
         profile["crs"] = profile["crs"].to_proj4()
         dtype = profile["dtype"]
         profile = dict(profile)
 
-        # We need a 6 element geotransform, sometimes we receive three extra
+        # We need a 6 element geotransform, sometimes we receive three extra <- why?
         profile["transform"] = profile["transform"][:6]
 
         # Add coordinates and else check that the new file matches everything
@@ -283,31 +259,30 @@ class Exclusions:
 class Reformatter(Exclusions):
     """Reformat any file into a reV-shaped raster."""
 
-    def __init__(self, template, input_table_path,raster_dir,exclusion_file,
-                sheet_name=None,overwrite=False):
+    def __init__(self, template, input, raster_dir, excl_fpath,
+                 overwrite=False):
         """Initialize Reformatter object.
 
         Parameters
         ----------
         template : str
-            Path to a raster to use as a template.
-        input_table_path: str
-            path to a raster 
+            Path to a raster with target georeferencing information.
+        input: str | dict | pd.
+            Path to a revruns input excel containing a 
         """
         self.template = template
-        self.string_lookup = {}
-        self.vectorfile_fields = self._format_input(
-            input_table_path,
-            sheet_name
-        )
+        self.parse_input(input)
+        # self.vectorfile_fields = self._format_input(
+        #     input_fpath,
+        #     sheet_name
+        # )
         self.raster_dir = raster_dir
         self.overwrite = overwrite
-        super().__init__(exclusion_file, self.string_lookup)
+        super().__init__(excl_fpath)
 
     def __repr__(self):
         """Return object representation string."""
         return f"<Reformatter: template={self.template}>"
-    
 
     def reformat_all(self):
         """ reformat all vectors and rasters listed in the input spreadsheet"""

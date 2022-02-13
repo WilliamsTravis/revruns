@@ -2,6 +2,7 @@
 """Create a raster out of an HDF point file."""
 import click
 import os
+import shutil
 import subprocess as sp
 
 import geopandas as gpd
@@ -31,6 +32,7 @@ LAYER_HELP = ("For HDF5 time series, the time index to render. If attempting "
 FILTER_HELP = ("A column name, value pair to use to filter the data before "
                "rasterizing (e.g. rrraster -f state -f Georgia ...). (list)")
 FILL_HELP = ("Fill na values by interpolation. (boolen)")
+CUT_HELP = ("Path to vector file to use to clip output. (str)")
 
 
 def get_scale(ds, dataset):
@@ -43,7 +45,36 @@ def get_scale(ds, dataset):
     return scale
 
 
-def h5(src, dst, dataset, res, crs, agg_fun, layer, fltr, fillna):
+def h5(src, dst, dataset, res, crs, agg_fun, layer, fltr, fillna, cutline):
+    """
+    Rasterize dataset in HDF5 file.
+
+    Parameters
+    ----------
+    src : TYPE
+        DESCRIPTION.
+    dst : TYPE
+        DESCRIPTION.
+    dataset : TYPE
+        DESCRIPTION.
+    res : TYPE
+        DESCRIPTION.
+    crs : TYPE
+        DESCRIPTION.
+    agg_fun : TYPE
+        DESCRIPTION.
+    layer : TYPE
+        DESCRIPTION.
+    fltr : TYPE
+        DESCRIPTION.
+    fillna : TYPE
+        DESCRIPTION.
+    cutline : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    """
     # Open the file
     with h5py.File(src, "r") as ds:
         meta = pd.DataFrame(ds["meta"][:])
@@ -73,10 +104,12 @@ def h5(src, dst, dataset, res, crs, agg_fun, layer, fltr, fillna):
     gdf = gdf.to_crs(crs)
 
     # And finally rasterize
-    rasterize(gdf, res, dst, fillna)
+    rasterize(gdf, res, dst, fillna, cutline)
+
+    return dst
 
 
-def gpkg(file, dst, dataset, res, crs, fillna):
+def gpkg(file, dst, dataset, res, crs, fillna, cutline):
     # This is inefficient
     gdf = gpd.read_file(file)
     gdf = gdf[["geometry", dataset]]
@@ -85,10 +118,10 @@ def gpkg(file, dst, dataset, res, crs, fillna):
     gdf = gdf.to_crs(crs)
 
     # And finally rasterize
-    rasterize(gdf, res, dst, fillna)
+    rasterize(gdf, res, dst, fillna, cutline)
 
 
-def csv(file, dst, dataset, res, crs, fillna):
+def csv(file, dst, dataset, res, crs, fillna, cutline):
     # This is inefficient
     df = pd.read_csv(file)
     gdf = df.rr.to_geo()
@@ -98,7 +131,7 @@ def csv(file, dst, dataset, res, crs, fillna):
     gdf = gdf.to_crs(crs)
 
     # And finally rasterize
-    rasterize(gdf, res, dst, fillna)
+    rasterize(gdf, res, dst, fillna, cutline)
 
 
 def h5_timeseries(ds, dataset, agg_fun, layer):
@@ -111,7 +144,7 @@ def h5_timeseries(ds, dataset, agg_fun, layer):
     return data
 
 
-def rasterize(gdf, res, dst, fillna):
+def rasterize(gdf, res, dst, fillna, cutline):
     # Make sure we have the target directory
     os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
 
@@ -134,7 +167,17 @@ def rasterize(gdf, res, dst, fillna):
 
     # Fill na values
     if fillna:
-        sp.call(["gdal_fillnodata.py", dst])
+        tmp_dst = dst.replace(".tif", "_tmp.tif")
+        sp.call(["gdal_fillnodata.py", dst, tmp_dst])
+        os.remove(dst)
+        shutil.move(tmp_dst, dst)
+
+    # Cut to vector
+    if cutline:
+        tmp_dst = dst.replace(".tif", "_tmp.tif")
+        sp.call(["gdalwarp", dst, tmp_dst, "-cutline", cutline])
+        os.remove(dst)
+        shutil.move(tmp_dst, dst)
 
     # Get rid of temporary shapefile
     os.remove(tmp_src)
@@ -204,7 +247,7 @@ def to_grid(gdf, variable, res):
     grid = np.zeros((gridy.shape[0], gridx.shape[0]))
 
     # Now, use the cartesian indices to add the values to the new grid
-    grid[gdf["iy"].values, gdf["ix"].values] = values # <--------------------- Check these values against the original dataset
+    grid[gdf["iy"].values, gdf["ix"].values] = values  # <--------------------- Check these values against the original dataset
 
     # Holy cow, did that work?
     return grid, geotransform
@@ -220,14 +263,16 @@ def to_grid(gdf, variable, res):
 @click.option("--layer", "-l", default=None, help=LAYER_HELP)
 @click.option("--fltr", "-f", default=None, multiple=True, help=FILTER_HELP)
 @click.option("--fillna", "-fn", is_flag=True, help=FILL_HELP)
-def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna):
+@click.option("--cutline", "-cl", default=None, help=CUT_HELP)
+def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna,
+         cutline):
     """REVRUNS - RRASTER - Rasterize a reV output.
 
-    src = "/lustre/eaglefs/shared-projects/rev/projects/weto/fy21/atb/rev/generation/onshore/1_moderate/1_moderate_multi-year.h5"
-    dst = "/lustre/eaglefs/shared-projects/rev/projects/weto/fy21/atb/rev/generation/onshore/1_moderate/1_moderate_multi-year_cf.tif"
+    src = "/lustre/eaglefs/shared-projects/rev/projects/morocco/fy22/onee/rev/solar/tracking/tracking_multi-year.h5"
+    dst = "/lustre/eaglefs/shared-projects/rev/projects/morocco/fy22/onee/rev/solar/tracking/tracking_multi-year.tif"
     dataset = "cf_mean-means"
     resolution = 2000
-    crs = "esri:102003"
+    crs = "epsg:26191"
     agg_fun = "mean"
     layer = None
     fltr = None
@@ -243,5 +288,5 @@ def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna):
         gpkg(src, dst, dataset, resolution, crs, fillna)
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

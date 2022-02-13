@@ -228,7 +228,12 @@ COLLECT_TEMPLATE = {
         "option": "eagle",
         "walltime": 1.0
     },
-    "dsets": "PLACEHOLDER",
+    "dsets": [
+        "cf_mean",
+        "cf_profile",
+        "lcoe_fcr",
+        "ghi_mean"
+    ],
     "file_prefixes": "PIPELINE",
     "log_level": "INFO",
     "project_points": "PLACEHOLDER"
