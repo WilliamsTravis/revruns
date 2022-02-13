@@ -259,29 +259,44 @@ class Exclusions:
 class Reformatter(Exclusions):
     """Reformat any file into a reV-shaped raster."""
 
-    def __init__(self, template, input, raster_dir, excl_fpath,
+    def __init__(self, input, out_dir, template=None, excl_fpath=None, 
                  overwrite=False):
         """Initialize Reformatter object.
 
         Parameters
         ----------
+        input : str | dict | pd.core.frame.DataFrame
+            Input data information. If dictionary, top-level keys provide
+            the target name of reformatted dataset, second-level keys are
+            'path' (required path to file'), 'field' (optional field name for
+            vectors), 'buffer' (optional buffer distance), and 'layer' 
+            (required only for FileGeoDatabases). If pandas data frame, the
+            secondary keys are required as columns, and the top-level key
+            is stored in a 'name' column. A path to a CSV of this table is
+            also acceptable.
+        out_dir : str
+            Path to a directory where reformatted data will be written as
+            GeoTiffs.
         template : str
-            Path to a raster with target georeferencing information.
-        input: str | dict | pd.
-            Path to a revruns input excel containing a 
+            Path to a raster with target georeferencing attributes. If 'None'
+            the 'excl_fpath' must point to an HDF5 file with target
+            georeferencing information as a top-level attribute.
+        excl_fpath : str
+            Path to existing or target HDF5 exclusion file. If provided,
+            reformatted datasets will be added to this file.
+        overwrite : boolean
+            If True, this will overwrite rasters in out_dir and datasets in
+            excl_fpath.
         """
+        # self.parse_input(input)
         self.template = template
-        self.parse_input(input)
-        # self.vectorfile_fields = self._format_input(
-        #     input_fpath,
-        #     sheet_name
-        # )
         self.raster_dir = raster_dir
         self.overwrite = overwrite
         super().__init__(excl_fpath)
 
     def __repr__(self):
         """Return object representation string."""
+        attrs = ", ".join([f"{k}={v}" for k, v in self.__dict__.items()])
         return f"<Reformatter: template={self.template}>"
 
     def reformat_all(self):
@@ -340,7 +355,6 @@ class Reformatter(Exclusions):
     
     def reformat_vectors(self):
         """Batch process the shapefiles indicated by the shapefile_fields; output are rasters"""
-        
         # create a copy of vectorfile_fields
         vectorfile_fields = self.vectorfile_fields.copy()
 
@@ -352,7 +366,7 @@ class Reformatter(Exclusions):
 
         # sequential processing: transform vectors into rasters like the template
         for key,value in tqdm(vectorfile_fields.items()):
-            
+
             # get the vector file_path, field and buffer value 
             field_name = value["field"]
             buffer = value["buffer"]
@@ -369,11 +383,11 @@ class Reformatter(Exclusions):
             # single cpu sequential process
             # if buffer is NaN
             if np.isnan(buffer):
-                self.reformat_vector(layer_name = key,file=vector_file_path, dst=dst, field=field_name,buffer=None,overwrite=self.overwrite)
+                self.reformat_vector(layer_name = key,file=vector_file_path, dst=dst, field=field_name, buffer=None, overwrite=self.overwrite)
             else:
-                self.reformat_vector(layer_name = key,file=vector_file_path, dst=dst, field=field_name,buffer=buffer,overwrite=self.overwrite)
-        
-       
+                self.reformat_vector(layer_name = key,file=vector_file_path, dst=dst, field=field_name, buffer=buffer, overwrite=self.overwrite)
+
+
         # get the number of cpu #<-------------------------parallel processing hasn't been implemented ---------<<<<<<<<<<
         # n_cpu = self.os.cpu_count()
         # parallel process the vector files 
@@ -536,16 +550,3 @@ class Reformatter(Exclusions):
         
         return gdf
 
-
-if __name__ == "__main__":
-    current_w = "/Users/jgu3/GDS/06-Code/rev/revruns"
-    TEMPLATE = os.path.join(current_w,"tests/data/Reformat_Test/Tempelate/pr_template.tif")
-    INPUTS = os.path.join(current_w,"tests/data/Reformat_Test/rev_input.xlsx")
-    rasters_dir  = os.path.join(current_w,"tests/data/Reformat_Test/Reformat_exlusion_output/Reformatted_Rasters")
-    h5_file = os.path.join(current_w,"tests/data/Reformat_Test/Reformat_exlusion_output/Reformatted_h5/PuertoRico_Exclusion.h5")
-
-    
-    reformat = Reformatter(TEMPLATE, INPUTS,raster_dir=rasters_dir,
-                            sheet_name="data",exclusion_file=h5_file,overwrite=False)
-
-    reformat.reformat_all()

@@ -5,6 +5,9 @@ Created on Fri Jan 28 16:57:22 2022
 
 @author: twillia2
 """
+import os
+import tempfile
+
 from revruns import rr, rreformatter
 
 
@@ -26,13 +29,24 @@ INPUT_FPATH = "data/tables/rev_inputs.xlsx"
 
 def test_dict():
     """Test sample refromatting routine with input dictionary."""
-
+    
 
 def test_table():
     """Test sample refromatting routine with input excel file."""
-    input = rr.get_sheet(INPUT_FPATH, "exclusion_files")
+    # Initialize object
+    out_dir = tempfile.TemporaryDirectory()
+    excl_fpath = os.path.join(out_dir.name, "Test_Exclusions.h5")
+    inputs = rr.get_sheet(INPUT_FPATH, "data")
+    self = rreformatter.Reformatter(
+        input=inputs,
+        out_dir=out_dir.name,
+        template=TEMPLATE,
+        excl_fpath=excl_fpath
 
+    )
 
+    # Run reformatting method
 
-if __name__ == "__main__":
-    self = rreformatter.Reformatter(TEMPLATE, INPUT_FPATH)
+    # Assertion tests
+
+    # Cleanup out_dir
