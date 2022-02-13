@@ -12,6 +12,7 @@ Created on Wed Dec  4 07:58:42 2019
 import json
 import os
 import shutil
+import warnings
 
 from glob import glob
 
@@ -19,17 +20,17 @@ import h5py
 import numpy as np
 import pandas as pd
 
+from pyproj import CRS
 from tqdm import tqdm
 
 pd.set_option("display.max_columns", 500)
 pd.set_option("display.max_rows", 20)
 pd.options.mode.chained_assignment = None
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 def crs_match(crs1, crs2):
     """Check if two coordinate reference systems match."""
-    from pyproj import CRS
-
     # Using strings and CRS objects directly is not consistent enough
     check = False
     crs1 = CRS(crs1).to_dict()
@@ -122,8 +123,20 @@ def h5_to_csv(src, dst, dataset):
 
 def isint(x):
     """Check if character string is an integer."""
+    check = False
+    if "." not in x:
+        try:
+            int(x)
+            check = True
+        except ValueError:
+            pass
+    return check
+
+
+def isfloat(x):
+    """Check if character string is an float."""
     try:
-        int(x)
+        float(x)
         return True
     except ValueError:
         return False

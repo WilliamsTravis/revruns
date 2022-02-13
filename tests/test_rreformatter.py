@@ -34,19 +34,20 @@ def test_dict():
 def test_table():
     """Test sample refromatting routine with input excel file."""
     # Initialize object
-    out_dir = tempfile.TemporaryDirectory()
-    excl_fpath = os.path.join(out_dir.name, "Test_Exclusions.h5")
-    inputs = rr.get_sheet(INPUT_FPATH, "data")
-    self = rreformatter.Reformatter(
-        input=inputs,
-        out_dir=out_dir.name,
-        template=TEMPLATE,
-        excl_fpath=excl_fpath
+    with tempfile.TemporaryDirectory() as out_dir:
+        excl_fpath = os.path.join(out_dir, "Test_Exclusions.h5")
+        inputs = rr.get_sheet(INPUT_FPATH, "data")
+        reformatter = rreformatter.Reformatter(
+            inputs=inputs,
+            out_dir=out_dir,
+            template=TEMPLATE,
+            excl_fpath=excl_fpath
+        )
+        reformatter.main()
 
-    )
+        # Run reformatting method
 
-    # Run reformatting method
+        # Assertion tests
 
-    # Assertion tests
+        # Cleanup out_dir
 
-    # Cleanup out_dir

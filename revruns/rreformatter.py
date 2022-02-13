@@ -13,6 +13,7 @@ import glob
 import json
 import subprocess as sp
 import os
+import warnings
 
 import geopandas as gpd
 import h5py
@@ -24,8 +25,13 @@ from pathos import multiprocessing as mp
 from pyproj import CRS, Transformer
 from rasterio import features
 from rasterio.errors import RasterioIOError
-from revruns.rr import crs_match
+from revruns.rr import crs_match, isint, isfloat
 from tqdm import tqdm
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+
+NEEDED_FIELDS = ["name", "path", "field", "description"]
 
 
 class Exclusions:
@@ -92,7 +98,6 @@ class Exclusions:
 
     def add_layers(self, file_dict, desc_dict=None, overwrite=False):
         """Add multiple raster files and their descriptions."""
-
         # Make copies of these dictionaries?
         file_dict = file_dict.copy()
         if desc_dict:
@@ -256,16 +261,16 @@ class Exclusions:
                 hdf.create_dataset(name="latitude", data=lats)
 
 
-class Reformatter(Exclusions):
-    """Reformat any file into a reV-shaped raster."""
+class Reformatter:
+    """Reformat any file or set of files into a reV-shaped raster."""
 
-    def __init__(self, input, out_dir, template=None, excl_fpath=None, 
+    def __init__(self, inputs, out_dir, template=None, excl_fpath=None, 
                  overwrite=False):
         """Initialize Reformatter object.
 
         Parameters
         ----------
-        input : str | dict | pd.core.frame.DataFrame
+        inputs : str | dict | pd.core.frame.DataFrame
             Input data information. If dictionary, top-level keys provide
             the target name of reformatted dataset, second-level keys are
             'path' (required path to file'), 'field' (optional field name for
@@ -288,121 +293,119 @@ class Reformatter(Exclusions):
             If True, this will overwrite rasters in out_dir and datasets in
             excl_fpath.
         """
-        # self.parse_input(input)
-        self.template = template
-        self.raster_dir = raster_dir
+        self._parse_inputs(inputs)
+        self.template = os.path.abspath(os.path.expanduser(template))
+        self.out_dir = os.path.abspath(os.path.expanduser(out_dir))
+        if excl_fpath:
+            excl_fpath = os.path.abspath(os.path.expanduser(excl_fpath))
+        self.excl_fpath = excl_fpath
         self.overwrite = overwrite
-        super().__init__(excl_fpath)
+        self.lookup = {}
 
     def __repr__(self):
         """Return object representation string."""
-        attrs = ", ".join([f"{k}={v}" for k, v in self.__dict__.items()])
-        return f"<Reformatter: template={self.template}>"
+        attrs = [f"{k}={v}" for k, v in self.__dict__.items() if k != "inputs"]
+        pattrs = ", ".join(attrs)
+        return f"<Reformatter: {pattrs}>"
 
-    def reformat_all(self):
-        """ reformat all vectors and rasters listed in the input spreadsheet"""
-        self.reformat_rasters()
-        self.reformat_vectors()
-        self.to_h5()
+    @property
+    def meta(self):
+        """Return the meta information from the template file."""
+        with rio.open(self.template) as raster:
+            meta = raster.meta
+        return meta
 
+    @property
+    def rasters(self):
+        """Return list of all rasters in inputs."""
+        rasters = {}
+        for name, attrs in self.inputs.items():
+            if attrs["path"].split(".")[-1] == "tif":
+                rasters[name] = attrs
+
+        return rasters
 
     def reformat_rasters(self):
-        """Resample and re-project rasters."""
-        # files = self.rasters
-        # n_cpu = self.os.cpu_count()
-        # dsts = []
-        # with mp.Pool(n_cpu) as pool:
-        #     for dst in self.tqdm(pool.imap(self.reformat_raster, files),
-        #                     total=n_cpu):
-        #         dsts.append(dst)
-        # return dsts
-        
-         # create a copy of vectorfile_fields
-        vectorfile_fields = self.vectorfile_fields.copy()
+        """Reformat all raster files in inputs."""
+        # Sequential processing: transform vectors into rasters
+        dsts = []
+        for name, attrs in tqdm(self.rasters.items()):
+            # Unpack attributes
+            path = attrs["path"]
 
-        # remove the raster files from vectorfile_fields
-        for key in list(vectorfile_fields.keys()):
-            vector_file_path = vectorfile_fields[key]["path"]
-            if vector_file_path not in self.rasters:
-                del vectorfile_fields[key]
-        
-        # sequential processing: transform rasters to rasters like a template
-        for key,value in tqdm(vectorfile_fields.items()):
-          
-            # get the raster file_path
-            raster_file_path = value["path"]
+            # Create dst path
+            dst_name = name + ".tif"
+            dst = os.path.join(self.out_dir, dst_name)
+            dsts.append(dst)
 
-            # create dst path
-            dst_name = key + ".tif"
-            dst = os.path.join(self.raster_dir, dst_name)
+            # Reformat vector
+            self.reformat_raster(
+                path=path,
+                dst=dst
+            )
 
-            # reformat the raster
-            self.reformat_raster(raster_file_path,dst)
+            # Add formatted path to input
+            self.inputs[name]["formatted_path"] = dst
 
-    
-    def reformat_raster(self, file, dst):
+        return dsts
+
+    def reformat_raster(self, path, dst):
         """Resample and re-project a raster."""
+        if not os.path.exists(path):
+            raise OSError(f"{path} does not exist.")
+
         if os.path.exists(dst) and not self.overwrite:
             return
         else:
-            sp.call(["rio", "warp", file, dst,
-                    "--like", self.template,
-                    "--co", "blockysize=128",
-                    "--co", "blockxsize=128",
-                    "--co", "compress=lzw",
-                    "--co", "tiled=yes",
-                    "--overwrite"])
-    
+            sp.call([
+                "rio", "warp", path, dst,
+                "--like", self.template,
+                "--co", "blockysize=128",
+                "--co", "blockxsize=128",
+                "--co", "compress=lzw",  # Check this
+                "--co", "tiled=yes",
+                "--overwrite"
+            ])
+
     def reformat_vectors(self):
-        """Batch process the shapefiles indicated by the shapefile_fields; output are rasters"""
-        # create a copy of vectorfile_fields
-        vectorfile_fields = self.vectorfile_fields.copy()
+        """Reformat all vector files in inputs."""
+        # Sequential processing: transform vectors into rasters
+        dsts = []
+        for name, attrs in tqdm(self.vectors.items()):
+            # Unpack attributes
+            field = attrs["field"]
+            buffer = attrs["buffer"]
+            path = attrs["path"]
 
-        # remove the raster files from vectorfile_fields
-        for key in list(vectorfile_fields.keys()):
-            vector_file_path = vectorfile_fields[key]["path"]
-            if vector_file_path not in self.shapefiles:
-                del vectorfile_fields[key]
+            # Create dst path
+            dst_name = name + ".tif"
+            dst = os.path.join(self.out_dir, dst_name)
+            dsts.append(dst)
 
-        # sequential processing: transform vectors into rasters like the template
-        for key,value in tqdm(vectorfile_fields.items()):
-
-            # get the vector file_path, field and buffer value 
-            field_name = value["field"]
-            buffer = value["buffer"]
-            vector_file_path = value["path"]
-
-            # # check if it is a vector file
-            # if value["path"] not in self.shapefiles:
-            #     continue
+            # Reformat vector
+            self.reformat_vector(
+                name=name,
+                path=path,
+                dst=dst,
+                field=field,
+                buffer=buffer,
+                overwrite=self.overwrite
+            )
             
-            # create dst path
-            dst_name = key + ".tif"
-            dst = os.path.join(self.raster_dir, dst_name)
-
-            # single cpu sequential process
-            # if buffer is NaN
-            if np.isnan(buffer):
-                self.reformat_vector(layer_name = key,file=vector_file_path, dst=dst, field=field_name, buffer=None, overwrite=self.overwrite)
-            else:
-                self.reformat_vector(layer_name = key,file=vector_file_path, dst=dst, field=field_name, buffer=buffer, overwrite=self.overwrite)
-
-
-        # get the number of cpu #<-------------------------parallel processing hasn't been implemented ---------<<<<<<<<<<
-        # n_cpu = self.os.cpu_count()
-        # parallel process the vector files 
-        # dsts=[]
-        # with self.mp.Pool(n_cpu) as pool:
-        #     for t in self.tqdm(pool.map(self.reformat_vectorfile,vector_files,dst,field_names),
-        #                     total=n_cpu):
-        #         dsts.append(t)
-        # return dsts
+            # Add formatted path to input
+            self.inputs[name]["formatted_path"] = dst
     
-    def reformat_vector(self, layer_name, file, dst, field=None,
-                            buffer=None, overwrite=False):
+        return dsts
+    
+    def reformat_vector(self, name, path, dst, field=None,  buffer=None,
+                        overwrite=False):
         """Preprocess, re-project, and rasterize a vector."""
+        # Check that path exists
+        if not os.path.exists(path):
+            raise OSError(f"{path} does not exist.")
+
         # Read and process file
-        gdf = self._process_vectorfile(layer_name,file, field, buffer)
+        gdf = self._process_vector(name, path, field, buffer)
         meta = self.meta
 
         # Skip if overwrite
@@ -410,9 +413,8 @@ class Reformatter(Exclusions):
             return
         else:
             # Rasterize
-            elements = gdf[["raster_value", "geometry"]].values
+            elements = gdf.values
             shapes = [(g, r) for r, g in elements]
-
             out_shape = [meta["height"], meta["width"]]
             transform = meta["transform"]
             with rio.Env():
@@ -434,111 +436,62 @@ class Reformatter(Exclusions):
 
     def to_h5(self):
         """transform all formatted rasters into a h5 file"""
-        raster_files = glob.glob(os.path.join(self.raster_dir,"*.tif"))
-        for file in raster_files:
-            dataset_name = os.path.basename(file).split(".")[0]
-            description = self.vectorfile_fields[dataset_name]["description"]
-            self.add_layer(dataset_name,file,description=description)
-    
-    @property
-    def meta(self):
-        """Return the meta information from the template file."""
-        with rio.open(self.template) as raster:
-            meta = raster.meta
-        return meta
-    
-    @property
-    def rasters(self):
-        """Return list of all rasters in project rasters folder."""
-        rasters = []
-        for layer_name,values in self.vectorfile_fields.items():
-            file_format = os.path.basename(values["path"]).split(".")[-1]
-            if file_format =="tif":
-                rasters.append(self.vectorfile_fields[layer_name]["path"])
-        return rasters
+        exclusions = Exclusions(self.excl_fpath, self.lookup)
+        for name, attrs in tqdm(self.inputs.items(), total=len(self.inputs)):
+            if "formatted_path" in attrs:
+                file = attrs["formatted_path"]
+                exclusions.add_layer(name, file)
+
+                # Add attributes
+                with h5py.File(self.excl_fpath, "r+") as ds:
+                    for akey, attr in attrs.items():
+                        if attr:
+                            ds[name].attrs[akey] = attr
 
     @property
-    def shapefiles(self):
-        """Return list of all shapefiles in project shapefiles folder."""
-        shapefiles = []
-        for layer_name,values in self.vectorfile_fields.items():
-            file_format = os.path.basename(values["path"]).split(".")[-1]
-            if file_format in ["shp","gpkg","geojson"]:
-                shapefiles.append(self.vectorfile_fields[layer_name]["path"])
-        return shapefiles
+    def vectors(self):
+        """Return list of all shapefiles in inputs."""
+        vectors = {}
+        for name, attrs in self.inputs.items():
+            if not os.path.exists(attrs["path"]):
+                raise OSError(f"{attrs['path']} does not exist.")
+            if attrs["path"].split(".")[-1] in ["gpkg", "shp", "geojson"]:
+                vectors[name] = attrs
+        return vectors
 
-    def _format_input(self, path, sheet_name):
-        """ to format the input csv or excel """
-        # read csv or excel
-        try:
-            input_table = pd.read_csv(path,header=0)
-        except:
-            input_table = pd.read_excel(path, sheet_name, header=0)
-        
-        # check the columns required
-        column_names = input_table.columns
-        for name in ["name", "path", "field", "buffer", "description"]:
-            if name not in column_names:
-                raise Exception(
-                    "Column: {} is not in the input table.".format(name))
-
-        # iterate the table, create a vector_file - field dictionary
-        vectorfile_fields = {}
-        for index, row in input_table.iterrows():
-            item = vectorfile_fields.get(row["name"], dict())
-            item["path"] = row["path"]
-            item["field"] = row["field"]
-            item["buffer"] = row["buffer"]
-            item["description"] = row["description"]
-            vectorfile_fields[row["name"]] = item
-
-        return vectorfile_fields
+    def _check_input_fields(self, inputs):
+        """Check that an input table or CSV contains all needed fields."""
+        check = all([field in inputs.columns for field in NEEDED_FIELDS])
+        assert check, ("Not all required fields present in inputs: "
+                       f"{NEEDED_FIELDS}")
     
-    def _process_vectorfile(self, layer_name, file, field=None, buffer=None):
-        """Process a single file. It includes following steps:
-        1. check if the a field exists in a shapefile;
-            to make sure the field name and its associated shapefile's path is correct; 
-            otherwise raise an error
-        2. check if the shapefile has a the same projetion as the template raster
-            if not, re-project
-        3. if buffer isn't non, then buffer the shapefile 
-         """
-
-        # Read in file and check the path
-        if not os.path.exists(file):
-            raise Exception(
-                "This shapefile path doesn't exist:{}".format(file))
+    def _parse_inputs(self, inputs):
+        """Take input values and create standard dictionary."""
+        # Create dictionary
+        if isinstance(inputs, dict):
+            self.inputs = inputs
         else:
-            gdf = gpd.read_file(file)
+            self._check_input_fields(inputs)
+            self.inputs = {}
+            if isinstance(inputs, str):
+                inputs = pd.read_csv(inputs)
+            cols = [c for c in inputs.columns if c != "name"]
+            for i, row in inputs.iterrows():
+                self.inputs[row["name"]] = {}
+                for col in cols:
+                    self.inputs[row["name"]][col] = row[col]
 
-        # Check the projection;
-        if str(gdf.crs).upper() != str(self.meta["crs"]).upper():
-            gdf = gdf.to_crs(self.meta["crs"])
+        # Convert NaNs to None
+        for key, attrs in self.inputs.items():
+            for akey, attr in attrs.items():
+                if not isinstance(attr, str):
+                    if np.isnan(attr):
+                        self.inputs[key][akey] = None
 
-        # Check if the field value in the shapefile and Assign raster value
-        if field:
-            if field not in gdf.columns:
-                raise Exception("Field '{}' not in '{}'".format(field, file))
-            gdf["raster_value"] = gdf[field]
-        else:
-            gdf["raster_value"] = 1
-
-        # Account for string values
-        if isinstance(gdf["raster_value"].iloc[0], str):
-            gdf = self._map_strings(layer_name, gdf, field)
-
-        # Reduce to two fields
-        gdf = gdf[["raster_value", "geometry"]]
-
-        # Buffering
-        if buffer:
-            gdf["geometry"] = gdf["geometry"].buffer(buffer)
-        return gdf
-    
     def _map_strings(self, layer_name, gdf, field):
         """Map string values to integers and save a lookup dictionary."""
         # Assing integers to unique string values
-        strings = gdf[field].unique()
+        strings = gdf["raster_value"].unique()
         string_map = {i + 1: v for i, v in enumerate(strings)}
         value_map = {v: k for k, v in string_map.items()}
 
@@ -546,7 +499,53 @@ class Reformatter(Exclusions):
         gdf["raster_value"] = gdf[field].map(value_map)
 
         # Update the string lookup dictionary
-        self.string_lookup[layer_name] = string_map
+        self.lookup[layer_name] = string_map
         
         return gdf
 
+    def _process_vector(self, name, path, field=None, buffer=None):
+        """Process a single vector file."""
+        # Read in file and check the path
+        gdf = gpd.read_file(path)
+
+        # Check the projection;
+        if not crs_match(gdf.crs, self.meta["crs"]):
+            gdf = gdf.to_crs(self.meta["crs"])
+
+        # Check if the field value in the shapefile and Assign raster value
+        if field:
+            if field not in gdf.columns:
+                raise Exception(f"Field '{field}' not in '{path}'")
+            gdf["raster_value"] = gdf[field]
+        else:
+            gdf["raster_value"] = 1
+
+        # Account for string values
+        sample = gdf["raster_value"].iloc[0]
+        if isinstance(sample, str):
+            if isint(sample):
+                gdf["raster_value"] = gdf["raster_value"].astype(int)
+            elif isfloat(sample):
+                gdf["raster_value"] = gdf["raster_value"].astype(float)
+            else:
+                gdf = self._map_strings(name, gdf, field)
+
+        # Reduce to two fields
+        gdf = gdf[["raster_value", "geometry"]]
+
+        # Buffering
+        if buffer:
+            gdf["geometry"] = gdf["geometry"].buffer(buffer)
+
+        return gdf
+
+    def main(self):
+        """Reformat all vectors and rasters listed in the inputs."""
+        print("Formatting rasters...")
+        _ = self.reformat_rasters()
+
+        print("Formatting vectors...")
+        _ = self.reformat_vectors()
+        if self.excl_fpath:
+            print(f"\nBuilding/updating exclusion {self.excl_fpath}...")
+            self.to_h5()
