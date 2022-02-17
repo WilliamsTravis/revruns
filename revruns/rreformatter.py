@@ -293,11 +293,12 @@ class Reformatter:
             If True, this will overwrite rasters in out_dir and datasets in
             excl_fpath.
         """
+        os.makedirs(out_dir, exist_ok=True)
+        if excl_fpath:
+            excl_fpath = os.path.abspath(os.path.expanduser(excl_fpath))
         self._parse_inputs(inputs)
         self.template = os.path.abspath(os.path.expanduser(template))
         self.out_dir = os.path.abspath(os.path.expanduser(out_dir))
-        if excl_fpath:
-            excl_fpath = os.path.abspath(os.path.expanduser(excl_fpath))
         self.excl_fpath = excl_fpath
         self.overwrite = overwrite
         self.lookup = {}
@@ -391,12 +392,12 @@ class Reformatter:
                 buffer=buffer,
                 overwrite=self.overwrite
             )
-            
+
             # Add formatted path to input
             self.inputs[name]["formatted_path"] = dst
-    
+
         return dsts
-    
+
     def reformat_vector(self, name, path, dst, field=None,  buffer=None,
                         overwrite=False):
         """Preprocess, re-project, and rasterize a vector."""
@@ -475,6 +476,8 @@ class Reformatter:
             self.inputs = {}
             if isinstance(inputs, str):
                 inputs = pd.read_csv(inputs)
+            inputs = inputs[~pd.isnull(inputs["name"])]
+            inputs = inputs[~pd.isnull(inputs["path"])]
             cols = [c for c in inputs.columns if c != "name"]
             for i, row in inputs.iterrows():
                 self.inputs[row["name"]] = {}
@@ -485,8 +488,9 @@ class Reformatter:
         for key, attrs in self.inputs.items():
             for akey, attr in attrs.items():
                 if not isinstance(attr, str):
-                    if np.isnan(attr):
-                        self.inputs[key][akey] = None
+                    if not attr == None:
+                        if np.isnan(attr):
+                            self.inputs[key][akey] = None
 
     def _map_strings(self, layer_name, gdf, field):
         """Map string values to integers and save a lookup dictionary."""
@@ -547,5 +551,5 @@ class Reformatter:
         print("Formatting vectors...")
         _ = self.reformat_vectors()
         if self.excl_fpath:
-            print(f"\nBuilding/updating exclusion {self.excl_fpath}...")
+            print(f"Building/updating exclusion {self.excl_fpath}...")
             self.to_h5()

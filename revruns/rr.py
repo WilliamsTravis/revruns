@@ -32,19 +32,13 @@ warnings.filterwarnings("ignore", category=UserWarning)
 def crs_match(crs1, crs2):
     """Check if two coordinate reference systems match."""
     # Using strings and CRS objects directly is not consistent enough
-    check = False
+    check = True
     crs1 = CRS(crs1).to_dict()
     crs2 = CRS(crs2).to_dict()
     for key, value in crs1.items():
         if key in crs2:
-            try:
-                assert value == crs2[key]
-                check = True
-            except AssertionError:
-                print(".")
-        else:
-            check = True
-            print(f"crs2 is missing the {key} key...")
+            if value != crs2[key]:
+                return False
 
     return check
 
