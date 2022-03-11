@@ -49,6 +49,7 @@ WALK_HELP = ("Walk the given directory structure and return the status of "
 
 CONFIG_DICT = {
     "gen": "config_gen.json",
+    "bespoke": "config_bespoke.json",
     "collect": "config_collect.json",
     "econ": "config_econ.json",
     "offshore": "config_offshore.json",
@@ -61,6 +62,7 @@ CONFIG_DICT = {
 }
 MODULE_NAMES = {
     "gen": "generation",
+    "bespoke": "bespoke",
     "collect": "collect",
     "econ": "econ",
     "offshore": "offshore",

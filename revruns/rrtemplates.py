@@ -38,9 +38,9 @@ COLLECT_HELP = ("Setup the `collect` module configuration template and all "
 FULL_HELP = ("Setup the full pipeline of reV module templates, from "
              "`generation` to `rep-profiles`. (boolean)")
 GEN_HELP = ("This is the generator type to simulate using the Systems "
-            "Advisor Model (SAM). Defaults to pvwattsv5. Options include: "
-            "\pvwattsv5 or pvwattsv7: Photovoltaic \nwindpower: Wind Turbines "
-            "\ncsp: Concentrating Solar Power.")
+            "Advisor Model (SAM). Options include: "
+            "\npvwattsv5 or pvwattsv7: Photovoltaic \nwindpower: Wind Turbines "
+            "\ncsp: Concentrating Solar Power. Defaults to `None`. ")
 LOGDIR_HELP = ("Logging directory. Defaults to './logs'")
 MULTIYEAR_HELP = ("Setup the `multi-year` module configuration template ."
                   "and all of its required module templates. "
@@ -122,7 +122,7 @@ def write_config(config_dict, path, verbose=False):
 @click.option("--supplycurve", "-sc", is_flag=True, help=SUPPLYCURVE_HELP)
 @click.option("--repprofiles", "-rp", is_flag=True, help=REPPROFILES_HELP)
 @click.option("--batch", "-ba", is_flag=True, help=BATCH_HELP)
-@click.option("--tech", "-t", default="pvwattsv5", help=GEN_HELP)
+@click.option("--tech", "-t", default=None, help=GEN_HELP)
 @click.option("--slurm", "-sl", is_flag=True, help=SLURM_HELP)
 @click.option("--full", "-f", is_flag=True, help=FULL_HELP)
 @click.option("--allocation", "-alloc", default="PLACEHOLDER", help=ALLOC_HELP)
@@ -155,47 +155,49 @@ def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
 
     # Retrieve the template objects
     templates = {m: TEMPLATES[m] for m in modules if m != "sl"}
-    templates = {**templates, **{"sl": SLURM_TEMPLATE}}
 
     # Assign all years (easier to subtract than add), and add allocation
-    years = DEFAULT_YEARS[tech]
-    for m in templates.keys():
-        if "analysis_years" in templates[m]:
-            templates[m]["analysis_years"] = years
-        if "execution_control" in templates[m]:
-            templates[m]["execution_control"]["allocation"] = allocation
-        if "directories" in templates[m]:
-            templates[m]["directories"]["output_directory"] = output_dir
-            templates[m]["directories"]["log_directories"] = log_dir
-
-    # Assign all points if specified  <---------------------------------------- Not done.
-    os.makedirs("./project_points", exist_ok=True)
-
-    # Write sam template:
-    os.makedirs("./sam_configs", exist_ok=True)
-    sam_template = SAM_TEMPLATES[tech]
-
-    # Write json file for each template
-    for m in templates.keys():
-        if m != "sl":
-            config = templates[m]
-            path = DEFAULT_PATHS[m]
-            write_config(config, path, verbose)
-        elif m == "sl":
-            template = SLURM_TEMPLATE
-            path = DEFAULT_PATHS["slurm"]
-            with open(path, "w") as file:
-                file.write(template)
+    years = DEFAULT_YEARS["windpower"]
+    for module, config in templates.items():
+        if "analysis_years" in config:
+            config["analysis_years"] = years
+        if "execution_control" in config:
+            config["execution_control"]["allocation"] = allocation
+        if "directories" in config:
+            config["directories"]["output_directory"] = output_dir
+            config["directories"]["log_directories"] = log_dir
+        path = DEFAULT_PATHS[module]
+        write_config(config, path, verbose)
 
     # If there are more than one module, write pipeline configuration
     if len(modules) > 1:
         pipeline = PIPELINE_TEMPLATE.copy()
         for m in modules:
-            if m != "sl":
-                dict = {MODULE_NAMES[m]: DEFAULT_PATHS[m]}
-                pipeline["pipeline"].append(dict)
+            dict = {MODULE_NAMES[m]: DEFAULT_PATHS[m]}
+            pipeline["pipeline"].append(dict)
         write_config(pipeline, "./config_pipeline.json", verbose)
+
+    # Write sam template:
+    if tech:
+        write_config(SAM_TEMPLATES[tech], f"sam_{tech}.json", verbose)
+
+    if slurm:
+        write_config(SLURM_TEMPLATE, DEFAULT_PATHS["slurm"], verbose)
 
 
 if "__name__" == "__main__":
+    generation = False
+    collect = False
+    multiyear = True
+    aggregation = False
+    supplycurve = False
+    repprofiles = False
+    batch = False
+    tech = "windpower"
+    full = False
+    slurm = False
+    allocation = "PLACEHOLDER"
+    output_dir = "./"
+    log_dir = "./logs"
+    verbose = True
     main()

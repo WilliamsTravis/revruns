@@ -29,7 +29,7 @@ setup(
                        "rrpipeline = revruns.rrpipeline:rrpipeline",
                        "rrpoints = revruns.rrpoints:main",
                        "rrprofiles = revruns.rrprofiles:main",
-		       "rrshape = revruns.rrshape:main",
+		               "rrshape = revruns.rrshape:main",
                        "rrsetup = revruns.rrsetup:main",
                        "rraster = revruns.rraster:main",
                        "rrtemplates = revruns.rrtemplates:main"

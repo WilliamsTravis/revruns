@@ -153,9 +153,20 @@ GEN_TEMPLATE = {
     },
 
     "log_level": "INFO",
-    "analysis_years": "PLACEHOLDER",
+    "analysis_years": [
+        2007,
+        2008,
+        2009,
+        2010,
+        2011,
+        2012,
+        2013
+    ],
     "technology": "PLACEHOLDER",
-    "output_request": "PLACEHOLDER",
+    "output_request": [
+      "cf_mean",
+      "cf_profile"
+    ],
     "project_points": "PLACEHOLDER",
     "sam_files": {
         "key": "PLACEHOLDER"
