@@ -31,8 +31,8 @@ def check_status(pdir):
 
     try:
         status_file, status = rrlogs.find_status(pdir)
-        pipeline_file = os.path.join(os.path.dirname(status_file),
-                                                     "config_pipeline.json")
+        status_dir = os.path.dirname(status_file)
+        pipeline_file = os.path.join(status_dir, "config_pipeline.json")
         pipeline = json.load(open(pipeline_file, "r"))
     except TypeError:
         status = None
@@ -90,14 +90,15 @@ def rrpipeline(dirpath, walk, file, print_paths):
                 print(Fore.CYAN + "Submitting " + rpath + "..."
                       + Style.RESET_ALL)
                 name = "_".join(os.path.dirname(path).split("/")[-3:])
-                cmd = ("nohup reV -c " + path + " -n " + name +
-                       " pipeline --monitor")
+                cmd = (f"nohup reV -c {path} pipeline --monitor")
                 cmd = shlex.split(cmd)
                 output = os.path.join(os.path.dirname(path), "pipeline.out")
-                process = sp.Popen(cmd,
-                                   stdout=open(output, "w"),
-                                   stderr=open(output, "w"),
-                                   preexec_fn=os.setpgrp)
+                process = sp.Popen(
+                    cmd,
+                    stdout=open(output, "w"),
+                    stderr=open(output, "w"),
+                    preexec_fn=os.setpgrp
+                )
                 if process.returncode == 1:
                     raise OSError("Submission failed: check {}".format(output))
                 SubprocessManager.submit(cmd, background=True,

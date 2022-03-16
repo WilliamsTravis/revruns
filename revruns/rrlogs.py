@@ -49,6 +49,7 @@ WALK_HELP = ("Walk the given directory structure and return the status of "
 
 CONFIG_DICT = {
     "gen": "config_gen.json",
+    "bespoke": "config_bespoke.json",
     "collect": "config_collect.json",
     "econ": "config_econ.json",
     "offshore": "config_offshore.json",
@@ -61,6 +62,7 @@ CONFIG_DICT = {
 }
 MODULE_NAMES = {
     "gen": "generation",
+    "bespoke": "bespoke",
     "collect": "collect",
     "econ": "econ",
     "offshore": "offshore",
@@ -117,8 +119,11 @@ class RRLogs():
 
         return print_df
     
-    def checkout(self, logdir, pid, output="error"):
+    def checkout(self, logdir, index, output="error"):
         """Print first 20 lines of an error or stdout log file."""
+        # Find process id from status dataframe index
+        # index
+ 
         if output == "error":
             pattern = "*e"
             name = "Error"
@@ -164,7 +169,7 @@ class RRLogs():
                        tablefmt="simple")
         print(name)
         if logdir:
-            print("  logs: " + logdir + Style.RESET_ALL)
+            print("  logs: " + logdir + Style.RESET_ALL + "\n")
         else:
             msg = "Could not find log directory."
             print(Fore.YELLOW + msg + Style.RESET_ALL)
@@ -421,27 +426,27 @@ class RRLogs():
     def module_status_dataframe(self, status, module="gen"):
         """Convert the status entry for a module to a dataframe."""
         import pandas as pd
-    
+
         # Copy status dictionary
         cstatus = copy.deepcopy(status)
-    
+
         # Target columns
         tcols = ["job_id", "pipeline_index", "hardware", "fout", "dirout",
                  "job_status", "finput", "runtime", "date"]
 
         # Get the module key
         mkey = MODULE_NAMES[module]
-    
+
         # Get the module entry
         if mkey in cstatus:
             mstatus = cstatus[mkey]
         else:
             return None
-    
+
         # The first entry is the pipeline index
         mindex = mstatus["pipeline_index"]
         del mstatus["pipeline_index"]
-    
+
         # If incomplete:
         if not mstatus:
             for col in tcols:
@@ -450,11 +455,11 @@ class RRLogs():
                 else:
                     mstatus[col] = None
             mstatus = {mkey: mstatus}
-    
+
         # Create data frame
         mdf = pd.DataFrame(mstatus).T
         mdf["pipeline_index"] = mindex
-    
+
         # Add date
         mdf["file"] = mdf.apply(self.join_fpath, axis=1)
         mdf["date"] = mdf["file"].apply(self.find_date)
@@ -466,13 +471,13 @@ class RRLogs():
             mdf["runtime"] = "na"
 
         mdf = mdf[tcols]
-    
+
         return mdf
 
     def status_dataframe(self, sub_folder, module=None):
         """Convert a status entr into dataframe."""
         import pandas as pd
-    
+
         # Get the status dictionary
         _, status = self.find_status(sub_folder)
 
@@ -496,17 +501,19 @@ class RRLogs():
                     mstatus = self.module_status_dataframe(status, module)
                     dfs.append(mstatus)
                 df = pd.concat(dfs, sort=False)
-    
+
             # Here, let's improve the time estimation somehow
             if "runtime" not in df.columns:
                 df["runtime"] = "nan"
-    
+
             # And refine this down for the printout
             df["job_name"] = df.index
-            df = df[["job_id", "job_name", "job_status", "pipeline_index",
-                     "runtime", "date"]]
+            df = df.reset_index(drop=True)
+            df = df.reset_index()
+            df = df[["index", "job_name", "job_status", "pipeline_index",
+                     "job_id", "runtime", "date"]]
             df["runtime"] = df["runtime"].apply(self.safe_round, n=2)
-    
+
             return df
         else:
             return None
@@ -532,15 +539,15 @@ class RRLogs():
         # This might return None
         if status_df is not None:
             logdir = self.find_logs(sub_folder)
-    
+
             # Now return the requested return type
             if status:
                 status_df = self.check_entries(status_df, status)
-    
+
             if not error and not out:
                 print_folder = os.path.relpath(sub_folder, folder)
                 self.color_print(status_df, print_folder, logdir)
-    
+
             # If a specific status was requested
             if error or out:
                 # Find the logging directoy
@@ -624,12 +631,12 @@ def main(folder, module, status, error, out, walk):
 
 
 if __name__ == "__main__":
-    args = dict(
-        folder=".",
-        module=None,
-        status=None,
-        error=None,
-        out=None,
-        walk=False,
-    )
+    folder = "."
+    module = None
+    status = None
+    error = None
+    out = 5
+    walk = False
+    args = dict(folder=folder, module=module, status=status, error=error,
+                out=out, walk=walk)
     self = RRLogs(**args)

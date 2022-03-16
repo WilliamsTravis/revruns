@@ -153,9 +153,20 @@ GEN_TEMPLATE = {
     },
 
     "log_level": "INFO",
-    "analysis_years": "PLACEHOLDER",
+    "analysis_years": [
+        2007,
+        2008,
+        2009,
+        2010,
+        2011,
+        2012,
+        2013
+    ],
     "technology": "PLACEHOLDER",
-    "output_request": "PLACEHOLDER",
+    "output_request": [
+      "cf_mean",
+      "cf_profile"
+    ],
     "project_points": "PLACEHOLDER",
     "sam_files": {
         "key": "PLACEHOLDER"
@@ -228,7 +239,12 @@ COLLECT_TEMPLATE = {
         "option": "eagle",
         "walltime": 1.0
     },
-    "dsets": "PLACEHOLDER",
+    "dsets": [
+        "cf_mean",
+        "cf_profile",
+        "lcoe_fcr",
+        "ghi_mean"
+    ],
     "file_prefixes": "PIPELINE",
     "log_level": "INFO",
     "project_points": "PLACEHOLDER"
@@ -462,3 +478,27 @@ SAM_TEMPLATES = {
     "pvwattsv7": SOLAR_SAM_PARAMS,
     "windpower": WIND_SAM_PARAMS
 }
+
+SLURM_TEMPLATE = (
+"""#!/bin/bash
+
+#SBATCH --account=PLACEHOLDER
+#SBATCH --time=1:00:00
+#SBATCH -o PLACEHOLDER.o
+#SBATCH -e PLACEHOLDER.e
+#SBATCH --job-name=<PLACEHOLDER>
+#SBATCH --nodes=1
+#SBATCH --mail-user=PLACEHOLDER
+#SBATCH --mem=79000
+
+echo Running on: $HOSTNAME, Machine Type: $MACHTYPE
+echo CPU: $(cat /proc/cpuinfo | grep "model name" -m 1 | cut -d:  -f2)
+echo RAM: $(free -h | grep  "Mem:" | cut -c16-21)
+
+source ~/.bashrc
+module load conda
+conda activate /path/to/env/
+
+python script.py
+"""
+)

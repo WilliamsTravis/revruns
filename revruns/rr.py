@@ -12,6 +12,7 @@ Created on Wed Dec  4 07:58:42 2019
 import json
 import os
 import shutil
+import warnings
 
 from glob import glob
 
@@ -19,31 +20,25 @@ import h5py
 import numpy as np
 import pandas as pd
 
+from pyproj import CRS
 from tqdm import tqdm
 
 pd.set_option("display.max_columns", 500)
 pd.set_option("display.max_rows", 20)
 pd.options.mode.chained_assignment = None
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 def crs_match(crs1, crs2):
     """Check if two coordinate reference systems match."""
-    from pyproj import CRS
-
     # Using strings and CRS objects directly is not consistent enough
-    check = False
+    check = True
     crs1 = CRS(crs1).to_dict()
     crs2 = CRS(crs2).to_dict()
     for key, value in crs1.items():
         if key in crs2:
-            try:
-                assert value == crs2[key]
-                check = True
-            except AssertionError:
-                print(".")
-        else:
-            check = True
-            print(f"crs2 is missing the {key} key...")
+            if value != crs2[key]:
+                return False
 
     return check
 
@@ -122,8 +117,20 @@ def h5_to_csv(src, dst, dataset):
 
 def isint(x):
     """Check if character string is an integer."""
+    check = False
+    if "." not in x:
+        try:
+            int(x)
+            check = True
+        except ValueError:
+            pass
+    return check
+
+
+def isfloat(x):
+    """Check if character string is an float."""
     try:
-        int(x)
+        float(x)
         return True
     except ValueError:
         return False
@@ -615,25 +622,28 @@ class PandasExtension:
         df.rr.decode()
 
         # Find coordinate columns
-        if "geometry" not in df.columns:
-            if "geom" not in df.columns:
-                try:
-                    lat, lon = self.find_coords()
-                except ValueError:
-                    pass
+        if not isinstance(df, self.gpd.geodataframe.GeoDataFrame):
+            if "geometry" not in df.columns:
+                if "geom" not in df.columns:
+                    try:
+                        lat, lon = self.find_coords()
+                    except ValueError:
+                        pass
 
-                # For a single row
-                def to_point(x):
-                    return self.Point(tuple(x))
-                df["geometry"] = df[[lon, lat]].apply(to_point, axis=1)
+                    # For a single row
+                    def to_point(x):
+                        return self.Point(x.values)
+                    df["geometry"] = df[[lon, lat]].apply(to_point, axis=1)
 
-        # Create the geodataframe - add in projections
-        if "geometry" in df.columns:
-            gdf = self.gpd.GeoDataFrame(df, crs='epsg:4326',
-                                        geometry="geometry")
-        if "geom" in df.columns:
-            gdf = self.gpd.GeoDataFrame(df, crs='epsg:4326',
-                                        geometry="geom")
+                # Create the geodataframe - add in projections
+                if "geometry" in df.columns:
+                    gdf = self.gpd.GeoDataFrame(df, crs='epsg:4326',
+                                                geometry="geometry")
+                if "geom" in df.columns:
+                    gdf = self.gpd.GeoDataFrame(df, crs='epsg:4326',
+                                                geometry="geom")
+            else:
+                gdf = df
 
         return gdf
 

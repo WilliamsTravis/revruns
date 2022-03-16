@@ -9,7 +9,12 @@ import os
 import click
 import numpy as np
 
-from revruns.constants import RESOURCE_DATASETS, TEMPLATES, SAM_TEMPLATES
+from revruns.constants import (
+    RESOURCE_DATASETS,
+    TEMPLATES,
+    SAM_TEMPLATES,
+    SLURM_TEMPLATE
+)
 
 
 # Help printouts
@@ -33,9 +38,9 @@ COLLECT_HELP = ("Setup the `collect` module configuration template and all "
 FULL_HELP = ("Setup the full pipeline of reV module templates, from "
              "`generation` to `rep-profiles`. (boolean)")
 GEN_HELP = ("This is the generator type to simulate using the Systems "
-            "Advisor Model (SAM). Defaults to pvwattsv5. Options include: "
-            "\pvwattsv5 or pvwattsv7: Photovoltaic \nwindpower: Wind Turbines "
-            "\ncsp: Concentrating Solar Power.")
+            "Advisor Model (SAM). Options include: "
+            "\npvwattsv5 or pvwattsv7: Photovoltaic \nwindpower: Wind Turbines "
+            "\ncsp: Concentrating Solar Power. Defaults to `None`. ")
 LOGDIR_HELP = ("Logging directory. Defaults to './logs'")
 MULTIYEAR_HELP = ("Setup the `multi-year` module configuration template ."
                   "and all of its required module templates. "
@@ -54,6 +59,7 @@ SUPPLYCURVE_HELP = ("Setup the `supply-curve` module configuration "
                     "This module will calculate supply curves "
                     "for each aggregated coordinate and return a csv. "
                     "(boolean)")
+SLURM_HELP = ("Write a template slurm batch submission .sh file.")
 PIPELINE_HELP = ("Setup a pipeline configuration template. (boolean)")
 
 MODULE_NAMES = {
@@ -64,7 +70,8 @@ MODULE_NAMES = {
     "sc": "supply-curve",
     "rp": "rep-profiles",
     "ba": "batch",
-    "pipe": "pipeline"
+    "pipe": "pipeline",
+    "sl": "slurm"
 }
 
 DEFAULT_PATHS = {
@@ -77,7 +84,8 @@ DEFAULT_PATHS = {
     "ba": "./config_batch.json",
     "points": "./project_points/project_points.csv",
     "pipe": "./config_pipeline.json",
-    "sam": "./sam_configs/sam.json"
+    "sam": "./sam_configs/sam.json",
+    "slurm": "./submit.sh" 
 }
 
 # Move to main module script
@@ -114,14 +122,15 @@ def write_config(config_dict, path, verbose=False):
 @click.option("--supplycurve", "-sc", is_flag=True, help=SUPPLYCURVE_HELP)
 @click.option("--repprofiles", "-rp", is_flag=True, help=REPPROFILES_HELP)
 @click.option("--batch", "-ba", is_flag=True, help=BATCH_HELP)
-@click.option("--tech", "-t", default="pvwattsv5", help=GEN_HELP)
+@click.option("--tech", "-t", default=None, help=GEN_HELP)
+@click.option("--slurm", "-sl", is_flag=True, help=SLURM_HELP)
 @click.option("--full", "-f", is_flag=True, help=FULL_HELP)
 @click.option("--allocation", "-alloc", default="PLACEHOLDER", help=ALLOC_HELP)
 @click.option("--output_dir", "-outdir", default="./", help=OUTDIR_HELP)
 @click.option("--log_dir", "-logdir", default="./logs", help=LOGDIR_HELP)
 @click.option("--verbose", "-v", is_flag=True)
 def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
-         batch, tech, full, allocation, output_dir, log_dir,
+         batch, tech, slurm, full, allocation, output_dir, log_dir,
          verbose):
     """Write template configuration json files for each reV module specified.
     Additionaly options will set up template sam_files and default project
@@ -132,27 +141,11 @@ def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
     be appropriate. To use all available points for the specified generator,
     provide the '--all-points' or '-ap' flag. To use all available years for a
     specified generator, provide the '--all-years' or '-ay' flag.
-
-    Sample Arguments
-    ----------------
-        generation = False
-        collect = False
-        multiyear = False
-        aggregation = True
-        supplycurve = True
-        repprofiles = True
-        batch = False
-        tech = "pvwattsv5"
-        allpoints = True
-        allyears = True
-        full = False
-        verbose = True
     """
-
     # Get requested modules as strings
-    strings = np.array(["gen", "co", "my", "ag", "sc", "rp", "ba"])
+    strings = np.array(["gen", "co", "my", "ag", "sc", "rp", "ba", "sl"])
     requested = np.array([generation, collect, multiyear, aggregation,
-                          supplycurve, repprofiles, batch])
+                          supplycurve, repprofiles, batch, slurm])
 
     # Convert module selections from booleans to key strings
     if full:
@@ -161,30 +154,19 @@ def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
         modules = strings[requested]
 
     # Retrieve the template objects
-    templates = {m: TEMPLATES[m] for m in modules}
+    templates = {m: TEMPLATES[m] for m in modules if m != "sl"}
 
     # Assign all years (easier to subtract than add), and add allocation
-    years = DEFAULT_YEARS[tech]
-    for m in templates.keys():
-        if "analysis_years" in templates[m]:
-            templates[m]["analysis_years"] = years
-        if "execution_control" in templates[m]:
-            templates[m]["execution_control"]["allocation"] = allocation
-        if "directories" in templates[m]:
-            templates[m]["directories"]["output_directory"] = output_dir
-            templates[m]["directories"]["log_directories"] = log_dir
-
-    # Assign all points if specified  <---------------------------------------- Not done.
-    os.makedirs("./project_points", exist_ok=True)
-
-    # Write sam template:
-    os.makedirs("./sam_configs", exist_ok=True)
-    sam_template = SAM_TEMPLATES[tech]
-
-    # Write json file for each template
-    for m in templates.keys():
-        config = templates[m]
-        path = DEFAULT_PATHS[m]
+    years = DEFAULT_YEARS["windpower"]
+    for module, config in templates.items():
+        if "analysis_years" in config:
+            config["analysis_years"] = years
+        if "execution_control" in config:
+            config["execution_control"]["allocation"] = allocation
+        if "directories" in config:
+            config["directories"]["output_directory"] = output_dir
+            config["directories"]["log_directories"] = log_dir
+        path = DEFAULT_PATHS[module]
         write_config(config, path, verbose)
 
     # If there are more than one module, write pipeline configuration
@@ -195,7 +177,27 @@ def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
             pipeline["pipeline"].append(dict)
         write_config(pipeline, "./config_pipeline.json", verbose)
 
+    # Write sam template:
+    if tech:
+        write_config(SAM_TEMPLATES[tech], f"sam_{tech}.json", verbose)
+
+    if slurm:
+        write_config(SLURM_TEMPLATE, DEFAULT_PATHS["slurm"], verbose)
+
 
 if "__name__" == "__main__":
+    generation = False
+    collect = False
+    multiyear = True
+    aggregation = False
+    supplycurve = False
+    repprofiles = False
+    batch = False
+    tech = "windpower"
+    full = False
+    slurm = False
+    allocation = "PLACEHOLDER"
+    output_dir = "./"
+    log_dir = "./logs"
+    verbose = True
     main()
-
