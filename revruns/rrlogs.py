@@ -119,11 +119,8 @@ class RRLogs():
 
         return print_df
     
-    def checkout(self, logdir, index, output="error"):
+    def checkout(self, logdir, pid, output="error"):
         """Print first 20 lines of an error or stdout log file."""
-        # Find process id from status dataframe index
-        # index
- 
         if output == "error":
             pattern = "*e"
             name = "Error"
@@ -534,19 +531,19 @@ class RRLogs():
         sub_folder = os.path.abspath(os.path.expanduser(sub_folder))
 
         # Convert module status to data frame
-        status_df = self.status_dataframe(sub_folder, module)
+        df = self.status_dataframe(sub_folder, module)
 
         # This might return None
-        if status_df is not None:
+        if df is not None:
             logdir = self.find_logs(sub_folder)
 
             # Now return the requested return type
             if status:
-                status_df = self.check_entries(status_df, status)
+                df = self.check_entries(df, status)
 
             if not error and not out:
                 print_folder = os.path.relpath(sub_folder, folder)
-                self.color_print(status_df, print_folder, logdir)
+                self.color_print(df, print_folder, logdir)
 
             # If a specific status was requested
             if error or out:
@@ -556,10 +553,13 @@ class RRLogs():
                           + "Could not find log directory."
                           + Style.RESET_ALL)
                     return
+
                 if error:
-                    self.checkout(logdir, error, output="error")
+                    pid = df["job_id"][df["index"] == int(error)].iloc[0]
+                    self.checkout(logdir, pid, output="error")
                 if out:
-                    self.checkout(logdir, out, output="stdout")
+                    pid = df["job_id"][df["index"] == int(out)].iloc[0]
+                    self.checkout(logdir, pid, output="stdout")
         else:
             print(Fore.RED + "No status file found for " + sub_folder
                   + Style.RESET_ALL)
@@ -575,19 +575,13 @@ class RRLogs():
         module = self.module
         status = self.status
 
-        # If walk find all project directories with a
+        # If walk find all project directories with a ...?
         if walk or error or out:
             folders = self.find_files(folder, file="logs")
             folders = [os.path.dirname(f) for f in folders]
             folders.sort()
         else:
             folders = [folder]
-
-        # If an error our stdout logs is requested, only run the containing folder
-        if error:
-            folders = self.find_pid_dirs(folders, error)
-        if out:
-            folders = self.find_pid_dirs(folders, out)
 
         # Run rrlogs for each
         if len(folders) > 1:
@@ -634,9 +628,10 @@ if __name__ == "__main__":
     folder = "."
     module = None
     status = None
-    error = None
-    out = 5
+    error = 13
+    out = None
     walk = False
     args = dict(folder=folder, module=module, status=status, error=error,
                 out=out, walk=walk)
     self = RRLogs(**args)
+    self.main()
