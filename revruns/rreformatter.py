@@ -369,8 +369,8 @@ class Reformatter:
         # Sequential processing: transform vectors into rasters
         dsts = []
         for name, attrs in tqdm(self.vectors.items()):
-            if "hotosm" in name:
-                break
+            # if "buildings" in name:
+            #     break
             # Unpack attributes
             field = attrs["field"]
             buffer = attrs["buffer"]
@@ -417,7 +417,7 @@ class Reformatter:
             out_shape = [meta["height"], meta["width"]]
             transform = meta["transform"]
             with rio.Env():
-                array = features.rasterize(shapes, out_shape,
+                array = features.rasterize(shapes, out_shape, all_touched=True,
                                            transform=transform)
 
             dtype = str(array.dtype)
