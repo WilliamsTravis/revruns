@@ -315,7 +315,7 @@ class Build_Points:
     def aggregate(self, resolution, memory, time, country, offshore=False):
         """Run aggregation with no exclusions to get full set of sc points."""
         # Setup paths
-        name = self.name(118)
+        name = self.name(resolution)
         dst2 = self.home.join("agtables", name + "_agg.csv", mkdir=True)
 
         # Make sure the resolution is an integer
@@ -353,7 +353,7 @@ class Build_Points:
     def _agg_config(self, resolution, memory, time, country, offshore):
         # Create the aggregation config
         config = copy.deepcopy(TEMPLATES["ag"])
-        name = self.name(118)
+        name = self.name(resolution)
         run_home = self.home.extend("agtables", mkdir=True)
         logdir = run_home.join(name, "logs")
         config_path = run_home.join(name, "config_aggregation.json")

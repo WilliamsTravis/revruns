@@ -107,11 +107,14 @@ PIPELINE_TEMPLATE =  {
 }
 
 
-def write_config(config_dict, path, verbose=False):
+def write_config(template, path, verbose=False):
     """ Write a configuration dictionary to a json file."""
     # Write json to file
     with open(path, "w") as file:
-        file.write(json.dumps(config_dict, indent=4))
+        if isinstance(template, dict):
+            file.write(json.dumps(template, indent=4))
+        else:
+            file.write(template)
 
 
 @click.command()
@@ -185,17 +188,17 @@ def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
         write_config(SLURM_TEMPLATE, DEFAULT_PATHS["slurm"], verbose)
 
 
-if "__name__" == "__main__":
+if __name__ == "__main__":
     generation = False
     collect = False
-    multiyear = True
+    multiyear = False
     aggregation = False
     supplycurve = False
     repprofiles = False
     batch = False
     tech = "windpower"
     full = False
-    slurm = False
+    slurm = True
     allocation = "PLACEHOLDER"
     output_dir = "./"
     log_dir = "./logs"

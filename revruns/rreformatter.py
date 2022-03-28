@@ -9,7 +9,6 @@ Updated in Feb, 2,2022
 
 @author: twillia2
 """
-import glob
 import json
 import subprocess as sp
 import os
@@ -21,10 +20,7 @@ import numpy as np
 import pandas as pd
 import rasterio as rio
 
-from pathos import multiprocessing as mp
-from pyproj import CRS, Transformer
 from rasterio import features
-from rasterio.errors import RasterioIOError
 from revruns.rr import crs_match, isint, isfloat
 from tqdm import tqdm
 
@@ -373,6 +369,8 @@ class Reformatter:
         # Sequential processing: transform vectors into rasters
         dsts = []
         for name, attrs in tqdm(self.vectors.items()):
+            if "hotosm" in name:
+                break
             # Unpack attributes
             field = attrs["field"]
             buffer = attrs["buffer"]
@@ -405,14 +403,14 @@ class Reformatter:
         if not os.path.exists(path):
             raise OSError(f"{path} does not exist.")
 
-        # Read and process file
-        gdf = self._process_vector(name, path, field, buffer)
-        meta = self.meta
-
         # Skip if overwrite
         if not overwrite and os.path.exists(dst):
             return
         else:
+            # Read and process file
+            gdf = self._process_vector(name, path, field, buffer)
+            meta = self.meta
+
             # Rasterize
             elements = gdf.values
             shapes = [(g, r) for r, g in elements]
@@ -465,7 +463,7 @@ class Reformatter:
         check = all([field in inputs.columns for field in NEEDED_FIELDS])
         assert check, ("Not all required fields present in inputs: "
                        f"{NEEDED_FIELDS}")
-    
+
     def _parse_inputs(self, inputs):
         """Take input values and create standard dictionary."""
         # Create dictionary
@@ -504,13 +502,16 @@ class Reformatter:
 
         # Update the string lookup dictionary
         self.lookup[layer_name] = string_map
-        
+    
         return gdf
 
     def _process_vector(self, name, path, field=None, buffer=None):
         """Process a single vector file."""
         # Read in file and check the path
         gdf = gpd.read_file(path)
+
+        if gdf.shape[0] == 0:
+            raise IndexError(f"{path} is an empty file.")
 
         # Check the projection;
         if not crs_match(gdf.crs, self.meta["crs"]):
