@@ -228,14 +228,14 @@ class RRLogs():
                 # The file might not open
                 try:
                     config = json.load(open(file, "r"))
-                except:  # <------------------------------------------------------- What would this/these be?
+                except:  # <--------------------------------------------------- What would this/these be?
                     pass
 
                 # The directory might be named differently
                 try:
-                    logdir = config["directories"]["log_directory"]
+                    logdir = config["log_directory"]
                 except KeyError:
-                    logdir = config["directories"]["logging_directory"]
+                    logdir = config["directories"]["log_directory"]
 
         # Expand log directory
         if logdir:
@@ -628,7 +628,7 @@ if __name__ == "__main__":
     folder = "."
     module = None
     status = None
-    error = 13
+    error = 254
     out = None
     walk = False
     args = dict(folder=folder, module=module, status=status, error=error,

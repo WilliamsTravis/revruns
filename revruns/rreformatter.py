@@ -21,6 +21,7 @@ import pandas as pd
 import rasterio as rio
 
 from rasterio import features
+from pyproj import Transformer
 from revruns.rr import crs_match, isint, isfloat
 from tqdm import tqdm
 
