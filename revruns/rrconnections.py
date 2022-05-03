@@ -16,8 +16,6 @@ import os
 import shutil
 import warnings
 
-from contextlib import contextmanager
-from functools import lru_cache
 
 import geopandas as gpd
 import getpass
@@ -31,7 +29,6 @@ from cached_property import cached_property
 from pathos import multiprocessing as mp
 from pyproj import Proj
 from rasterio.sample import sample_gen
-from reV.handlers.transmission import TransmissionFeatures
 from reV.pipeline import Pipeline
 from revruns.constants import TEMPLATES
 from revruns import rr

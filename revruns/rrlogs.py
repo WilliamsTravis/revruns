@@ -119,6 +119,15 @@ class RRLogs():
 
         return print_df
     
+    def check_index(self, df, sub_folder):
+        """Check that log files for a given status index exist."""
+        for i, row in df.iterrows():
+            try:
+                self.find_pid_dirs([sub_folder], row["job_id"])
+            except FileNotFoundError:
+                df["index"].iloc[i] = "NA"
+        return df
+
     def checkout(self, logdir, pid, output="error"):
         """Print first 20 lines of an error or stdout log file."""
         if output == "error":
@@ -507,6 +516,8 @@ class RRLogs():
             df["job_name"] = df.index
             df = df.reset_index(drop=True)
             df = df.reset_index()
+            df = self.check_index(df, sub_folder, )
+    
             df = df[["index", "job_name", "job_status", "pipeline_index",
                      "job_id", "runtime", "date"]]
             df["runtime"] = df["runtime"].apply(self.safe_round, n=2)

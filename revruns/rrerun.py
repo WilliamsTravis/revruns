@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """Reconfigure a reV run to rerun from a specified point in the pipeline."""
-
 import json
 import os
 import subprocess as sp
@@ -10,7 +9,7 @@ from glob import glob
 
 import click
 
-from revruns.rrlogs import find_status
+from revruns.rrlogs import RRLogs
 
 
 FOLDER_HELP = ("A folder containing configurations and results "
@@ -77,8 +76,9 @@ def main(folder, module, run):
     os.chdir(folder)
 
     # Find the various logging documents
+    logs = RRLogs(folder=folder)
     ppath, pipeline = find_pipeline(folder)
-    spath, status = find_status(folder)
+    spath, status = logs.find_status(folder)
 
     # List the files to keep and drip
     ran_modules = list(status.keys())

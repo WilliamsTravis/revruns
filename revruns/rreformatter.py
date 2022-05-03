@@ -262,7 +262,7 @@ class Reformatter:
     """Reformat any file or set of files into a reV-shaped raster."""
 
     def __init__(self, inputs, out_dir, template=None, excl_fpath=None, 
-                 overwrite=False):
+                 overwrite_tif=False, overwrite_dset=False):
         """Initialize Reformatter object.
 
         Parameters
@@ -286,9 +286,10 @@ class Reformatter:
         excl_fpath : str
             Path to existing or target HDF5 exclusion file. If provided,
             reformatted datasets will be added to this file.
-        overwrite : boolean
-            If True, this will overwrite rasters in out_dir and datasets in
-            excl_fpath.
+        overwrite_tif : boolean
+            If `True`, this will overwrite rasters in `out_dir`.
+        overwrite_dset : boolean
+            If `True`, this will overwrite datasets in `excl_fpath`.
         """
         os.makedirs(out_dir, exist_ok=True)
         if excl_fpath:
@@ -297,7 +298,8 @@ class Reformatter:
         self.template = os.path.abspath(os.path.expanduser(template))
         self.out_dir = os.path.abspath(os.path.expanduser(out_dir))
         self.excl_fpath = excl_fpath
-        self.overwrite = overwrite
+        self.overwrite_tif = overwrite_tif
+        self.overwrite_dset = overwrite_dset
         self.lookup = {}
 
     def __repr__(self):
@@ -352,9 +354,11 @@ class Reformatter:
         if not os.path.exists(path):
             raise OSError(f"{path} does not exist.")
 
-        if os.path.exists(dst) and not self.overwrite:
+        if os.path.exists(dst) and not self.overwrite_tif:
             return
         else:
+            # If the tiff is too big make adjustments to avoid big tiff errors
+            # Reprojecting separately might do the trick
             sp.call([
                 "rio", "warp", path, dst,
                 "--like", self.template,
@@ -398,14 +402,14 @@ class Reformatter:
         return dsts
 
     def reformat_vector(self, name, path, dst, field=None,  buffer=None,
-                        overwrite=False):
+                        overwrite_tif=False):
         """Preprocess, re-project, and rasterize a vector."""
         # Check that path exists
         if not os.path.exists(path):
             raise OSError(f"{path} does not exist.")
 
         # Skip if overwrite
-        if not overwrite and os.path.exists(dst):
+        if not overwrite_tif and os.path.exists(dst):
             return
         else:
             # Read and process file
@@ -440,7 +444,7 @@ class Reformatter:
         for name, attrs in tqdm(self.inputs.items(), total=len(self.inputs)):
             if "formatted_path" in attrs:
                 file = attrs["formatted_path"]
-                exclusions.add_layer(name, file)
+                exclusions.add_layer(name, file, overwrite=self.overwrite_dset)
 
                 # Add attributes
                 with h5py.File(self.excl_fpath, "r+") as ds:

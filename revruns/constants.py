@@ -138,10 +138,7 @@ BATCH_TEMPLATE = {
 }
 
 GEN_TEMPLATE = {
-    "directories": {
-        "log_directory": "./logs",
-        "output_directory": "./"
-    },
+    "log_directory": "./logs",
     "execution_control": {
         "allocation": "PLACEHOLDER",
         "feature": "--qos=normal",
@@ -175,10 +172,7 @@ GEN_TEMPLATE = {
 }
 
 OFFSHORE_TEMPLATE = {
-  "directories": {
-      "log_directory": "./logs/",
-      "output_directory": "./"
-  },
+  "log_directory": "./logs/",
   "execution_control": {
       "allocation": "PLACEHOLDER",
       "option": "eagle",
@@ -227,11 +221,7 @@ OFFSHORE_TEMPLATE = {
 }
 
 COLLECT_TEMPLATE = {
-    "directories": {
-        "collect_directory": "PIPELINE",
-        "log_directory": "./logs",
-        "output_directory": "./"
-    },
+    "log_directory": "./logs",
     "execution_control": {
         "allocation": "PLACEHOLDER",
         "feature": "--qos=normal",
@@ -262,10 +252,7 @@ ECON_TEMPLATE = {
   ],
   "append": True,
   "cf_file": "PLACEHOLDER",
-  "directories": {
-    "log_directory": "./logs",
-    "output_directory": "./"
-  },
+  "log_directory": "./logs",
   "execution_control": {
     "allocation": "PLACEHOLDER",
     "nodes": "PLACEHOLDER",
@@ -289,10 +276,7 @@ ECON_TEMPLATE = {
 
 
 MULTIYEAR_TEMPLATE = {
-  "directories": {
-    "log_directory": "./logs",
-    "output_directory": "./"
-  },
+  "log_directory": "./logs",
   "execution_control": {
     "allocation": "PLACEHOLDER",
     "feature": "--qos=normal",
@@ -323,10 +307,7 @@ AGGREGATION_TEMPLATE = {
       "method": "mode"
     }
   },
-  "directories": {
-    "log_directory": "./logs",
-    "output_directory": "./"
-  },
+  "log_directory": "./logs",
   "excl_dict": {
     "PLACEHOLDER": {
       "exclude_values": "PLACEHOLDER"
@@ -353,10 +334,7 @@ AGGREGATION_TEMPLATE = {
 
 SUPPLYCURVE_TEMPLATE = {
   "avail_cap_frac": "PLACEHOLDER",
-  "directories": {
-    "log_directory": "./logs",
-    "output_directory": "./"
-  },
+  "log_directory": "./logs",
   "execution_control": {
     "allocation": "PLACEHOLDER",
     "feature": "--qos=normal",
@@ -383,10 +361,7 @@ SUPPLYCURVE_TEMPLATE = {
 
 REPPROFILES_TEMPLATE = {
   "cf_dset": "cf_profile-{}",
-  "directories": {
-    "log_directory": "./logs",
-    "output_directory": "./"
-  },
+  "log_directory": "./logs",
   "err_method": "rmse",
   "execution_control": {
     "allocation": "PLACEHOLDER",
@@ -414,7 +389,9 @@ PIPELINE_TEMPLATE = {
         "log_file": None,
         "log_level": "INFO"
     },
-    "pipeline": []
+    "pipeline": [{
+      "module_name": "./path/to/config.json"
+    }]
 }
 
 TEMPLATES = {
