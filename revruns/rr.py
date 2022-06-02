@@ -87,16 +87,15 @@ def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=0):
 def h5_to_csv(src, dst, dataset):
     """Reformat a reV outpur HDF5 file/dataset to a csv."""
     # Read in meta, time index, and data
-    # with h5py.File(src, "r") as ds:
-    ds = h5py.File(src, "r")
-    # Get an good time index
-    if "multi" in src:
-        time_key = [ti for ti in ds.keys() if "time_index" in ti][0]
-        data = [ds[d][:] for d in ds.keys() if dataset in d]
-        data = np.array(data)
-    else:
-        time_key = "time_index"
-        data = ds[dataset][:]
+    with h5py.File(src, "r") as ds:
+        # Get an good time index
+        if "multi" in src:
+            time_key = [ti for ti in ds.keys() if "time_index" in ti][0]
+            data = [ds[d][:] for d in ds.keys() if dataset in d]
+            data = np.array(data)
+        else:
+            time_key = "time_index"
+            data = ds[dataset][:]
 
     # Read in needed elements
     meta = pd.DataFrame(ds["meta"][:])

@@ -9,6 +9,7 @@ Updated in Feb, 2,2022
 
 @author: twillia2
 """
+import datetime as dt
 import json
 import subprocess as sp
 import os
@@ -28,7 +29,7 @@ from tqdm import tqdm
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 
-NEEDED_FIELDS = ["name", "path", "field", "description"]
+NEEDED_FIELDS = ["name", "path"]
 
 
 class Exclusions:
@@ -71,7 +72,7 @@ class Exclusions:
 
         # Add coordinates and else check that the new file matches everything
         self._set_coords(profile)
-        self._check_dims(raster, profile, dname)
+        self._check_dims(file, self.profile)
 
         # Add everything to target exclusion HDF
         array = raster.read()
@@ -167,15 +168,17 @@ class Exclusions:
                 with open(self.string_values, "r") as file:
                     self.string_values = json.load(file)
 
-    def _check_dims(self, raster, profile, dname):
+    def _check_dims(self, file, profile):
         # Check new layers against the first added raster
-        old = self.profile
-        new = profile
+        old = profile
+        dname = os.path.basename(file)
+        with rio.open(file, "r") as r:    
+            new = r.profile
 
         # Check the CRS
         if not crs_match(old["crs"], new["crs"]):
-            raise AssertionError("CRS for " + dname + " does not match"
-                                 " exisitng CRS.")
+            raise AssertionError(f"CRS for {dname} does not match exisitng "
+                                 "CRS.")
 
         # Check the transform
         try:
@@ -183,18 +186,18 @@ class Exclusions:
             old_trans = old["transform"][:6]
             new_trans = new["transform"][:6]
             assert old_trans == new_trans
-        except Exception:
-            raise AssertionError("Geotransform for " + dname + " does "
-                                 "not match geotransform.")
+        except AssertionError:
+            print(f"Geotransform for {dname} does not match geotransform.")
+            raise
 
         # Check the dimesions
         try:
             assert old["width"] == new["width"]
             assert old["height"] == new["height"]
-        except Exception:
-            raise AssertionError("Width and/or height for " + dname +
-                                 " does not match exisitng " +
-                                 "dimensions.")
+        except AssertionError:
+            print(f"Width and/or height for {dname} does not match existing "
+                  "dimensions.")
+            raise
 
     def _convert_coords(self, xs, ys):
         # Convert projected coordinates into WGS84
@@ -223,8 +226,6 @@ class Exclusions:
         return xs, ys
 
     def _initialize_h5(self):
-        import datetime as dt
-
         # Create an empty hdf file if one doesn't exist
         date = format(dt.datetime.today(), "%Y-%m-%d %H:%M")
         self.excl_fpath = os.path.expanduser(self.excl_fpath)
@@ -258,7 +259,7 @@ class Exclusions:
                 hdf.create_dataset(name="latitude", data=lats)
 
 
-class Reformatter:
+class Reformatter(Exclusions):
     """Reformat any file or set of files into a reV-shaped raster."""
 
     def __init__(self, inputs, out_dir, template=None, excl_fpath=None, 
@@ -272,7 +273,9 @@ class Reformatter:
             the target name of reformatted dataset, second-level keys are
             'path' (required path to file'), 'field' (optional field name for
             vectors), 'buffer' (optional buffer distance), and 'layer' 
-            (required only for FileGeoDatabases). If pandas data frame, the
+            (required only for FileGeoDatabases). Inputs can also include any
+            additional field and it will be included in the attributes of the
+            HDF5 dataset if writing to and HDF5 file. If pandas data frame, the
             secondary keys are required as columns, and the top-level key
             is stored in a 'name' column. A path to a CSV of this table is
             also acceptable.
@@ -291,11 +294,15 @@ class Reformatter:
         overwrite_dset : boolean
             If `True`, this will overwrite datasets in `excl_fpath`.
         """
+        super().__init__(str(excl_fpath))
         os.makedirs(out_dir, exist_ok=True)
-        if excl_fpath:
+        if excl_fpath is not None:
             excl_fpath = os.path.abspath(os.path.expanduser(excl_fpath))
         self._parse_inputs(inputs)
-        self.template = os.path.abspath(os.path.expanduser(template))
+        if template is not None:
+            self.template = os.path.abspath(os.path.expanduser(template))
+        else:
+            self.template = template
         self.out_dir = os.path.abspath(os.path.expanduser(out_dir))
         self.excl_fpath = excl_fpath
         self.overwrite_tif = overwrite_tif
@@ -311,8 +318,27 @@ class Reformatter:
     @property
     def meta(self):
         """Return the meta information from the template file."""
-        with rio.open(self.template) as raster:
-            meta = raster.meta
+        meta = None
+        if self.template is not None:
+            with rio.open(self.template) as raster:
+                meta = raster.meta
+        else:
+            if not os.path.exists(self.excl_fpath):
+                raise FileNotFoundError("If not template is provided, an "
+                                        "existing `excl_fpath` is required.")
+            with h5py.File(self.excl_fpath, "r") as ds:
+                if "profile" in ds.attrs:
+                    meta = json.loads(ds.attrs["profile"])
+                else:
+                    for key, data in ds.items():
+                        if len(data.shape) == 3:
+                            if "profile" in data.attrs:
+                                meta = json.loads(data.attrs["profile"])
+                                break
+
+        if not meta:
+            raise ValueError("No meta object found.")
+
         return meta
 
     @property
@@ -354,6 +380,13 @@ class Reformatter:
         if not os.path.exists(path):
             raise OSError(f"{path} does not exist.")
 
+        if self.template is not None:
+            try:
+                self._check_dims(path)
+                return
+            except:
+                pass
+
         if os.path.exists(dst) and not self.overwrite_tif:
             return
         else:
@@ -374,12 +407,17 @@ class Reformatter:
         # Sequential processing: transform vectors into rasters
         dsts = []
         for name, attrs in tqdm(self.vectors.items()):
-            # if "buildings" in name:
-            #     break
             # Unpack attributes
-            field = attrs["field"]
-            buffer = attrs["buffer"]
             path = attrs["path"]
+            if "field" in attrs:
+                field = attrs["field"]
+            else:
+                field = None
+
+            if "buffer" in attrs:
+                buffer = attrs["buffer"]
+            else:
+                buffer = None
 
             # Create dst path
             dst_name = name + ".tif"
@@ -392,8 +430,7 @@ class Reformatter:
                 path=path,
                 dst=dst,
                 field=field,
-                buffer=buffer,
-                overwrite=self.overwrite
+                buffer=buffer
             )
 
             # Add formatted path to input
@@ -401,15 +438,14 @@ class Reformatter:
 
         return dsts
 
-    def reformat_vector(self, name, path, dst, field=None,  buffer=None,
-                        overwrite_tif=False):
+    def reformat_vector(self, name, path, dst, field=None,  buffer=None):
         """Preprocess, re-project, and rasterize a vector."""
         # Check that path exists
         if not os.path.exists(path):
             raise OSError(f"{path} does not exist.")
 
         # Skip if overwrite
-        if not overwrite_tif and os.path.exists(dst):
+        if not self.overwrite_tif and os.path.exists(dst):
             return
         else:
             # Read and process file
@@ -481,6 +517,9 @@ class Reformatter:
                 inputs = pd.read_csv(inputs)
             inputs = inputs[~pd.isnull(inputs["name"])]
             inputs = inputs[~pd.isnull(inputs["path"])]
+            inputs = inputs[inputs["name"] != "\xa0"]
+            inputs = inputs[inputs["path"] != "\xa0"]
+
             cols = [c for c in inputs.columns if c != "name"]
             for i, row in inputs.iterrows():
                 self.inputs[row["name"]] = {}
@@ -491,7 +530,7 @@ class Reformatter:
         for key, attrs in self.inputs.items():
             for akey, attr in attrs.items():
                 if not isinstance(attr, str):
-                    if not attr == None:
+                    if attr is not None:
                         if np.isnan(attr):
                             self.inputs[key][akey] = None
 
@@ -559,3 +598,4 @@ class Reformatter:
         if self.excl_fpath:
             print(f"Building/updating exclusion {self.excl_fpath}...")
             self.to_h5()
+

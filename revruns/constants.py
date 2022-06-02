@@ -367,21 +367,19 @@ REPPROFILES_TEMPLATE = {
     "allocation": "PLACEHOLDER",
     "feature": "--qos=normal",
     "memory": 179,
-    "nodes": 10,
+    "nodes": 1,
     "option": "eagle",
     "sites_per_worker": 100,
-    "walltime": 2.0
+    "walltime": 1.0
   },
   "gen_fpath": "PIPELINE",
-  "n_profiles": 1,
-  "analysis_years": "PLACEHOLDER",
-  "log_level": "INFO",
-  "reg_cols": [
-    "model_region",
-    "res_class"
+  "analysis_years": [
+    2012
   ],
-  "rep_method": "meanoid",
-  "rev_summary": "PIPELINE"
+  "reg_cols": "sc_point_gid",
+  "log_level": "DEBUG",
+  "rev_summary": "PIPELINE",
+  "aggregate_profiles": True
 }
 
 PIPELINE_TEMPLATE = {
