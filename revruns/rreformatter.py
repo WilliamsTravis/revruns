@@ -27,7 +27,8 @@ from rasterio import features
 from rasterio.merge import merge
 from pyproj import CRS, Transformer
 from revruns.rr import crs_match, isint, isfloat
-from shapely.geometry import box, MultiPolygon
+from shapely.geometry import box
+from shapely.ops import cascaded_union
 from tqdm import tqdm
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -79,9 +80,9 @@ class Rasterizer:
 
         # Read in template information
         if self.template:
-            r = self.rio.open(template)
-            profile = r.profile
-            crs = CRS(profile["crs"])
+            with self.rio.open(template) as r:
+                profile = r.profile
+                crs = CRS(profile["crs"])
 
         # Set crs and project if needed
         if not crs:
@@ -91,7 +92,8 @@ class Rasterizer:
 
         # Comine arguments for multiprocessing routine
         arg_list = []
-        for geom in df["geometry"].values:
+        geoms = np.array_split(df["geometry"].values, 1_000)
+        for geom in geoms:  #  Consider grouping these
             # Unpack target geometry
             xmin, ymin, xmax, ymax = self._bounds(geom)
             height, width = self._shape(geom)
@@ -107,9 +109,21 @@ class Rasterizer:
                             total=len(arg_list)):
                 tmps.append(tmp)
 
-        # Combine arrays
+        # If template, use its bounds
+        if self.template:
+            with self.rio.open(template) as r:
+                bounds = tuple(r.bounds)
+        else:
+            bounds = None
+
+        # Merge individual temporary rasters
         datasets = [rio.open(tmp) for tmp in tmps]
-        array, transform = merge(datasets, method="max")
+        array, transform = merge(
+            datasets,
+            bounds=bounds,
+            res=resolution,
+            method="max"
+        )
         array = array[0]
 
         # Write to GeoTiff
@@ -129,35 +143,21 @@ class Rasterizer:
             file.write(array, 1)
 
         # Remove temporary files
-        shutil.rmtree(self.tmp_dir)
+        shutil.rmtree(self.temp_dir)
 
     def _bounds(self, geom):
         """Return the bounds of a geometry."""
-        if isinstance(geom, MultiPolygon):
-            xs = np.concatenate([g.exterior.xy[0] for g in geom])
-            ys = np.concatenate([g.exterior.xy[1] for g in geom])
-        else:
-            xs = np.array(geom.exterior.xy[0])
-            ys = np.array(geom.exterior.xy[1])
-        xmin = xs.min()
-        ymin = ys.min()
-        xmax = xs.max()
-        ymax = ys.max()
+        bounds = np.array([g.bounds for g in geom])
+        xmin = bounds[:, 0].min()
+        ymin = bounds[:, 1].min()
+        xmax = bounds[:, 2].max()
+        ymax = bounds[:, 3].max()
         return xmin, ymin, xmax, ymax
 
     def _rasterize(self, geom, shape, transform, exterior=False):
         """Rasterize a single geometry."""
         # Build shapes and account for multipolygons
-        if isinstance(geom, MultiPolygon):
-            if exterior:
-                shapes = [(g.exterior, 1) for g in geom]
-            else:
-                shapes = [(g, 1) for g in geom]
-        else:
-            if exterior:
-                shapes = [(geom.exterior, 1)]
-            else:
-                shapes = [(geom, 1)]
+        shapes = [(g, 1) for g in geom]
 
         # Build array
         array = self.rio.features.rasterize(
@@ -182,6 +182,9 @@ class Rasterizer:
         # Remove boundary cells from full array
         partial = (full - boundary).astype("float32")
 
+        # Now we need a singular polygon object
+        single_geom = cascaded_union(geom)
+
         # loop through indicies of all exterior cells
         idx = np.where(boundary == 1)
         for r, c in zip(*idx):
@@ -194,7 +197,7 @@ class Rasterizer:
 
             # Construct shapely geometry of cell and intersect with geometry
             cell = box(*bounds)
-            overlap = cell.intersection(geom)
+            overlap = cell.intersection(single_geom)
 
             # update pctcover with percentage based on area proportion
             ratio = overlap.area / cell.area
@@ -802,9 +805,11 @@ class Reformatter(Exclusions):
 
 if __name__ == "__main__":
     src = "/projects/rev/data/conus/national_hydrography_dataset/waterbodies/NHD_H_Vermont_State_waterbodies.gpkg"
+    src = "/home/travis/data/shapefiles/NHD_H_Colorado_State_waterbodies.gpkg"
     dst = "/scratch/twillia2/test_vt_waterbodies.tif"
+    dst = "/home/travis/scratch/partial_test_template.tif"
     crs = None
     resolution = 90
-    template =  "/projects/rev/data/conus/conus_template.tif"
+    template =  "/home/travis/scratch/conus_template.tif"
     self = Rasterizer(template=template)
-    self.rasterize_partial(src, dst)
+    # self.rasterize_partial(src, dst)
