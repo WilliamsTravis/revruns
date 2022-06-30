@@ -24,9 +24,9 @@ import numpy as np
 import pandas as pd
 import rasterio as rio
 
+from pyproj import CRS, Transformer
 from rasterio import features
 from rasterio.merge import merge
-from pyproj import CRS, Transformer
 from revruns.rr import crs_match, isint, isfloat
 from shapely.geometry import box
 from shapely.ops import cascaded_union
@@ -43,7 +43,7 @@ class Rasterizer:
 
     import rasterio as rio
 
-    def __init__(self, template=None, temp_dir=None):
+    def __init__(self, flip=False, template=None, temp_dir=None):
         """Initialize Rasterize object.
 
         Parameters
@@ -52,17 +52,21 @@ class Rasterizer:
             Path to template raster used for grid geometry. Optional.
         temp_dir : str
             Path to directory to store temporary raster files.
+        flip : boolean
+            Reverse values such that 1 represent cells outside of vector and
+            0 represent within.
         """
         self.template = template
         self.temp_dir = temp_dir
+        self.flip = flip
 
     def rasterize_partial(self, src, dst, resolution=90, crs=None):
         """Rasterize full vector dataset using percent coverage.
 
         Parameters
         ----------
-        src : str
-            Path to source vector dataset file.
+        src : str | gpd.geodataframe.GeoDataFrame
+            Path to source vector dataset file or geodataframe.
         dst : str
             Path to destination GeoTiff file.
         resolution : int
@@ -76,7 +80,10 @@ class Rasterizer:
         print(f"Rasterizing {src} to {dst}...")
 
         # Read in source dataset
-        df = gpd.read_file(src)
+        if isinstance(src, str):
+            df = gpd.read_file(src)
+        else:
+            df = src
 
         # Set up temporary directory
         if not self.temp_dir:
@@ -121,6 +128,10 @@ class Rasterizer:
             method="max"
         )
         array = array[0]
+
+        # Flip values if requested
+        if self.flip:
+            array = (1 - array) * -1
 
         # Write to GeoTiff
         if not self.template:
@@ -832,12 +843,10 @@ class Reformatter(Exclusions):
 
 
 if __name__ == "__main__":
-    src = "/projects/rev/data/conus/national_hydrography_dataset/waterbodies/NHD_H_Vermont_State_waterbodies.gpkg"
-    src = "/home/travis/data/shapefiles/NHD_H_Colorado_State_waterbodies.gpkg"
-    dst = "/scratch/twillia2/test_vt_waterbodies.tif"
-    dst = "/home/travis/scratch/partial_test_template.tif"
+    src = "/projects/rev/data/conus/national_hydrography_dataset/waterbodies/NHD_H_Colorado_State_waterbodies.gpkg"
+    dst = "/scratch/twillia2/testco_waterbodies.tif"
     crs = None
     resolution = 90
-    template =  "/home/travis/scratch/conus_template.tif"
-    self = Rasterizer(template=template)
+    template =  "/projects/rev/data/conus/conus_template.tif"
+    self = Rasterizer(template=template, flip=True)
     # self.rasterize_partial(src, dst)
