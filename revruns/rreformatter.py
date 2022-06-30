@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess as sp
 import tempfile
+import time
 import warnings
 
 import pathos.multiprocessing as mp
@@ -70,6 +71,10 @@ class Rasterizer:
             Coordinate reference system of target GeoTiff. Use "epsg:<code>"
             format. Will default to crs of src if not provided.
         """
+        # Start timer
+        start = time.time()
+        print(f"Rasterizing {src} to {dst}...")
+
         # Read in source dataset
         df = gpd.read_file(src)
 
@@ -91,16 +96,7 @@ class Rasterizer:
             df = df.to_crs(crs)
 
         # Comine arguments for multiprocessing routine
-        arg_list = []
-        geoms = np.array_split(df["geometry"].values, 1_000)
-        for geom in geoms:  #  Consider grouping these
-            # Unpack target geometry
-            xmin, ymin, xmax, ymax = self._bounds(geom)
-            height, width = self._shape(geom)
-            shape = (height, width)
-            transform = rio.transform.from_bounds(xmin, ymin, xmax, ymax,
-                                                  width, height)
-            arg_list.append((geom, transform, shape))
+        arg_list = self._get_args(df)
 
         # Run partial rasterization
         tmps = []
@@ -139,11 +135,19 @@ class Rasterizer:
                 'nodata': None,
                 'tiled': False
             }
+        else:
+            profile["dtype"] = str(array.dtype)
+
         with rio.open(dst, 'w', **profile) as file:
             file.write(array, 1)
 
         # Remove temporary files
         shutil.rmtree(self.temp_dir)
+
+        # Wrap up
+        end = time.time()
+        minutes = round((end - start) / 60, 2)
+        print(f"Rasterization of {dst} completed in {minutes} minutes...")
 
     def _bounds(self, geom):
         """Return the bounds of a geometry."""
@@ -153,6 +157,30 @@ class Rasterizer:
         xmax = bounds[:, 2].max()
         ymax = bounds[:, 3].max()
         return xmin, ymin, xmax, ymax
+
+    def _get_args(self, df):
+        """Get arguments for multiprocessing."""
+        # Sort geogpahically for smaller chunks
+        df["x"] = df["geometry"].centroid.x
+        df["y"] = df["geometry"].centroid.y
+        df = df.sort_values(["x", "y"])
+
+        # The smaller the better for memory
+        nrows = df.shape[0]
+        nsplit = np.ceil(nrows / mp.cpu_count())
+        nchunks = np.min([nrows, nsplit, 1_000])
+        geoms = np.array_split(df["geometry"].values, nchunks)
+        arg_list = []
+        for geom in geoms:
+            # Unpack target geometry
+            xmin, ymin, xmax, ymax = self._bounds(geom)
+            height, width = self._shape(geom)
+            shape = (height, width)
+            transform = rio.transform.from_bounds(xmin, ymin, xmax, ymax,
+                                                  width, height)
+            arg_list.append((geom, transform, shape))
+
+        return arg_list
 
     def _rasterize(self, geom, shape, transform, exterior=False):
         """Rasterize a single geometry."""
