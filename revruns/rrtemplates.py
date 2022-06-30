@@ -48,6 +48,7 @@ MULTIYEAR_HELP = ("Setup the `multi-year` module configuration template ."
                   "large HDF5 file. (boolean)")
 OUTDIR_HELP = ("Output directory. This is also used as the SLURM job name "
                "in the queue. Defaults to './'")
+PIPELINE_HELP = "Write sample pipeline configuration template. (boolean)"
 REPPROFILES_HELP = ("Setup the `rep-profiles` module configuration "
                     "template and all of its required module templates. "
                     "This module will select a number of "
@@ -82,6 +83,7 @@ DEFAULT_PATHS = {
     "sc": "./config_supply-curve.json",
     "rp": "./config_rep-profiles.json",
     "ba": "./config_batch.json",
+    "pi": "./config_pipeline.json",
     "points": "./project_points/project_points.csv",
     "pipe": "./config_pipeline.json",
     "sam": "./sam_configs/sam.json",
@@ -107,11 +109,14 @@ PIPELINE_TEMPLATE =  {
 }
 
 
-def write_config(config_dict, path, verbose=False):
+def write_config(template, path, verbose=False):
     """ Write a configuration dictionary to a json file."""
     # Write json to file
     with open(path, "w") as file:
-        file.write(json.dumps(config_dict, indent=4))
+        if isinstance(template, dict):
+            file.write(json.dumps(template, indent=4))
+        else:
+            file.write(template)
 
 
 @click.command()
@@ -121,6 +126,7 @@ def write_config(config_dict, path, verbose=False):
 @click.option("--aggregation", "-ag", is_flag=True, help=AGGREGATION_HELP)
 @click.option("--supplycurve", "-sc", is_flag=True, help=SUPPLYCURVE_HELP)
 @click.option("--repprofiles", "-rp", is_flag=True, help=REPPROFILES_HELP)
+@click.option("--pipeline", "-pl", is_flag=True, help=PIPELINE_HELP)
 @click.option("--batch", "-ba", is_flag=True, help=BATCH_HELP)
 @click.option("--tech", "-t", default=None, help=GEN_HELP)
 @click.option("--slurm", "-sl", is_flag=True, help=SLURM_HELP)
@@ -130,7 +136,7 @@ def write_config(config_dict, path, verbose=False):
 @click.option("--log_dir", "-logdir", default="./logs", help=LOGDIR_HELP)
 @click.option("--verbose", "-v", is_flag=True)
 def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
-         batch, tech, slurm, full, allocation, output_dir, log_dir,
+         pipeline, batch, tech, slurm, full, allocation, output_dir, log_dir,
          verbose):
     """Write template configuration json files for each reV module specified.
     Additionaly options will set up template sam_files and default project
@@ -143,9 +149,9 @@ def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
     specified generator, provide the '--all-years' or '-ay' flag.
     """
     # Get requested modules as strings
-    strings = np.array(["gen", "co", "my", "ag", "sc", "rp", "ba", "sl"])
+    strings = np.array(["gen", "co", "my", "ag", "sc", "rp", "pi", "ba", "sl"])
     requested = np.array([generation, collect, multiyear, aggregation,
-                          supplycurve, repprofiles, batch, slurm])
+                          supplycurve, repprofiles, pipeline, batch, slurm])
 
     # Convert module selections from booleans to key strings
     if full:
@@ -185,17 +191,17 @@ def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
         write_config(SLURM_TEMPLATE, DEFAULT_PATHS["slurm"], verbose)
 
 
-if "__name__" == "__main__":
+if __name__ == "__main__":
     generation = False
     collect = False
-    multiyear = True
+    multiyear = False
     aggregation = False
     supplycurve = False
     repprofiles = False
     batch = False
     tech = "windpower"
     full = False
-    slurm = False
+    slurm = True
     allocation = "PLACEHOLDER"
     output_dir = "./"
     log_dir = "./logs"

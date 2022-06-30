@@ -16,8 +16,6 @@ import os
 import shutil
 import warnings
 
-from contextlib import contextmanager
-from functools import lru_cache
 
 import geopandas as gpd
 import getpass
@@ -31,7 +29,6 @@ from cached_property import cached_property
 from pathos import multiprocessing as mp
 from pyproj import Proj
 from rasterio.sample import sample_gen
-from reV.handlers.transmission import TransmissionFeatures
 from reV.pipeline import Pipeline
 from revruns.constants import TEMPLATES
 from revruns import rr
@@ -315,7 +312,7 @@ class Build_Points:
     def aggregate(self, resolution, memory, time, country, offshore=False):
         """Run aggregation with no exclusions to get full set of sc points."""
         # Setup paths
-        name = self.name(118)
+        name = self.name(resolution)
         dst2 = self.home.join("agtables", name + "_agg.csv", mkdir=True)
 
         # Make sure the resolution is an integer
@@ -353,7 +350,7 @@ class Build_Points:
     def _agg_config(self, resolution, memory, time, country, offshore):
         # Create the aggregation config
         config = copy.deepcopy(TEMPLATES["ag"])
-        name = self.name(118)
+        name = self.name(resolution)
         run_home = self.home.extend("agtables", mkdir=True)
         logdir = run_home.join(name, "logs")
         config_path = run_home.join(name, "config_aggregation.json")

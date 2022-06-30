@@ -39,8 +39,23 @@ def crs_match(crs1, crs2):
         if key in crs2:
             if value != crs2[key]:
                 return False
-
     return check
+
+
+def crs_match_alt(crs1, crs2):
+    """Alternative CRS match with no extra dependencies."""
+    # Check that this a proj4 string
+    # it would have +lat_1 +lat_2 etc
+    assert "+lat_1" in crs1, "Fail"
+    assert "+lat_1" in crs2, "Fail"
+
+    # Check that there is no difference
+    diff = set(crs.split())  - set(crs2.split())
+
+    if not diff:
+        return True
+    else:
+        return False
 
 
 def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=0):
@@ -72,16 +87,15 @@ def get_sheet(file_name, sheet_name=None, starty=0, startx=0, header=0):
 def h5_to_csv(src, dst, dataset):
     """Reformat a reV outpur HDF5 file/dataset to a csv."""
     # Read in meta, time index, and data
-    # with h5py.File(src, "r") as ds:
-    ds = h5py.File(src, "r")
-    # Get an good time index
-    if "multi" in src:
-        time_key = [ti for ti in ds.keys() if "time_index" in ti][0]
-        data = [ds[d][:] for d in ds.keys() if dataset in d]
-        data = np.array(data)
-    else:
-        time_key = "time_index"
-        data = ds[dataset][:]
+    with h5py.File(src, "r") as ds:
+        # Get an good time index
+        if "multi" in src:
+            time_key = [ti for ti in ds.keys() if "time_index" in ti][0]
+            data = [ds[d][:] for d in ds.keys() if dataset in d]
+            data = np.array(data)
+        else:
+            time_key = "time_index"
+            data = ds[dataset][:]
 
     # Read in needed elements
     meta = pd.DataFrame(ds["meta"][:])

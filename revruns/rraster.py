@@ -281,7 +281,8 @@ def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna,
     # Get the file extension and call the appropriate function
     extension = os.path.splitext(src)[1]
     if extension == ".h5":
-        h5(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna)
+        h5(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna,
+           cutline)
     elif extension == ".csv":
         csv(src, dst, dataset, resolution, crs, fillna)
     elif extension == ".gpkg":

@@ -9,7 +9,7 @@ Updated in Feb, 2,2022
 
 @author: twillia2
 """
-import glob
+import datetime as dt
 import json
 import subprocess as sp
 import os
@@ -21,17 +21,65 @@ import numpy as np
 import pandas as pd
 import rasterio as rio
 
-from pathos import multiprocessing as mp
-from pyproj import CRS, Transformer
 from rasterio import features
-from rasterio.errors import RasterioIOError
+from pyproj import Transformer
 from revruns.rr import crs_match, isint, isfloat
+from shapely.geometry import box
 from tqdm import tqdm
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 
-NEEDED_FIELDS = ["name", "path", "field", "description"]
+NEEDED_FIELDS = ["name", "path"]
+
+
+def _rasterize_geom(geom, shape, atrans, all_touched):
+    indata = [(geom, 1)]
+    rv_array = features.rasterize(
+        indata,
+        out_shape=shape,
+        transform=atrans,
+        fill=0,
+        all_touched=all_touched)
+    return rv_array
+
+
+def rasterize_pctcover(geom, atrans, shape):
+    default = _rasterize_geom(geom, shape, atrans, all_touched=False)
+    alltouched = _rasterize_geom(geom, shape, atrans, all_touched=True)
+    exterior = _rasterize_geom(geom.exterior, shape, atrans, all_touched=True)
+
+    # Create percent cover grid as the difference between them
+    # at this point all cells are known 100% coverage,
+    # we'll update this array for exterior points
+    pctcover = (alltouched - exterior)
+
+    # loop through indicies of all exterior cells
+    for r, c in zip(*np.where(exterior == 1)):
+
+        # Find cell bounds, from rasterio DatasetReader.window_bounds
+        window = ((r, r+1), (c, c+1))
+        ((row_min, row_max), (col_min, col_max)) = window
+        x_min, y_min = (col_min, row_max) * atrans
+        x_max, y_max = (col_max, row_min) * atrans
+        bounds = (x_min, y_min, x_max, y_max)
+
+        # Construct shapely geometry of cell
+        cell = box(*bounds)
+
+        # Intersect with original shape
+        cell_overlap = cell.intersection(geom)
+
+        # update pctcover with percentage based on area proportion
+        coverage = cell_overlap.area / cell.area
+        pctcover[r, c] = int(coverage)
+
+    # Print out areas
+    print("{:,}sq. km".format((default.sum() * 90 * 90) / 1_000_000))
+    print("{:,}sq. km".format((alltouched.sum() * 90 * 90) / 1_000_000))
+    print("{:,}sq. km".format((pctcover.sum() * 90 * 90) / 1_000_000))
+
+    return pctcover
 
 
 class Exclusions:
@@ -74,7 +122,7 @@ class Exclusions:
 
         # Add coordinates and else check that the new file matches everything
         self._set_coords(profile)
-        self._check_dims(raster, profile, dname)
+        self._check_dims(file, self.profile)
 
         # Add everything to target exclusion HDF
         array = raster.read()
@@ -170,15 +218,17 @@ class Exclusions:
                 with open(self.string_values, "r") as file:
                     self.string_values = json.load(file)
 
-    def _check_dims(self, raster, profile, dname):
+    def _check_dims(self, file, profile):
         # Check new layers against the first added raster
-        old = self.profile
-        new = profile
+        old = profile
+        dname = os.path.basename(file)
+        with rio.open(file, "r") as r:    
+            new = r.profile
 
         # Check the CRS
         if not crs_match(old["crs"], new["crs"]):
-            raise AssertionError("CRS for " + dname + " does not match"
-                                 " exisitng CRS.")
+            raise AssertionError(f"CRS for {dname} does not match exisitng "
+                                 "CRS.")
 
         # Check the transform
         try:
@@ -186,18 +236,18 @@ class Exclusions:
             old_trans = old["transform"][:6]
             new_trans = new["transform"][:6]
             assert old_trans == new_trans
-        except Exception:
-            raise AssertionError("Geotransform for " + dname + " does "
-                                 "not match geotransform.")
+        except AssertionError:
+            print(f"Geotransform for {dname} does not match geotransform.")
+            raise
 
         # Check the dimesions
         try:
             assert old["width"] == new["width"]
             assert old["height"] == new["height"]
-        except Exception:
-            raise AssertionError("Width and/or height for " + dname +
-                                 " does not match exisitng " +
-                                 "dimensions.")
+        except AssertionError:
+            print(f"Width and/or height for {dname} does not match existing "
+                  "dimensions.")
+            raise
 
     def _convert_coords(self, xs, ys):
         # Convert projected coordinates into WGS84
@@ -226,8 +276,6 @@ class Exclusions:
         return xs, ys
 
     def _initialize_h5(self):
-        import datetime as dt
-
         # Create an empty hdf file if one doesn't exist
         date = format(dt.datetime.today(), "%Y-%m-%d %H:%M")
         self.excl_fpath = os.path.expanduser(self.excl_fpath)
@@ -261,11 +309,11 @@ class Exclusions:
                 hdf.create_dataset(name="latitude", data=lats)
 
 
-class Reformatter:
+class Reformatter(Exclusions):
     """Reformat any file or set of files into a reV-shaped raster."""
 
     def __init__(self, inputs, out_dir, template=None, excl_fpath=None, 
-                 overwrite=False):
+                 overwrite_tif=False, overwrite_dset=False):
         """Initialize Reformatter object.
 
         Parameters
@@ -275,7 +323,9 @@ class Reformatter:
             the target name of reformatted dataset, second-level keys are
             'path' (required path to file'), 'field' (optional field name for
             vectors), 'buffer' (optional buffer distance), and 'layer' 
-            (required only for FileGeoDatabases). If pandas data frame, the
+            (required only for FileGeoDatabases). Inputs can also include any
+            additional field and it will be included in the attributes of the
+            HDF5 dataset if writing to and HDF5 file. If pandas data frame, the
             secondary keys are required as columns, and the top-level key
             is stored in a 'name' column. A path to a CSV of this table is
             also acceptable.
@@ -289,18 +339,24 @@ class Reformatter:
         excl_fpath : str
             Path to existing or target HDF5 exclusion file. If provided,
             reformatted datasets will be added to this file.
-        overwrite : boolean
-            If True, this will overwrite rasters in out_dir and datasets in
-            excl_fpath.
+        overwrite_tif : boolean
+            If `True`, this will overwrite rasters in `out_dir`.
+        overwrite_dset : boolean
+            If `True`, this will overwrite datasets in `excl_fpath`.
         """
+        super().__init__(str(excl_fpath))
         os.makedirs(out_dir, exist_ok=True)
-        if excl_fpath:
+        if excl_fpath is not None:
             excl_fpath = os.path.abspath(os.path.expanduser(excl_fpath))
         self._parse_inputs(inputs)
-        self.template = os.path.abspath(os.path.expanduser(template))
+        if template is not None:
+            self.template = os.path.abspath(os.path.expanduser(template))
+        else:
+            self.template = template
         self.out_dir = os.path.abspath(os.path.expanduser(out_dir))
         self.excl_fpath = excl_fpath
-        self.overwrite = overwrite
+        self.overwrite_tif = overwrite_tif
+        self.overwrite_dset = overwrite_dset
         self.lookup = {}
 
     def __repr__(self):
@@ -312,8 +368,27 @@ class Reformatter:
     @property
     def meta(self):
         """Return the meta information from the template file."""
-        with rio.open(self.template) as raster:
-            meta = raster.meta
+        meta = None
+        if self.template is not None:
+            with rio.open(self.template) as raster:
+                meta = raster.meta
+        else:
+            if not os.path.exists(self.excl_fpath):
+                raise FileNotFoundError("If not template is provided, an "
+                                        "existing `excl_fpath` is required.")
+            with h5py.File(self.excl_fpath, "r") as ds:
+                if "profile" in ds.attrs:
+                    meta = json.loads(ds.attrs["profile"])
+                else:
+                    for key, data in ds.items():
+                        if len(data.shape) == 3:
+                            if "profile" in data.attrs:
+                                meta = json.loads(data.attrs["profile"])
+                                break
+
+        if not meta:
+            raise ValueError("No meta object found.")
+
         return meta
 
     @property
@@ -355,9 +430,18 @@ class Reformatter:
         if not os.path.exists(path):
             raise OSError(f"{path} does not exist.")
 
-        if os.path.exists(dst) and not self.overwrite:
+        if self.template is not None:
+            try:
+                self._check_dims(path)
+                return
+            except:
+                pass
+
+        if os.path.exists(dst) and not self.overwrite_tif:
             return
         else:
+            # If the tiff is too big make adjustments to avoid big tiff errors
+            # Reprojecting separately might do the trick
             sp.call([
                 "rio", "warp", path, dst,
                 "--like", self.template,
@@ -374,9 +458,16 @@ class Reformatter:
         dsts = []
         for name, attrs in tqdm(self.vectors.items()):
             # Unpack attributes
-            field = attrs["field"]
-            buffer = attrs["buffer"]
             path = attrs["path"]
+            if "field" in attrs:
+                field = attrs["field"]
+            else:
+                field = None
+
+            if "buffer" in attrs:
+                buffer = attrs["buffer"]
+            else:
+                buffer = None
 
             # Create dst path
             dst_name = name + ".tif"
@@ -389,8 +480,7 @@ class Reformatter:
                 path=path,
                 dst=dst,
                 field=field,
-                buffer=buffer,
-                overwrite=self.overwrite
+                buffer=buffer
             )
 
             # Add formatted path to input
@@ -398,28 +488,27 @@ class Reformatter:
 
         return dsts
 
-    def reformat_vector(self, name, path, dst, field=None,  buffer=None,
-                        overwrite=False):
+    def reformat_vector(self, name, path, dst, field=None,  buffer=None):
         """Preprocess, re-project, and rasterize a vector."""
         # Check that path exists
         if not os.path.exists(path):
             raise OSError(f"{path} does not exist.")
 
-        # Read and process file
-        gdf = self._process_vector(name, path, field, buffer)
-        meta = self.meta
-
         # Skip if overwrite
-        if not overwrite and os.path.exists(dst):
+        if not self.overwrite_tif and os.path.exists(dst):
             return
         else:
+            # Read and process file
+            gdf = self._process_vector(name, path, field, buffer)
+            meta = self.meta
+
             # Rasterize
             elements = gdf.values
             shapes = [(g, r) for r, g in elements]
             out_shape = [meta["height"], meta["width"]]
             transform = meta["transform"]
             with rio.Env():
-                array = features.rasterize(shapes, out_shape,
+                array = features.rasterize(shapes, out_shape, all_touched=True,
                                            transform=transform)
 
             dtype = str(array.dtype)
@@ -441,7 +530,7 @@ class Reformatter:
         for name, attrs in tqdm(self.inputs.items(), total=len(self.inputs)):
             if "formatted_path" in attrs:
                 file = attrs["formatted_path"]
-                exclusions.add_layer(name, file)
+                exclusions.add_layer(name, file, overwrite=self.overwrite_dset)
 
                 # Add attributes
                 with h5py.File(self.excl_fpath, "r+") as ds:
@@ -465,7 +554,7 @@ class Reformatter:
         check = all([field in inputs.columns for field in NEEDED_FIELDS])
         assert check, ("Not all required fields present in inputs: "
                        f"{NEEDED_FIELDS}")
-    
+
     def _parse_inputs(self, inputs):
         """Take input values and create standard dictionary."""
         # Create dictionary
@@ -478,6 +567,9 @@ class Reformatter:
                 inputs = pd.read_csv(inputs)
             inputs = inputs[~pd.isnull(inputs["name"])]
             inputs = inputs[~pd.isnull(inputs["path"])]
+            inputs = inputs[inputs["name"] != "\xa0"]
+            inputs = inputs[inputs["path"] != "\xa0"]
+
             cols = [c for c in inputs.columns if c != "name"]
             for i, row in inputs.iterrows():
                 self.inputs[row["name"]] = {}
@@ -488,7 +580,7 @@ class Reformatter:
         for key, attrs in self.inputs.items():
             for akey, attr in attrs.items():
                 if not isinstance(attr, str):
-                    if not attr == None:
+                    if attr is not None:
                         if np.isnan(attr):
                             self.inputs[key][akey] = None
 
@@ -504,13 +596,16 @@ class Reformatter:
 
         # Update the string lookup dictionary
         self.lookup[layer_name] = string_map
-        
+    
         return gdf
 
     def _process_vector(self, name, path, field=None, buffer=None):
         """Process a single vector file."""
         # Read in file and check the path
         gdf = gpd.read_file(path)
+
+        if gdf.shape[0] == 0:
+            raise IndexError(f"{path} is an empty file.")
 
         # Check the projection;
         if not crs_match(gdf.crs, self.meta["crs"]):
@@ -553,3 +648,55 @@ class Reformatter:
         if self.excl_fpath:
             print(f"Building/updating exclusion {self.excl_fpath}...")
             self.to_h5()
+
+
+def test_partial():
+    """Test partial rasterization routines."""
+    import fiona
+    import matplotlib.pyplot as plt
+
+    from affine import Affine
+    from shapely.geometry import shape
+
+
+    df = gpd.read_file("/home/travis/data/shapefiles/tl_2021_us_state.shp")
+    df = df.to_crs("epsg:2857")
+    geom = df["geometry"][0]
+
+    xs = np.array(geom.exterior.xy[0])
+    ys = np.array(geom.exterior.xy[1])
+    xmin = xs.min()
+    ymin = ys.min()
+    xmax = xs.max()
+    ymax = ys.max()
+
+    res = 90
+
+    width = int(np.ceil((xmax - xmin) / res))
+    height = int(np.ceil((ymax - ymin) / res))
+
+    atrans = rio.transform.from_bounds(xmin, ymin, xmax, ymax, width, height)
+
+    shape = (height, width)
+
+    profile = {
+        'affine': atrans,
+        'height': shape[0],
+        'width': shape[1],
+        'count': 1,
+        'crs': "epsg:2857",
+        'driver': 'GTiff',
+        'dtype': 'uint8',
+        'nodata': None,
+        'tiled': False
+    }
+
+    pctcover = rasterize_pctcover(geom, atrans=atrans, shape=shape)
+    plt.imshow(pctcover)
+
+    with rio.open('/home/travis/scratch/percent_cover.tif', 'w', **profile) as dst:
+        dst.write(pctcover, 1)
+
+
+if __name__ == "__main__":
+    test_partial()
