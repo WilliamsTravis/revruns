@@ -10,6 +10,7 @@ Note that rasterize partial was adjusted from:
 import datetime as dt
 import json
 import os
+import shutil
 import subprocess as sp
 import tempfile
 import warnings
@@ -40,15 +41,109 @@ class Rasterizer:
 
     import rasterio as rio
 
-    def __init__(self, template=None):
+    def __init__(self, template=None, temp_dir=None):
         """Initialize Rasterize object.
 
         Parameters
         ----------
         template : str
             Path to template raster used for grid geometry. Optional.
+        temp_dir : str
+            Path to directory to store temporary raster files.
         """
         self.template = template
+        self.temp_dir = temp_dir
+
+    def rasterize_partial(self, src, dst, resolution=90, crs=None):
+        """Rasterize full vector dataset using percent coverage.
+
+        Parameters
+        ----------
+        src : str
+            Path to source vector dataset file.
+        dst : str
+            Path to destination GeoTiff file.
+        resolution : int
+            Target raster Resolution in units of src.
+        crs : str
+            Coordinate reference system of target GeoTiff. Use "epsg:<code>"
+            format. Will default to crs of src if not provided.
+        """
+        # Read in source dataset
+        df = gpd.read_file(src)
+
+        # Set up temporary directory
+        if not self.temp_dir:
+            self.temp_dir = os.path.join(os.path.dirname(dst), "tmp")
+        os.makedirs(self.temp_dir, exist_ok=True)
+
+        # Read in template information
+        if self.template:
+            r = self.rio.open(template)
+            profile = r.profile
+            crs = CRS(profile["crs"])
+
+        # Set crs and project if needed
+        if not crs:
+            crs = df.crs
+        if CRS(crs).to_epsg() != df.crs.to_epsg():
+            df = df.to_crs(crs)
+
+        # Comine arguments for multiprocessing routine
+        arg_list = []
+        for geom in df["geometry"].values:
+            # Unpack target geometry
+            xmin, ymin, xmax, ymax = self._bounds(geom)
+            height, width = self._shape(geom)
+            shape = (height, width)
+            transform = rio.transform.from_bounds(xmin, ymin, xmax, ymax,
+                                                  width, height)
+            arg_list.append((geom, transform, shape))
+
+        # Run partial rasterization
+        tmps = []
+        with mp.Pool(mp.cpu_count() - 1) as pool:
+            for tmp in tqdm(pool.imap(self._rasterize_partial, arg_list),
+                            total=len(arg_list)):
+                tmps.append(tmp)
+
+        # Combine arrays
+        datasets = [rio.open(tmp) for tmp in tmps]
+        array, transform = merge(datasets, method="max")
+        array = array[0]
+
+        # Write to GeoTiff
+        if not self.template:
+            profile = {
+                'transform':transform,
+                'height': array.shape[0],
+                'width': array.shape[1],
+                'count': 1,
+                'crs': crs,
+                'driver': 'GTiff',
+                'dtype': 'float32',
+                'nodata': None,
+                'tiled': False
+            }
+        with rio.open(dst, 'w', **profile) as file:
+            file.write(array, 1)
+
+        # Remove temporary files
+        shutil.rmtree(self.tmp_dir)
+
+    def _bounds(self, geom):
+        """Return the bounds of a geometry."""
+        if isinstance(geom, MultiPolygon):
+            xs = np.concatenate([g.exterior.xy[0] for g in geom])
+            ys = np.concatenate([g.exterior.xy[1] for g in geom])
+        else:
+            xs = np.array(geom.exterior.xy[0])
+            ys = np.array(geom.exterior.xy[1])
+        xmin = xs.min()
+        ymin = ys.min()
+        xmax = xs.max()
+        ymax = ys.max()
+        return xmin, ymin, xmax, ymax
 
     def _rasterize(self, geom, shape, transform, exterior=False):
         """Rasterize a single geometry."""
@@ -118,8 +213,8 @@ class Rasterizer:
             'tiled': False
         }
 
-        _, dst = tempfile.mkstemp()
-        dst += ".tif"
+        tmp = next(tempfile._get_candidate_names())
+        dst = os.path.join(self.temp_dir, tmp + ".tif")
         with rio.open(dst, 'w', **profile) as file:
             file.write(partial, 1)
 
@@ -128,86 +223,6 @@ class Rasterizer:
         del full
 
         return dst
-
-    def rasterize_partial(self, src, dst, resolution=90, crs=None):
-        """Rasterize full vector dataset.
-
-        Parameters
-        ----------
-        src : str
-            Path to source vector dataset file.
-        dst : str
-            Path to destination GeoTiff file.
-        resolution : int
-            Target raster Resolution in units of src.
-        crs : str
-            Coordinate reference system of target GeoTiff. Use "epsg:<code>"
-            format. Will default to crs of src if not provided.
-        """
-        # Read in source dataset
-        df = gpd.read_file(src)
-
-        # Set crs and project if needed
-        if not crs:
-            crs = df.crs
-        if CRS(crs).to_epsg() != df.crs.to_epsg():
-            df = df.to_crs(crs)
-
-        # Comine arguments for multiprocessing routine
-        arg_list = []
-        for geom in df["geometry"].values:
-            # Unpack target geometry
-            xmin, ymin, xmax, ymax = self._bounds(geom)
-            height, width = self._shape(geom)
-            shape = (height, width)
-            transform = rio.transform.from_bounds(xmin, ymin, xmax, ymax,
-                                                  width, height)
-            arg_list.append((geom, transform, shape))
-
-        # Run partial rasterization
-        tmps = []
-        with mp.Pool(mp.cpu_count() - 1) as pool:
-            for tmp in tqdm(pool.imap(self._rasterize_partial, arg_list),
-                            total=len(arg_list)):
-                tmps.append(tmp)
-
-        # Combine arrays
-        datasets = [rio.open(tmp) for tmp in tmps]
-        array, transform = merge(datasets, method="max")
-        array = array[0]
-
-        # Write to GeoTiff
-        profile = {
-            'transform':transform,
-            'height': array.shape[0],
-            'width': array.shape[1],
-            'count': 1,
-            'crs': crs,
-            'driver': 'GTiff',
-            'dtype': 'float32',
-            'nodata': None,
-            'tiled': False
-        }
-
-        with rio.open(dst, 'w', **profile) as file:
-            file.write(array, 1)
-
-        for tmp in tmps:
-            os.remove(tmp)
-
-    def _bounds(self, geom):
-        """Return the bounds of a geometry."""
-        if isinstance(geom, MultiPolygon):
-            xs = np.concatenate([g.exterior.xy[0] for g in geom])
-            ys = np.concatenate([g.exterior.xy[1] for g in geom])
-        else:
-            xs = np.array(geom.exterior.xy[0])
-            ys = np.array(geom.exterior.xy[1])
-        xmin = xs.min()
-        ymin = ys.min()
-        xmax = xs.max()
-        ymax = ys.max()
-        return xmin, ymin, xmax, ymax
 
     def _shape(self, geom):
         """Return target shape for geometry."""
@@ -786,9 +801,10 @@ class Reformatter(Exclusions):
 
 
 if __name__ == "__main__":
-    src = "/home/travis/data/shapefiles/tl_2021_us_state.gpkg"
-    dst = "/home/travis/scratch/test_partial.tif"
+    src = "/projects/rev/data/conus/national_hydrography_dataset/waterbodies/NHD_H_Vermont_State_waterbodies.gpkg"
+    dst = "/scratch/twillia2/test_vt_waterbodies.tif"
     crs = None
     resolution = 90
-    rasterizer = Rasterizer()
-    rasterizer.rasterize_partial(src, dst)
+    template =  "/projects/rev/data/conus/conus_template.tif"
+    self = Rasterizer(template=template)
+    self.rasterize_partial(src, dst)
