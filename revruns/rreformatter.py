@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
 """Reformat a shapefile or raster into a reV raster using a template.
 
-Ideally, any raster or vector format will work with this.
+Note that rasterize partial was adjusted from:
+    https://gist.github.com/perrygeohttps://gist.github.com/perrygeo
 
-Created on Tue Apr 27 16:47:10 2021
-
-Updated in Feb, 2,2022 
-
+@date: Tue Apr 27 16:47:10 2021
 @author: twillia2
 """
 import datetime as dt
 import json
-import subprocess as sp
 import os
+import subprocess as sp
+import tempfile
 import warnings
+
+import pathos.multiprocessing as mp
 
 import geopandas as gpd
 import h5py
@@ -22,9 +23,10 @@ import pandas as pd
 import rasterio as rio
 
 from rasterio import features
-from pyproj import Transformer
+from rasterio.merge import merge
+from pyproj import CRS, Transformer
 from revruns.rr import crs_match, isint, isfloat
-from shapely.geometry import box
+from shapely.geometry import box, MultiPolygon
 from tqdm import tqdm
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -33,53 +35,186 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 NEEDED_FIELDS = ["name", "path"]
 
 
-def _rasterize_geom(geom, shape, atrans, all_touched):
-    indata = [(geom, 1)]
-    rv_array = features.rasterize(
-        indata,
-        out_shape=shape,
-        transform=atrans,
-        fill=0,
-        all_touched=all_touched)
-    return rv_array
+class Rasterizer:
+    """Methods for rasterizing vectors."""
 
+    import rasterio as rio
 
-def rasterize_pctcover(geom, atrans, shape):
-    default = _rasterize_geom(geom, shape, atrans, all_touched=False)
-    alltouched = _rasterize_geom(geom, shape, atrans, all_touched=True)
-    exterior = _rasterize_geom(geom.exterior, shape, atrans, all_touched=True)
+    def __init__(self, template=None):
+        """Initialize Rasterize object.
 
-    # Create percent cover grid as the difference between them
-    # at this point all cells are known 100% coverage,
-    # we'll update this array for exterior points
-    pctcover = (alltouched - exterior)
+        Parameters
+        ----------
+        template : str
+            Path to template raster used for grid geometry. Optional.
+        """
+        self.template = template
 
-    # loop through indicies of all exterior cells
-    for r, c in zip(*np.where(exterior == 1)):
+    def _rasterize(self, geom, shape, transform, exterior=False):
+        """Rasterize a single geometry."""
+        # Build shapes and account for multipolygons
+        if isinstance(geom, MultiPolygon):
+            if exterior:
+                shapes = [(g.exterior, 1) for g in geom]
+            else:
+                shapes = [(g, 1) for g in geom]
+        else:
+            if exterior:
+                shapes = [(geom.exterior, 1)]
+            else:
+                shapes = [(geom, 1)]
 
-        # Find cell bounds, from rasterio DatasetReader.window_bounds
-        window = ((r, r+1), (c, c+1))
-        ((row_min, row_max), (col_min, col_max)) = window
-        x_min, y_min = (col_min, row_max) * atrans
-        x_max, y_max = (col_max, row_min) * atrans
-        bounds = (x_min, y_min, x_max, y_max)
+        # Build array
+        array = self.rio.features.rasterize(
+            shapes=shapes,
+            out_shape=shape,
+            transform=transform,
+            fill=0,
+            all_touched=True
+        )
 
-        # Construct shapely geometry of cell
-        cell = box(*bounds)
+        return array
 
-        # Intersect with original shape
-        cell_overlap = cell.intersection(geom)
+    def _rasterize_partial(self, args):
+        """Rasterize geometry with percent coverage for partial cells."""
+        # Unpack arguments
+        geom, transform, shape = args
 
-        # update pctcover with percentage based on area proportion
-        coverage = cell_overlap.area / cell.area
-        pctcover[r, c] = int(coverage)
+        # Create full and boundary arrays
+        full = self._rasterize(geom, shape, transform)
+        boundary = self._rasterize(geom, shape, transform, exterior=True)
 
-    # Print out areas
-    print("{:,}sq. km".format((default.sum() * 90 * 90) / 1_000_000))
-    print("{:,}sq. km".format((alltouched.sum() * 90 * 90) / 1_000_000))
-    print("{:,}sq. km".format((pctcover.sum() * 90 * 90) / 1_000_000))
+        # Remove boundary cells from full array
+        partial = (full - boundary).astype("float32")
 
-    return pctcover
+        # loop through indicies of all exterior cells
+        idx = np.where(boundary == 1)
+        for r, c in zip(*idx):
+            # Find cell bounds
+            window = ((r, r + 1), (c, c + 1))
+            ((row_min, row_max), (col_min, col_max)) = window
+            x_min, y_min = transform * (col_min, row_max)
+            x_max, y_max = transform * (col_max, row_min)
+            bounds = (x_min, y_min, x_max, y_max)
+
+            # Construct shapely geometry of cell and intersect with geometry
+            cell = box(*bounds)
+            overlap = cell.intersection(geom)
+
+            # update pctcover with percentage based on area proportion
+            ratio = overlap.area / cell.area
+            partial[r, c] = ratio
+
+        # Save to temporary file
+        profile = {
+            'transform': transform,
+            'height': shape[0],
+            'width': shape[1],
+            'count': 1,
+            'crs': crs,
+            'driver': 'GTiff',
+            'dtype': 'float32',
+            'nodata': None,
+            'tiled': False
+        }
+
+        _, dst = tempfile.mkstemp()
+        dst += ".tif"
+        with rio.open(dst, 'w', **profile) as file:
+            file.write(partial, 1)
+
+        del partial
+        del boundary
+        del full
+
+        return dst
+
+    def rasterize_partial(self, src, dst, resolution=90, crs=None):
+        """Rasterize full vector dataset.
+
+        Parameters
+        ----------
+        src : str
+            Path to source vector dataset file.
+        dst : str
+            Path to destination GeoTiff file.
+        resolution : int
+            Target raster Resolution in units of src.
+        crs : str
+            Coordinate reference system of target GeoTiff. Use "epsg:<code>"
+            format. Will default to crs of src if not provided.
+        """
+        # Read in source dataset
+        df = gpd.read_file(src)
+
+        # Set crs and project if needed
+        if not crs:
+            crs = df.crs
+        if CRS(crs).to_epsg() != df.crs.to_epsg():
+            df = df.to_crs(crs)
+
+        # Comine arguments for multiprocessing routine
+        arg_list = []
+        for geom in df["geometry"].values:
+            # Unpack target geometry
+            xmin, ymin, xmax, ymax = self._bounds(geom)
+            height, width = self._shape(geom)
+            shape = (height, width)
+            transform = rio.transform.from_bounds(xmin, ymin, xmax, ymax,
+                                                  width, height)
+            arg_list.append((geom, transform, shape))
+
+        # Run partial rasterization
+        tmps = []
+        with mp.Pool(mp.cpu_count() - 1) as pool:
+            for tmp in tqdm(pool.imap(self._rasterize_partial, arg_list),
+                            total=len(arg_list)):
+                tmps.append(tmp)
+
+        # Combine arrays
+        datasets = [rio.open(tmp) for tmp in tmps]
+        array, transform = merge(datasets, method="max")
+        array = array[0]
+
+        # Write to GeoTiff
+        profile = {
+            'transform':transform,
+            'height': array.shape[0],
+            'width': array.shape[1],
+            'count': 1,
+            'crs': crs,
+            'driver': 'GTiff',
+            'dtype': 'float32',
+            'nodata': None,
+            'tiled': False
+        }
+
+        with rio.open(dst, 'w', **profile) as file:
+            file.write(array, 1)
+
+        for tmp in tmps:
+            os.remove(tmp)
+
+    def _bounds(self, geom):
+        """Return the bounds of a geometry."""
+        if isinstance(geom, MultiPolygon):
+            xs = np.concatenate([g.exterior.xy[0] for g in geom])
+            ys = np.concatenate([g.exterior.xy[1] for g in geom])
+        else:
+            xs = np.array(geom.exterior.xy[0])
+            ys = np.array(geom.exterior.xy[1])
+        xmin = xs.min()
+        ymin = ys.min()
+        xmax = xs.max()
+        ymax = ys.max()
+        return xmin, ymin, xmax, ymax
+
+    def _shape(self, geom):
+        """Return target shape for geometry."""
+        xmin, ymin, xmax, ymax = self._bounds(geom)
+        width = int(np.ceil((xmax - xmin) / resolution))
+        height = int(np.ceil((ymax - ymin) / resolution))
+        return (height, width)
 
 
 class Exclusions:
@@ -650,53 +785,10 @@ class Reformatter(Exclusions):
             self.to_h5()
 
 
-def test_partial():
-    """Test partial rasterization routines."""
-    import fiona
-    import matplotlib.pyplot as plt
-
-    from affine import Affine
-    from shapely.geometry import shape
-
-
-    df = gpd.read_file("/home/travis/data/shapefiles/tl_2021_us_state.shp")
-    df = df.to_crs("epsg:2857")
-    geom = df["geometry"][0]
-
-    xs = np.array(geom.exterior.xy[0])
-    ys = np.array(geom.exterior.xy[1])
-    xmin = xs.min()
-    ymin = ys.min()
-    xmax = xs.max()
-    ymax = ys.max()
-
-    res = 90
-
-    width = int(np.ceil((xmax - xmin) / res))
-    height = int(np.ceil((ymax - ymin) / res))
-
-    atrans = rio.transform.from_bounds(xmin, ymin, xmax, ymax, width, height)
-
-    shape = (height, width)
-
-    profile = {
-        'affine': atrans,
-        'height': shape[0],
-        'width': shape[1],
-        'count': 1,
-        'crs': "epsg:2857",
-        'driver': 'GTiff',
-        'dtype': 'uint8',
-        'nodata': None,
-        'tiled': False
-    }
-
-    pctcover = rasterize_pctcover(geom, atrans=atrans, shape=shape)
-    plt.imshow(pctcover)
-
-    with rio.open('/home/travis/scratch/percent_cover.tif', 'w', **profile) as dst:
-        dst.write(pctcover, 1)
-
-
 if __name__ == "__main__":
-    test_partial()
+    src = "/home/travis/data/shapefiles/tl_2021_us_state.gpkg"
+    dst = "/home/travis/scratch/test_partial.tif"
+    crs = None
+    resolution = 90
+    rasterizer = Rasterizer()
+    rasterizer.rasterize_partial(src, dst)
