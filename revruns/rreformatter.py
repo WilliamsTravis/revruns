@@ -28,7 +28,7 @@ from pyproj import CRS, Transformer
 from rasterio import features
 from rasterio.merge import merge
 from revruns.rr import crs_match, isint, isfloat
-from shapely.geometry import box
+from shapely import geometry
 from shapely.ops import cascaded_union
 from tqdm import tqdm
 
@@ -43,7 +43,7 @@ class Rasterizer:
 
     import rasterio as rio
 
-    def __init__(self, flip=False, resolution=90, crs="epsg:102008",
+    def __init__(self, flip=False, resolution=90, crs="esri:102008",
                  template=None, temp_dir=None):
         """Initialize Rasterize object.
 
@@ -97,7 +97,7 @@ class Rasterizer:
             with self.rio.open(self.template) as r:
                 profile = r.profile
                 self.crs = CRS(profile["crs"])
-    
+
         # Set crs and project if needed
         if not self.crs:
             self.crs = df.crs
@@ -133,16 +133,16 @@ class Rasterizer:
 
         # Flip values if requested
         if self.flip:
-            array = (1 - array) * -1
+            array = (array - 1) * -1
 
         # Write to GeoTiff
         if not self.template:
             profile = {
-                'transform':transform,
+                'transform': transform,
                 'height': array.shape[0],
                 'width': array.shape[1],
                 'count': 1,
-                'crs': crs,
+                'crs': self.crs,
                 'driver': 'GTiff',
                 'dtype': 'float32',
                 'nodata': None,
@@ -171,35 +171,94 @@ class Rasterizer:
         ymax = bounds[:, 3].max()
         return xmin, ymin, xmax, ymax
 
+    def _exterior_ratio(self, partial, boundary, geom, transform):
+        """Calculate the coverage ratio for exterior cells of an array."""
+        idx = np.where(boundary == 1)
+        for r, c in zip(*idx):
+            # Find cell bounds
+            window = ((r, r + 1), (c, c + 1))
+            ((row_min, row_max), (col_min, col_max)) = window
+            x_min, y_min = transform * (col_min, row_max)
+            x_max, y_max = transform * (col_max, row_min)
+            bounds = (x_min, y_min, x_max, y_max)
+
+            # Construct shapely geometry of cell and intersect with geometry
+            cell = geometry.box(*bounds)
+            overlap = cell.intersection(geom)
+
+            # update pctcover with percentage based on area proportion
+            ratio = (overlap.area / cell.area)
+            partial[r, c] = ratio
+
+        return partial
+
     def _get_args(self, df):
         """Get arguments for multiprocessing."""
-        # Sort geogpahically for smaller chunks
-        df["x"] = df["geometry"].centroid.x
-        df["y"] = df["geometry"].centroid.y
-        df = df.sort_values(["x", "y"])
-
         # The smaller the better for memory
         nrows = df.shape[0]
         nsplit = np.ceil(nrows / mp.cpu_count())
         nchunks = np.min([nrows, nsplit, 1_000])
+
+        # Option #1: Create grid to split data frame by
+        # df = self._grid(df, nchunks)
+        # geoms = [list(g[1]) for g in df.groupby("grid")["geometry"]]
+
+        # Option 2: Split linearly
+        df["x"] = df["geometry"].centroid.x
+        df["y"] = df["geometry"].centroid.y
+        df = df.sort_values(["x", "y"])
         geoms = np.array_split(df["geometry"].values, nchunks)
+
+        # Build argument list
         arg_list = []
         for geom in geoms:
             # Unpack target geometry
             xmin, ymin, xmax, ymax = self._bounds(geom)
             height, width = self._shape(geom)
             shape = (height, width)
-            transform = rio.transform.from_bounds(xmin, ymin, xmax, ymax,
-                                                  width, height)
+            transform = rio.transform.from_bounds(
+                xmin, ymin, xmax, ymax, width, height
+            )
             arg_list.append((geom, transform, shape))
 
         return arg_list
 
+    def _grid(self, df, nchunks):
+        """Create a grid to split a geodataframe."""
+        # Polygon Size
+        xmin, ymin, xmax, ymax = df.total_bounds
+        x = xmin
+        y = ymin
+        array = []
+        size = 10_000
+        while y <= ymax:
+            while x <= xmax:
+                geom = geometry.Polygon([
+                    (x, y),
+                    (x, y + size),
+                    (x + size, y + size),
+                    (x + size, y),
+                    (x, y)
+                ])
+                array.append(geom)
+                x += size
+            x = xmin
+            y += size
+     
+        grid = gpd.GeoDataFrame(array, columns=["geometry"], crs=df.crs)
+        grid["grid"] = grid.index
+        df = gpd.sjoin(df, grid)
+
+        return df
+
     def _rasterize(self, geom, shape, transform, exterior=False):
         """Rasterize a single geometry."""
         # Build shapes and account for multipolygons
-        shapes = [(g, 1) for g in geom]
-
+        if exterior:
+            shapes = [(g.exterior, 1) for g in geom]
+        else:
+            shapes = [(g, 1) for g in geom]
+        
         # Build array
         array = self.rio.features.rasterize(
             shapes=shapes,
@@ -216,6 +275,9 @@ class Rasterizer:
         # Unpack arguments
         geom, transform, shape = args
 
+        # Create single geometry
+        geom = cascaded_union(geom)
+
         # Create full and boundary arrays
         full = self._rasterize(geom, shape, transform)
         boundary = self._rasterize(geom, shape, transform, exterior=True)
@@ -223,26 +285,8 @@ class Rasterizer:
         # Remove boundary cells from full array
         partial = (full - boundary).astype("float32")
 
-        # Now we need a singular polygon object
-        single_geom = cascaded_union(geom)
-
-        # loop through indicies of all exterior cells
-        idx = np.where(boundary == 1)
-        for r, c in zip(*idx):
-            # Find cell bounds
-            window = ((r, r + 1), (c, c + 1))
-            ((row_min, row_max), (col_min, col_max)) = window
-            x_min, y_min = transform * (col_min, row_max)
-            x_max, y_max = transform * (col_max, row_min)
-            bounds = (x_min, y_min, x_max, y_max)
-
-            # Construct shapely geometry of cell and intersect with geometry
-            cell = box(*bounds)
-            overlap = cell.intersection(single_geom)
-
-            # update pctcover with percentage based on area proportion
-            ratio = overlap.area / cell.area
-            partial[r, c] = ratio
+        # Loop through indicies of all exterior cells and calc ratio
+        partial = self._exterior_ratio(partial, boundary, geom, transform)
 
         # Save to temporary file
         profile = {
@@ -261,10 +305,6 @@ class Rasterizer:
         dst = os.path.join(self.temp_dir, tmp + ".tif")
         with rio.open(dst, 'w', **profile) as file:
             file.write(partial, 1)
-
-        del partial
-        del boundary
-        del full
 
         return dst
 
@@ -846,9 +886,14 @@ class Reformatter(Exclusions):
 
 if __name__ == "__main__":
     src = "/projects/rev/data/conus/national_hydrography_dataset/waterbodies/NHD_H_Colorado_State_waterbodies.gpkg"
-    dst = "/scratch/twillia2/testco_waterbodies.tif"
-    crs = None
-    resolution = 90
-    template =  "/projects/rev/data/conus/conus_template.tif"
+    src = "/home/travis/data/shapefiles/colorado_waterbodies.gpkg"
+    src = "/home/travis/data/shapefiles/vermont_waterbodies.gpkg"
+
+    dst = "/home/travis/scratch/test_co_waterbodies.tif"
+    dst = "/home/travis/scratch/test_vt_waterbodies.tif"
+
+    template = "/projects/rev/data/conus/conus_template.tif"
+    template = "/home/travis/data/rasters/conus_template.tif"
+
     self = Rasterizer(template=template, flip=True)
-    # self.rasterize_partial(src, dst)
+    self.rasterize_partial(src, dst)
