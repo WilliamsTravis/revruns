@@ -13,9 +13,7 @@ import os
 import shutil
 import subprocess as sp
 import tempfile
-import time
 import warnings
-
 import pathos.multiprocessing as mp
 
 import geopandas as gpd
@@ -78,9 +76,6 @@ class Rasterizer:
             Coordinate reference system of target GeoTiff. Use "epsg:<code>"
             format. Will default to crs of src if not provided.
         """
-        # Start timer
-        start = time.time()
-
         # Read in source dataset
         if isinstance(src, str):
             df = gpd.read_file(src)
@@ -156,11 +151,6 @@ class Rasterizer:
 
         # Remove temporary files
         shutil.rmtree(self.temp_dir)
-
-        # Wrap up
-        end = time.time()
-        minutes = round((end - start) / 60, 2)
-        print(f"Rasterization of {dst} completed in {minutes} minutes...")
 
     def _bounds(self, geom):
         """Return the bounds of a geometry."""
@@ -882,18 +872,3 @@ class Reformatter(Exclusions):
         if self.excl_fpath:
             print(f"Building/updating exclusion {self.excl_fpath}...")
             self.to_h5()
-
-
-if __name__ == "__main__":
-    src = "/projects/rev/data/conus/national_hydrography_dataset/waterbodies/NHD_H_Colorado_State_waterbodies.gpkg"
-    src = "/home/travis/data/shapefiles/colorado_waterbodies.gpkg"
-    src = "/home/travis/data/shapefiles/vermont_waterbodies.gpkg"
-
-    dst = "/home/travis/scratch/test_co_waterbodies.tif"
-    dst = "/home/travis/scratch/test_vt_waterbodies.tif"
-
-    template = "/projects/rev/data/conus/conus_template.tif"
-    template = "/home/travis/data/rasters/conus_template.tif"
-
-    self = Rasterizer(template=template, flip=True)
-    self.rasterize_partial(src, dst)
