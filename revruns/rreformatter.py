@@ -43,7 +43,8 @@ class Rasterizer:
 
     import rasterio as rio
 
-    def __init__(self, flip=False, template=None, temp_dir=None):
+    def __init__(self, flip=False, resolution=90, crs="epsg:102008",
+                 template=None, temp_dir=None):
         """Initialize Rasterize object.
 
         Parameters
@@ -58,9 +59,11 @@ class Rasterizer:
         """
         self.template = template
         self.temp_dir = temp_dir
+        self.resolution = resolution
+        self.crs = crs
         self.flip = flip
 
-    def rasterize_partial(self, src, dst, resolution=90, crs=None):
+    def rasterize_partial(self, src, dst):
         """Rasterize full vector dataset using percent coverage.
 
         Parameters
@@ -77,7 +80,6 @@ class Rasterizer:
         """
         # Start timer
         start = time.time()
-        print(f"Rasterizing {src} to {dst}...")
 
         # Read in source dataset
         if isinstance(src, str):
@@ -92,15 +94,15 @@ class Rasterizer:
 
         # Read in template information
         if self.template:
-            with self.rio.open(template) as r:
+            with self.rio.open(self.template) as r:
                 profile = r.profile
-                crs = CRS(profile["crs"])
-
+                self.crs = CRS(profile["crs"])
+    
         # Set crs and project if needed
-        if not crs:
-            crs = df.crs
-        if CRS(crs).to_epsg() != df.crs.to_epsg():
-            df = df.to_crs(crs)
+        if not self.crs:
+            self.crs = df.crs
+        if CRS(self.crs).to_epsg() != df.crs.to_epsg():
+            df = df.to_crs(self.crs)
 
         # Comine arguments for multiprocessing routine
         arg_list = self._get_args(df)
@@ -114,7 +116,7 @@ class Rasterizer:
 
         # If template, use its bounds
         if self.template:
-            with self.rio.open(template) as r:
+            with self.rio.open(self.template) as r:
                 bounds = tuple(r.bounds)
         else:
             bounds = None
@@ -124,7 +126,7 @@ class Rasterizer:
         array, transform = merge(
             datasets,
             bounds=bounds,
-            res=resolution,
+            res=self.resolution,
             method="max"
         )
         array = array[0]
@@ -248,7 +250,7 @@ class Rasterizer:
             'height': shape[0],
             'width': shape[1],
             'count': 1,
-            'crs': crs,
+            'crs': self.crs,
             'driver': 'GTiff',
             'dtype': 'float32',
             'nodata': None,
@@ -269,8 +271,8 @@ class Rasterizer:
     def _shape(self, geom):
         """Return target shape for geometry."""
         xmin, ymin, xmax, ymax = self._bounds(geom)
-        width = int(np.ceil((xmax - xmin) / resolution))
-        height = int(np.ceil((ymax - ymin) / resolution))
+        width = int(np.ceil((xmax - xmin) / self.resolution))
+        height = int(np.ceil((ymax - ymin) / self.resolution))
         return (height, width)
 
 
