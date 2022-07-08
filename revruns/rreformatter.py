@@ -10,11 +10,14 @@ Note that rasterize partial was adjusted from:
 import datetime as dt
 import json
 import os
+import psutil
 import shutil
 import subprocess as sp
 import tempfile
 import warnings
 import pathos.multiprocessing as mp
+
+from pathlib import Path
 
 import geopandas as gpd
 import h5py
@@ -34,6 +37,60 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 
 NEEDED_FIELDS = ["name", "path"]
+
+
+def grid_chunks(df, nchunks):
+    """Create a grid to split a geodataframe into roughly `nchunks` parts."""
+    # Polygon Size
+    xmin, ymin, xmax, ymax = df.total_bounds
+    width = xmax - xmin
+    height = ymax - ymin
+
+    # Needed number of cells in each direction
+    yratio = height / width
+    xratio = width / height
+    nx = np.ceil(np.sqrt(nchunks) * xratio)
+    ny = np.ceil(np.sqrt(nchunks) * yratio)
+
+    # Each cell distance
+    ysize = height / ny
+    xsize = height / nx
+
+    # Build grid geometry
+    x = xmin
+    y = ymin
+    array = []
+    while y <= ymax:
+        while x <= xmax:
+            geom = geometry.Polygon([
+                (x, y),
+                (x, y + ysize),
+                (x + xsize, y + ysize),
+                (x + xsize, y),
+                (x, y)
+            ])
+            array.append(geom)
+            x += xsize
+        x = xmin
+        y += ysize
+
+    # Build grid geodataframe
+    grid = gpd.GeoDataFrame(array, columns=["geometry"], crs=df.crs)
+    grid["grid"] = grid.index
+
+    # Use the centriods to join with grid
+    df["geometry1"] = df["geometry"]
+    df["geometry"] = df["geometry1"].centroid
+    df = gpd.sjoin(df, grid, op="within", how="left")
+    df["geometry"] = df["geometry1"]
+    del df["geometry1"]
+    del df["index_right"]
+
+    return df
+
+
+def fopen():
+    return psutil.Process().open_files()
 
 
 class Rasterizer:
@@ -84,8 +141,12 @@ class Rasterizer:
 
         # Set up temporary directory
         if not self.temp_dir:
-            self.temp_dir = os.path.join(os.path.dirname(dst), "tmp")
-        os.makedirs(self.temp_dir, exist_ok=True)
+            self.temp_dir = Path(dst).parent.joinpath("tmp")
+            self.temp_dir.mkdir(exist_ok=True)
+        files = list(self.temp_dir.glob("*tif"))
+        if files:
+            for file in files:
+                os.remove(file)
 
         # Read in template information
         if self.template:
@@ -96,7 +157,7 @@ class Rasterizer:
         # Set crs and project if needed
         if not self.crs:
             self.crs = df.crs
-        if CRS(self.crs).to_epsg() != df.crs.to_epsg():
+        if CRS(self.crs).to_wkt() != df.crs.to_wkt():  # Fails if not found
             df = df.to_crs(self.crs)
 
         # Comine arguments for multiprocessing routine
@@ -117,6 +178,8 @@ class Rasterizer:
             bounds = None
 
         # Merge individual temporary rasters
+        nopen = len(fopen())
+        print(f"Open files: {nopen}")
         datasets = [rio.open(tmp) for tmp in tmps]
         array, transform = merge(
             datasets,
@@ -149,7 +212,9 @@ class Rasterizer:
         with rio.open(dst, 'w', **profile) as file:
             file.write(array, 1)
 
-        # Remove temporary files
+        # Close and remove temporary files
+        for dataset in datasets:
+            dataset.close()
         shutil.rmtree(self.temp_dir)
 
     def _bounds(self, geom):
@@ -184,13 +249,13 @@ class Rasterizer:
 
     def _get_args(self, df):
         """Get arguments for multiprocessing."""
-        # The smaller the better for memory
+        # The smaller the better for memory, note system open file limits
         nrows = df.shape[0]
         nsplit = np.ceil(nrows / mp.cpu_count())
         nchunks = np.min([nrows, nsplit, 1_000])
 
-        # Option #1: Create grid to split data frame by
-        # df = self._grid(df, nchunks)
+        # Option #1: Split data frame into spatially neighboring grid cells
+        # df = grid_chunks(df, nchunks)
         # geoms = [list(g[1]) for g in df.groupby("grid")["geometry"]]
 
         # Option 2: Split linearly
@@ -292,7 +357,7 @@ class Rasterizer:
         }
 
         tmp = next(tempfile._get_candidate_names())
-        dst = os.path.join(self.temp_dir, tmp + ".tif")
+        dst = str(self.temp_dir.joinpath(tmp + ".tif"))
         with rio.open(dst, 'w', **profile) as file:
             file.write(partial, 1)
 
