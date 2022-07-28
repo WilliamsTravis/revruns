@@ -1,25 +1,25 @@
-name: devruns
+name: homeruns
 channels:
   - nrel
   - conda-forge
   - defaults
 dependencies:
-  - descartes
-  - python>=3.9
+  - python=3.8
   - colorama
-  - geopandas
-  - pandas
-  - numpy
-  - rasterio
-  - h5py
+  - descartes
   - gdal
-  - dask
+  - geopandas
+  - h5py
   - ipython
-  - xlrd
-  - xlsxwriter
-  - spyder
+  - numpy
+  - pandas
+  - rasterio
+  - rioxarray
   - tabulate
   - tqdm
+  - xarray
+  - xlrd
+  - xlsxwriter
   - pip
   - pip:
     - addfips
@@ -31,3 +31,4 @@ dependencies:
     - ipywidgets
     - pathos
     - openpyxl
+    - HOPP=0.0.5

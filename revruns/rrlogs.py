@@ -636,13 +636,13 @@ def main(folder, module, status, error, out, walk):
 
 
 if __name__ == "__main__":
-    folder = "."
+    folder = "/shared-projects/rev/projects/weto/fy22/bespoke/rev/main"
     module = None
-    status = None
-    error = 254
+    status = "f"
+    error = None
     out = None
-    walk = False
+    walk = True
     args = dict(folder=folder, module=module, status=status, error=error,
                 out=out, walk=walk)
     self = RRLogs(**args)
-    self.main()
+    # self.main()

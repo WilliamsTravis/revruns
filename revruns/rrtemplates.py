@@ -1,16 +1,11 @@
-
 # -*- coding: utf-8 -*-
-"""Setup configuration files as templates for a reV run.
-"""
-
+"""Setup configuration files as templates for a reV run."""
 import json
-import os
 
 import click
 import numpy as np
 
 from revruns.constants import (
-    RESOURCE_DATASETS,
     TEMPLATES,
     SAM_TEMPLATES,
     SLURM_TEMPLATE
@@ -30,6 +25,9 @@ ALLPOINTS_HELP = ("Use all available coordinates for the specified generator. "
 BATCH_HELP = ("Set up the `batch` module configuration template. This"
               "module will run reV with a sequence of arguments or argument"
               "combinations. (boolean)")
+BESPOKE_HELP = ("Set up the `bespoke` module configuration template. Unique to"
+                " windpower, this module will run reV with a unique layout of "
+                "individual wind turbines at each site. (boolean)")
 COLLECT_HELP = ("Setup the `collect` module configuration template and all "
                 "of its required module templates. When "
                 "you run the generation module with multiple nodes, "
@@ -65,6 +63,7 @@ PIPELINE_HELP = ("Setup a pipeline configuration template. (boolean)")
 
 MODULE_NAMES = {
     "gen": "generation",
+    "bsp": "bespoke",
     "co": "collect",
     "my": "multi-year",
     "ag": "supply-curve-aggregation",
@@ -77,6 +76,7 @@ MODULE_NAMES = {
 
 DEFAULT_PATHS = {
     "gen": "./config_generation.json",
+    "bsp": "./config_bespoke.json",
     "co": "./config_collect.json",
     "my": "./config_multi-year.json",
     "ag": "./config_aggregation.json",
@@ -121,6 +121,7 @@ def write_config(template, path, verbose=False):
 
 @click.command()
 @click.option("--generation", "-gen", is_flag=True, help=AGGREGATION_HELP)
+@click.option("--bespoke", "-bsp", is_flag=True, help=BESPOKE_HELP)
 @click.option("--collect", "-co", is_flag=True, help=COLLECT_HELP)
 @click.option("--multiyear", "-my", is_flag=True, help=MULTIYEAR_HELP)
 @click.option("--aggregation", "-ag", is_flag=True, help=AGGREGATION_HELP)
@@ -135,9 +136,9 @@ def write_config(template, path, verbose=False):
 @click.option("--output_dir", "-outdir", default="./", help=OUTDIR_HELP)
 @click.option("--log_dir", "-logdir", default="./logs", help=LOGDIR_HELP)
 @click.option("--verbose", "-v", is_flag=True)
-def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
-         pipeline, batch, tech, slurm, full, allocation, output_dir, log_dir,
-         verbose):
+def main(generation, bespoke, collect, multiyear, aggregation, supplycurve,
+         repprofiles, pipeline, batch, tech, slurm, full, allocation,
+         output_dir, log_dir, verbose):
     """Write template configuration json files for each reV module specified.
     Additionaly options will set up template sam_files and default project
     point files. Files will be written to your current directory.
@@ -149,8 +150,9 @@ def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
     specified generator, provide the '--all-years' or '-ay' flag.
     """
     # Get requested modules as strings
-    strings = np.array(["gen", "co", "my", "ag", "sc", "rp", "pi", "ba", "sl"])
-    requested = np.array([generation, collect, multiyear, aggregation,
+    strings = np.array(["gen", "bsp", "co", "my", "ag", "sc", "rp", "pi", "ba",
+                        "sl"])
+    requested = np.array([generation, bespoke, collect, multiyear, aggregation,
                           supplycurve, repprofiles, pipeline, batch, slurm])
 
     # Convert module selections from booleans to key strings
@@ -192,18 +194,4 @@ def main(generation, collect, multiyear, aggregation, supplycurve, repprofiles,
 
 
 if __name__ == "__main__":
-    generation = False
-    collect = False
-    multiyear = False
-    aggregation = False
-    supplycurve = False
-    repprofiles = False
-    batch = False
-    tech = "windpower"
-    full = False
-    slurm = True
-    allocation = "PLACEHOLDER"
-    output_dir = "./"
-    log_dir = "./logs"
-    verbose = True
     main()

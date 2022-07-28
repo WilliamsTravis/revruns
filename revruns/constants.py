@@ -136,6 +136,56 @@ BATCH_TEMPLATE = {
     }
   ]
 }
+BESPOKE_TEMPLATE = {
+    "log_directory": "./logs",
+    "execution_control": {
+        "allocation": "wetosa",
+        "feature": "--qos=normal",
+        "option": "eagle",
+        "walltime": 12,
+        "nodes": 100,
+        "memory": 79
+    },
+    "excl_dict":  {
+        "PLACEHOLDER": {
+            "exclude_values": "PLACEHOLDER"
+        }
+    },
+    "excl_fpath": "/projects/rev/data/exclusions/ATB_Exclusions.h5",
+    "log_level": "DEBUG",
+    "res_fpath": "/datasets/WIND/conus/v1.0.0/wtk_conus_*.h5",
+    "tm_dset": "techmap_wind",
+    "project_points": "PLACEHOLDER",
+    "sam_files": {
+        "onshore": "PLACEHOLDER"
+    },
+    "capital_cost_function": "PLACEHOLDER",
+    "fixed_operating_cost_function": "PLACEHOLDEER",
+    "variable_operating_cost_function": "0",
+    "objective_function": "PLACEHOLDER",
+    "ga_kwargs": {
+        "convergence_iters": 100,
+        "max_generation": 1000,
+        "max_time": 15000
+    },
+    "output_request": [
+        "system_capacity",
+        "cf_mean",
+        "cf_profile",
+        "wake_losses",
+        "annual_gross_energy",
+        "winddirection",
+        "ws_mean",
+        "lcoe_fcr",
+        "fixed_charge_rate",
+        "capital_cost",
+        "fixed_operating_cost",
+        "variable_operating_cost"
+    ],
+    "resolution": 128,
+    "pre_extract_inclusions": False,
+    "wake_loss_multiplier": 1
+}
 
 GEN_TEMPLATE = {
     "log_directory": "./logs",
@@ -387,13 +437,14 @@ PIPELINE_TEMPLATE = {
         "log_file": None,
         "log_level": "INFO"
     },
-    "pipeline": [{
-      "module_name": "./path/to/config.json"
-    }]
+    "pipeline": [
+        {"module_name": "./path/to/config.json"}
+    ]
 }
 
 TEMPLATES = {
     "gen": GEN_TEMPLATE,
+    "bsp": BESPOKE_TEMPLATE,
     "off": OFFSHORE_TEMPLATE,
     "co": COLLECT_TEMPLATE,
     "econ": ECON_TEMPLATE,

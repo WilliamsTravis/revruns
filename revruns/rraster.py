@@ -144,7 +144,7 @@ def h5_timeseries(ds, dataset, agg_fun, layer):
     return data
 
 
-def rasterize(gdf, res, dst, fillna, cutline):
+def rasterize(gdf, res, dst, fillna=False, cutline=None, attribute=None):
     # Make sure we have the target directory
     os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
 
@@ -154,7 +154,8 @@ def rasterize(gdf, res, dst, fillna, cutline):
     gdf.to_file(tmp_src, driver="GPKG")
 
     # There will only be two columns
-    attribute = gdf.columns[1]
+    if not attribute:
+        attribute = gdf.columns[1]
 
     # Write to dst
     sp.call(["gdal_rasterize",
@@ -163,7 +164,7 @@ def rasterize(gdf, res, dst, fillna, cutline):
              "-a", attribute,
              "-a_nodata", "0",
              "-at",
-             "-tr", str(res), str(res)])
+             "-tr", str(res), str(-res)])
 
     # Fill na values
     if fillna:
@@ -284,9 +285,9 @@ def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna,
         h5(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna,
            cutline)
     elif extension == ".csv":
-        csv(src, dst, dataset, resolution, crs, fillna)
+        csv(src, dst, dataset, resolution, crs, fillna, cutline)
     elif extension == ".gpkg":
-        gpkg(src, dst, dataset, resolution, crs, fillna)
+        gpkg(src, dst, dataset, resolution, crs, fillna, cutline)
 
 
 # if __name__ == "__main__":

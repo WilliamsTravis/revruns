@@ -13,6 +13,7 @@ from zipfile import ZipFile
 
 import geopandas as gpd
 import requests
+from remotezip import RemoteZip
 
 from revruns import Paths
 from revruns.rr import isint
@@ -21,7 +22,7 @@ from revruns.rr import isint
 LINKS = {
     "boem_lease_areas": 
         "https://www.boem.gov/BOEM-Renewable-Energy-Shapefiles.zip",
-    "wtdb": "",
+    "wtdb": "https://eerscmap.usgs.gov/uswtdb/assets/data/uswtdbGeoJSON.zip",
     "atb": ""
 }
 
@@ -201,5 +202,67 @@ class BOEM:
             date = None
 
 
+
+class WTDB:
+    """Methods for retrieving the most up to date US Wind Turbine Database."""
+
+    def __init__(self, target_directory="~/uswtdbs"):
+        """Initialize WTDB object."""
+        self.target_directory = target_directory 
+
+    def download(self, target_directory=None):
+        """Download and unzip zip file.
+
+        Parameters
+        ----------
+        target_directory : str
+            Target directory to store downloaded USWTDB file.
+        """
+        # Build paths
+        url = LINKS["wtdb"]
+        remote_fname = self.remote_fname
+        final_dst = os.path.join(self.trgt_dir, remote_fname)
+        zip_dst = os.path.join(self.trgt_dir, os.path.basename(url))
+
+        # Download zip file
+        if not os.path.exists(final_dst):
+            with open(zip_dst, "wb") as file:
+                with requests.get(url) as r:
+                    file.write(r.content)
+
+            # Unzip zipfile
+            with ZipFile(zip_dst, "r") as zfile:
+                contents = zfile.filelist
+                zfile.extractall(self.trgt_dir)
+            os.remove(zip_dst)
+
+        return final_dst
+
+    @property
+    def remote_fname(self):
+        """Read the filename of the remote zip file."""
+        url = LINKS["wtdb"]
+        with RemoteZip(url) as rzfile:
+            files = rzfile.filelist
+        obj = [f for f in files if f.filename.endswith(".geojson")][0]
+        fname = obj.filename
+
+        return fname
+
+    @property
+    def trgt_dir(self, target_directory=None):
+        """Return target directory."""
+                # Set target directory
+        if target_directory:
+            trgt_dir = os.path.abspath(
+                os.path.expanduser(target_directory)
+            )
+        else:
+            trgt_dir = os.path.abspath(
+                os.path.expanduser(self.target_directory)
+            )
+        os.makedirs(trgt_dir, exist_ok=True)
+        return trgt_dir
+
 if __name__ == "__main__":
-    self = BOEM()
+    self = WTDB()

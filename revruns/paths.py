@@ -9,8 +9,6 @@ import os
 
 from importlib import resources
 
-import revruns
-
 
 class Paths:
     """Methods for handling paths to package data."""
@@ -25,13 +23,13 @@ class Paths:
     @property
     def home(cls):
         """Return application home directory."""
-        return resources.files(revruns.__name__)
+        return resources.files("revruns")
 
     @classmethod
     @property
     def paths(cls):
         """Return posix path objects for package data items."""
-        contents = resources.files(revruns.__name__)
+        contents = resources.files("revruns")
         paths = {}
         for path in cls.data.rglob("*"):
             if path.is_file():
@@ -53,16 +51,15 @@ class Paths:
     @property
     def home(cls):
         """Return application home directory."""
-        return resources.files(revruns.__name__)
+        return resources.files("revruns")
 
     @classmethod
     @property
     def paths(cls):
         """Return posix path objects for package data items."""
-        contents = resources.files(revruns.__name__)
+        contents = resources.files("revruns")
         paths = {}
         for folder in cls.data.iterdir():
             name = os.path.splitext(folder.name)[0].lower()
             paths[name] = folder
         return paths
-
