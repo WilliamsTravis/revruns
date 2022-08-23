@@ -5,9 +5,11 @@ import os
 import subprocess as sp
 import time
 
+from colorama import Fore, Style
 from glob import glob
 
 import click
+
 
 from revruns.rrlogs import RRLogs
 
@@ -18,10 +20,11 @@ FOLDER_HELP = ("A folder containing configurations and results "
 MODULE_HELP = ("A module in the reV pipeline. Options include 'generation', "
                "'collect', 'multi-year', 'aggregation', 'supply-curve', or "
                "'rep_profiles'. rrerun will overwrite all results in the "
-               "pipeline after this step (the results of this module "
-               "not included).(str)")
+               "pipeline including the given module. (str)")
 RUN_HELP = ("Rerun reV pipeline. Without this, the logging and status "
             "files will be updated and you must rerun manually. (Boolean)")
+WALK_HELP = ("Walk the given directory structure and run command on each ."
+             "reV model pipeline found. (boolean)")
 MODULES = ["generation", "collect", "econ", "offshore", "multi-year",
            "supply-curve-aggregation", "supply-curve", "rep-profiles", "qa-qc"]
 MODULE_SHORTS = {"generation": "gen",
@@ -35,6 +38,11 @@ MODULE_SHORTS = {"generation": "gen",
                  "qa-qc": "qa-qc"}
 
 
+def cprint(msg):
+    """Print a message in blue."""
+    print(Fore.CYAN + msg + Style.RESET_ALL)
+
+
 def find_pipeline(folder):
     """Find the pipeline configuration."""
     path = glob(os.path.join(folder, "*pipeline*json"))[0]
@@ -43,11 +51,75 @@ def find_pipeline(folder):
     return path, pipeline["pipeline"]
 
 
+def rrerun(folder, module, run=False, pipeline_name="config_pipeline.json"):
+    """Reset and/or rerun reV module pipeline from a given module."""
+    # Print to user
+    msg = f"Resetting pipeline in {folder} to start at the {module} module..."
+    cprint(msg)
+
+    # Find the various logging documents
+    logs = RRLogs(folder=folder)
+    ppath, pipeline = find_pipeline(folder)
+    spath, status = logs.find_status(folder)
+
+    # List the files to keep and drop
+    ran_modules = list(status.keys())
+    if module in ran_modules:
+
+        # Keep everything in status up to the module
+        keepers = ran_modules[: ran_modules.index(module)]
+        status = {k: v for k, v in status.items() if k in keepers}
+
+        # Delete old outputs?
+
+        # Rewrite status json
+        with open(spath, "w") as sfile:
+            sfile.write(json.dumps(status, indent=4))
+
+        # Rerun pipeline
+        if run:
+            if os.path.exists("nohup.out"):
+                os.remove("nohup.out")
+            sp.Popen(["nohup", "reV", "-c", "config_pipeline.json", "pipeline",
+                    "--monitor"],
+                    stdout=open("pipeline.out", "a"),
+                    stderr=open("pipeline.out", "a"),
+                    preexec_fn=os.setpgrp)
+            time.sleep(2)
+            initial_out = sp.check_output(["cat", "pipeline.out"])
+            print(initial_out.decode())
+
+
+def rreruns(folder, module, run=False, pipeline_name="config_pipeline.json"):
+    """Reset and/or rerun all reV pipelines nested in a folder."""
+    # Find nested pipeline configs
+    logs = RRLogs(folder=folder)
+    pipelines = logs.find_files(folder=folder, file=pipeline_name)
+
+    # Run rrerun for each
+    for pipeline in pipelines:
+        folder = os.path.dirname(pipeline)
+        rrerun(folder=folder, module=module, run=run)
+
+
+def spell_aggregation(module):
+    """Return the appropriate aggregation module name from user input."""
+    ag_spellings = ["ag", "agg", "aggregation", "supply-curve-aggregation"]
+    if any([m == module for m in ag_spellings]):
+        module = "supply-curve-aggregation"
+    if module == "multi_year" or module == "supply_curve":
+        module = module.replace("_", "-")
+    if module == "rep_profiles":
+        module = module.replace("_", "-")
+    return module
+
+
 @click.command()
 @click.option("--folder", "-f", default=".", help=FOLDER_HELP)
 @click.option("--module", "-m", required=True, help=MODULE_HELP)
 @click.option("--run", "-r", is_flag=True, help=RUN_HELP)
-def main(folder, module, run):
+@click.option("--walk", "-w", is_flag=True, help=WALK_HELP)
+def main(folder, module, run, walk):
     """
     REVRUNS - RERUN.
 
@@ -63,46 +135,14 @@ def main(folder, module, run):
     modules in one pipeline depend on outputs from another, you must rerun the
     other first if you want to start over that far back.
     """
-    # The module syntax can be easily confused
-    ag_spellings = ["ag", "agg", "aggregation", "supply-curve_aggregation"]
-    if any([m == module for m in ag_spellings]):
-        module = "supply-curve-aggregation"
-    if module == "multi_year" or module == "supply_curve":
-        module = module.replace("_", "-")
-    if module == "rep_profiles":
-        module = module.replace("_", "-")
+    # The aggregation module is too long, use a variety of user inputs
+    module = spell_aggregation(module)
 
-    # change to directory
-    os.chdir(folder)
-
-    # Find the various logging documents
-    logs = RRLogs(folder=folder)
-    ppath, pipeline = find_pipeline(folder)
-    spath, status = logs.find_status(folder)
-
-    # List the files to keep and drip
-    ran_modules = list(status.keys())
-    keepers = ran_modules[: ran_modules.index(module) + 1]
-
-    # Remove everything in status after the module
-    status = {k: v for k, v in status.items() if k in keepers}
-
-    # Rewrite status json
-    with open(spath, "w") as sfile:
-        sfile.write(json.dumps(status, indent=4))
-
-    # Rerun pipeline
-    if run:
-        if os.path.exists("nohup.out"):
-            os.remove("nohup.out")
-        sp.Popen(["nohup", "reV", "-c", "config_pipeline.json", "pipeline",
-                  "--monitor"],
-                 stdout=open('pipeline.out', 'a'),
-                 stderr=open('pipeline.out', 'a'),
-                 preexec_fn=os.setpgrp)
-        time.sleep(2)
-        initial_out = sp.check_output(["cat", "nohup.out"])
-        print(initial_out.decode())
+    # Run rrerun in current or nested directories.
+    if walk:
+        rreruns(folder, module)
+    else:
+        rrerun(folder, module)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ To Do:
     - Implement SLURM submission
     - Catch missing line dependencies and add them to the table.
     - Refactor into class methods
+    - Include or infer CRS option.
 
 @author travis
 """
@@ -41,13 +42,23 @@ pd.set_option('display.width', 1000)
 tqdm.pandas()
 
 
-AEA_CRS = ("+proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 "
-           "+ellps=GRS80 +datum=NAD83 +units=m +no_defs ")
-DISTANCE_BUFFER = 5000
-GEN_PATH = "/projects/rev/data/transmission/build/sample_gen_2013.h5"
+DISTANCE_BUFFER = 5_000
+EXCL_PATHS = {
+    "onshore": {
+        "conus": "/projects/rev/data/exclusions/ATB_Exclusions.h5",
+        "canada": "/projects/rev/data/exclusions/Canada_Exclusions.h5"
+    },
+    "offshore": {
+        "conus": "/projects/rev/data/exclusions/Offshore_Exclusions.h5"
+    }
+}
+GEN_PATHS = {
+    "conus": "/projects/rev/data/transmission/build/sample_gen_2013.h5",
+    "canada": "",
+    "mexico": ""
+}
 RES_PATH = "/datasets/WIND/conus/v1.0.0/wtk_conus_2013.h5"
-TM_DSET = "techmap_wtk"
-ALLCONNS_PATHS = {
+CONNECTION_PATHS = {
     "onshore": ("/projects/rev/data/transmission/shapefiles/"
                 "conus_allconns.gpkg"),
     "offshore": ("/projects/rev/data/transmission/shapefiles/"
@@ -57,15 +68,7 @@ MULTIPLIER_PATHS = {
     "conus": ("/projects/rev/data/transmission/transmults/"
               "conus_trans_multipliers.csv")
 }
-EXCL_PATHS = {
-    "onshore": {
-        "conus": "/projects/rev/data/exclusions/ATB_Exclusions.h5",
-        "canada": "/projects/rev/data/exclusions/Canada_Exclusions.h5"
-    },
-    "offshore": {
-        "conus": "/projects/rev/data/exclusions/Offshore_Exclusions.h5"
-        }
-}
+TM_DSET = "techmap_wtk"
 
 # Help printouts
 ALLOC_HELP = ("The Eagle account/allocation to use to generate the supply "
@@ -155,33 +158,8 @@ def multipliers(point_path, dst, country="conus"):
     df.to_csv(dst)
 
 
-def slurm(resolution, allocation, time, memory, country, dstdir):
-    """Submit this job to slurm.
-
-    This isn't worked in yet. I have to make it so this won't submit itself.
-    """
-    # Build command
-    name = "transmission_{:03d}".format(resolution)
-    template = "rrconnections -r {} -a {} -t {} -m {} -c {} -d {}"
-    cmd = template.format(
-        resolution,
-        allocation,
-        time,
-        memory,
-        country,
-        dstdir
-    )
-
-    # Submit command to slurm - there redundancy because of aggregation step
-    slurm = SLURM()
-    slurm.sbatch(cmd=cmd, alloc=allocation, walltime=time, memory=memory,
-                 name=name, stdout_path='./stdout',
-                 keep_sh=False, conda_env="revruns", module=None,
-                 module_root=None)
-
-
 class Features:
-    """Methods for retrieving and storing transmission feature datasets."""
+    """Can possibly replace with rrdb."""
 
     def __init__(self, country="conus"):
         """Initialize Features object."""
@@ -189,8 +167,8 @@ class Features:
 
     def __repr__(self):
         """Return representation string."""
-        cntry = self.country
-        msg = f"<Features instance: country={cntry}>"
+        attrs = [f"{k}={v}" for k, v in self.__dict__.items()]
+        msg = f"<Features instance: {', '.join(attrs)}>"
         return msg
 
     @cached_property
@@ -278,14 +256,13 @@ class Build_Points:
 
     def __init__(self, allocation, home_path=".", **kwargs):
         """Initialize Build_Points object."""
-        self.home_path = os.path.expanduser(os.path.abspath(home_path))
+        self.home_path = rr.Data_Path(home_path)
         self.allocation = allocation
 
     def __repr__(self):
         """Return representation string."""
-        home = self.home_path
-        alloc = self.allocation
-        msg = f"<Build_Points instance: home_path={home}, allocation={alloc}>"
+        attrs = [f"{k}={v}" for k, v in self.__dict__.items()]
+        msg = f"<Build_Points instance: {', '.join(attrs)}>"
         return msg
 
     def agg_factor(self, area_sqkm, resolution=90, verbose=False):
@@ -308,26 +285,31 @@ class Build_Points:
             print(f"Closest agg factor:{factor} \nResulting area: {area} sqkm")
         return factor
 
-    def aggregate(self, resolution, memory, time, country, offshore=False):
+    def aggregate(self, resolution, memory, time, offshore=False):
         """Run aggregation with no exclusions to get full set of sc points."""
         # Setup paths
         name = self.name(resolution)
-        dst2 = self.home.join("agtables", name + "_agg.csv", mkdir=True)
+        final_dst = self.home_path.join("agtables", name + "_agg.csv",
+                                        mkdir=True)
 
         # Make sure the resolution is an integer
         resolution = int(resolution)
 
         # We'll only need to do this once for each
-        if not os.path.exists(dst2):
-            dst1 = self.home.join("agtables", name, name + "_agg.csv",
-                                  mkdir=True)
+        if not os.path.exists(final_dst):
+            initial_dst = self.home_path.join(
+                "agtables",
+                name,
+                name + "_agg.csv",
+                mkdir=True
+            )
             pipeline_path = self.config(resolution, memory, time, country,
                                         offshore)
 
             # Call reV on this file  <----------------------------------------- I want this to stay running until its done so I can run this and the connections in sequence
             Pipeline.run(pipeline_path, monitor=True, verbose=False)
             shutil.move(dst1, dst2)
-            shutil.rmtree(self.home.join("agtables", name))
+            shutil.rmtree(self.home_path.join("agtables", name))
 
         return dst2
 
@@ -344,13 +326,13 @@ class Build_Points:
 
     def name(self, resolution):
         """Return the name of the resolution run."""
-        return "{}_{:03d}".format(self.home.base, resolution)
+        return "{}_{:03d}".format(self.home_path.base, resolution)
 
     def _agg_config(self, resolution, memory, time, country, offshore):
         # Create the aggregation config
         config = copy.deepcopy(TEMPLATES["ag"])
         name = self.name(resolution)
-        run_home = self.home.extend("agtables", mkdir=True)
+        run_home = self.home_path.extend("agtables", mkdir=True)
         logdir = run_home.join(name, "logs")
         config_path = run_home.join(name, "config_aggregation.json")
 
@@ -369,8 +351,7 @@ class Build_Points:
 
         # Fill in needed elements
         config["cf_dset"] = "cf_mean"
-        config["directories"]["logging_directories"] = logdir
-        config["directories"]["output_directory"] = run_home.join(name)
+        config["logging_directory"] = logdir
         config["execution_control"]["allocation"] = self.allocation
         config["execution_control"]["memory"] = memory
         config["execution_control"]["walltime"] = time
@@ -390,13 +371,16 @@ class Build_Points:
 
         return config_path
 
-    def _pipeline_config(self, ag_config_path):
+    def _pipeline_config(self, resolution, ag_config_path):
         # Create a pipeline config for just aggregation (need it to monitor)
-        run_home = self.home.extend("agtables", mkdir=True)
-        config_path = run_home.join(self.name(118), "config_pipeline.json")
+        run_home = self.home_path.extend("agtables", mkdir=True)
+        config_path = run_home.join(
+            str(self.name(resolution)),
+            "config_pipeline.json"
+        )
 
         config = copy.deepcopy(TEMPLATES["pi"])
-        config["pipeline"].append({"supply-curve-aggregation": ag_config_path})
+        config["pipeline"] = [{"supply-curve-aggregation": ag_config_path}]
         with open(config_path, "w") as file:
             file.write(json.dumps(config, indent=4))
 
@@ -406,19 +390,21 @@ class Build_Points:
 class Connections(Build_Points, Features):
     """Methods for connection supply curve points to transmission features."""
 
-    def __init__(self, allocation, home_path=".", country="conus",
-                 offshore=False):
+    def __init__(self, allocation, home_path=".", resolution=128, memory=79,
+                 time=1, country="conus", offshore=False):
         """Initialize Connections object."""
         super(Connections, self).__init__(allocation=allocation,
                                           home_path=home_path)
-        self.country=country
-        self.offshore=offshore
+        self.country = country.lower()
+        self.offshore = offshore
+        self.resolution = resolution
+        self.memory = memory
+        self.time = time
 
     def __repr__(self):
         """Return representation string."""
-        home = self.home_path
-        alloc = self.allocation
-        msg = f"<Connections instance: home_path={home}, allocation={alloc}>"
+        attrs = [f"{k}={v}" for k, v in self.__dict__.items()]
+        msg = f"<Connections instance: {', '.join(attrs)}>"
         return msg
 
     def single_dist(self, row, simple=False):
@@ -598,18 +584,26 @@ class Connections(Build_Points, Features):
             print("Saving connections table to " + dst)
             condf.to_csv(dst, index=False)
 
+    def shore(self):
+        """Return on or offshore name."""
+        if self.offshore:
+            shore = "offshore"
+        else:
+            shore = "onshore"
+        return shore
+
 
 @click.command()
 @click.option("--resolution", "-r", required=True, help=RES_HELP)
 @click.option("--allocation", "-a", required=True, help=ALLOC_HELP)
 @click.option("--country", "-c", default="CONUS", help=COUNTRY_HELP)
-@click.option("--home", "-d", default=".", help=DIR_HELP)
+@click.option("--home_path", "-d", default=".", help=DIR_HELP)
 @click.option("--memory", "-m", default=90, help=MEM_HELP)
 @click.option("--time", "-t", default=1, help=TIME_HELP)
 @click.option("--offshore", "-o", is_flag=True, default=False, help=OFF_HELP)
 @click.option("--simple", "-s", is_flag=True, help=SIMPLE_HELP)
 @click.option("--just_agg", "-ja", is_flag=True, help=JA_HELP)
-def main(resolution, allocation, country, home, memory, time, offshore,
+def main(resolution, allocation, country, home_path, memory, time, offshore,
          simple, just_agg):
     """RRCONNECTIONS.
 
@@ -618,12 +612,18 @@ def main(resolution, allocation, country, home, memory, time, offshore,
 
     Exclusion file input and SLURM submission not implemented yet.
     """
-    home = os.path.abspath(os.path.expanduser(home))
-    country = country.lower()
-
     # Build the point file and retrieve the file path
-    builder = Connections(allocation, home)
-    point_path = builder.aggregate(resolution, memory, time, country, offshore)
+    home_path = os.path.abspath(os.path.expanduser(home_path))
+    connector = Connections(
+        allocation=allocation,
+        home_path=home,
+        resolution=resolution,
+        memory=memory,
+        time=time,
+        country=country,
+        offshore=offshore
+    )
+    point_path = connector.aggregate()
 
     if not just_agg:
         # Create the target path
@@ -650,16 +650,23 @@ def main(resolution, allocation, country, home, memory, time, offshore,
 
 if __name__ == "__main__":
     allocation = "wetosa"
-    home = "/projects/rev/data/transmission/build/offshore"
-    resolution = 118
+    home_path = "/projects/rev/data/transmission/build/canada"
+    resolution = 128
     allocation = "wetosa"
-    memory = 90
+    memory = 79
     time = 1
-    country = "conus"
-    simple = True
-    offshore = True
+    country = "canada"
+    simple = False
+    offshore = False
     just_agg = False
-    exclusions = EXCL_PATHS["offshore"][country]
-    # self = Connections(allocation, home)
-
-    main()
+    exclusions = EXCL_PATHS["onshore"][country]
+    self = Connections(
+        allocation=allocation,
+        home_path=home_path,
+        resolution=resolution,
+        memory=memory,
+        time=time,
+        country=country,
+        offshore=offshore
+    )
+    # main()

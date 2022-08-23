@@ -66,16 +66,16 @@ VARIABLE_CHECKS = {
 
 # Resource data set dimensions. Just the number of grid points for the moment.
 RESOURCE_DIMS = {
-        "nsrdb_v3": 2018392,
-        "wind_conus_v1": 2488136,
-        "wind_canada_v1": 2894781,
-        "wind_canada_v1bc": 2894781,
-        "wind_mexico_v1": 1736130,
-        "wind_conus_v1_1": 2488136,
-        "wind_canada_v1_1": 289478,
-        "wind_canada_v1_1bc": 289478,
-        "wind_mexico_v1_1": 1736130
-        }
+    "nsrdb_v3": 2018392,
+    "wind_conus_v1": 2488136,
+    "wind_canada_v1": 2894781,
+    "wind_canada_v1bc": 2894781,
+    "wind_mexico_v1": 1736130,
+    "wind_conus_v1_1": 2488136,
+    "wind_canada_v1_1": 289478,
+    "wind_canada_v1_1bc": 289478,
+    "wind_mexico_v1_1": 1736130
+}
 
 # The Eagle HPC path to each resource data set. Brackets indicate years.
 RESOURCE_DATASETS = {
@@ -382,7 +382,7 @@ AGGREGATION_TEMPLATE = {
   "tm_dset": "PLACHOLDER"
 }
 
-SUPPLYCURVE_TEMPLATE = {
+SUPPLY_CURVE_TEMPLATE_OLD = {
   "avail_cap_frac": "PLACEHOLDER",
   "log_directory": "./logs",
   "execution_control": {
@@ -394,12 +394,10 @@ SUPPLYCURVE_TEMPLATE = {
     "walltime": 1.0
   },
   "fixed_charge_rate": "PLACEHOLDER",
-  "sc_features": ("/projects/rev/data/transmission/" +
-                  "conus_pv_tline_multipliers.csv"),
+  "sc_features": "/projects/rev/data/transmission/build/multipliers_128.csv",
   "sc_points": "PIPELINE",
-  "simple": False,
-  "trans_table": ("/projects/rev/data/transmission/" +
-                  "conus_trans_lines_cache_offsh_064_sj_infsink.csv"),
+  "simple": True,
+  "trans_table": "/projects/rev/data/transmission/build/connections_128.csv",
   "transmission_costs": {
     "center_tie_in_cost": "PLACEHOLDER",
     "line_cost": "PLACEHOLDER",
@@ -409,7 +407,28 @@ SUPPLYCURVE_TEMPLATE = {
   }
 }
 
-REPPROFILES_TEMPLATE = {
+SUPPLY_CURVE_TEMPLATE_LC = {
+    "log_directory": "./logs",
+    "execution_control": {
+        "allocation": "PLACEHOLDER",
+        "feature": "--qos=normal",
+        "option": "eagle",
+        "memory": 90,
+        "nodes": 4,
+        "walltime": 2
+    },
+    "fixed_charge_rate": "PLACEHOLDER",
+    "sc_points": "PIPELINE",
+    "simple": True,  # Must be true
+    "trans_table": [
+        "/shared-projects/rev/exclusions/least_cost_xmission/100MW_costs_128.csv",
+        "/shared-projects/rev/exclusions/least_cost_xmission/200MW_costs_128.csv",
+        "/shared-projects/rev/exclusions/least_cost_xmission/400MW_costs_128.csv",
+        "/shared-projects/rev/exclusions/least_cost_xmission/1000MW_costs_128.csv"  # For Large ReEDS solar runs
+    ]
+}
+
+REP_PROFILES_TEMPLATE = {
   "cf_dset": "cf_profile-{}",
   "log_directory": "./logs",
   "err_method": "rmse",
@@ -438,7 +457,13 @@ PIPELINE_TEMPLATE = {
         "log_level": "INFO"
     },
     "pipeline": [
-        {"module_name": "./path/to/config.json"}
+        {"generation": "./config_gen.json"},
+        {"collect": "./config_collect.json"},
+        {"econ": "./config_econ.json"},
+        {"multi-year": "./config_multi-year.json"},
+        {"supply-curve-aggregation": "./config_aggregation.json"},
+        {"supply-curve": "./config_supply-curve.json"},
+        {"rep-profiles": "./config_rep-profiles.json"}
     ]
 }
 
@@ -450,8 +475,9 @@ TEMPLATES = {
     "econ": ECON_TEMPLATE,
     "my": MULTIYEAR_TEMPLATE,
     "ag": AGGREGATION_TEMPLATE,
-    "sc": SUPPLYCURVE_TEMPLATE,
-    "rp": REPPROFILES_TEMPLATE,
+    "sc_old": SUPPLY_CURVE_TEMPLATE_OLD,
+    "sc_lc": SUPPLY_CURVE_TEMPLATE_LC,
+    "rp": REP_PROFILES_TEMPLATE,
     "ba": BATCH_TEMPLATE,
     "pi": PIPELINE_TEMPLATE
 }

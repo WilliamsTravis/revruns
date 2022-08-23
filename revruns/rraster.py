@@ -121,9 +121,9 @@ def gpkg(file, dst, dataset, res, crs, fillna, cutline):
     rasterize(gdf, res, dst, fillna, cutline)
 
 
-def csv(file, dst, dataset, res, crs, fillna, cutline):
+def csv(src, dst, dataset, res, crs, fillna, cutline):
     # This is inefficient
-    df = pd.read_csv(file)
+    df = pd.read_csv(src)
     gdf = df.rr.to_geo()
     gdf = gdf[["geometry", dataset]]
 
@@ -157,14 +157,25 @@ def rasterize(gdf, res, dst, fillna=False, cutline=None, attribute=None):
     if not attribute:
         attribute = gdf.columns[1]
 
+    # Set no data value
+    dtype = str(gdf[attribute].dtype)
+    if "float" in dtype:
+        na = np.finfo(dtype).max
+    else:
+        na = np.iinfo(dtype).max
+
     # Write to dst
-    sp.call(["gdal_rasterize",
-             tmp_src, dst,
-             "-l", layer_name,
-             "-a", attribute,
-             "-a_nodata", "0",
-             "-at",
-             "-tr", str(res), str(-res)])
+    sp.call(
+        [
+            "gdal_rasterize",
+            tmp_src, dst,
+            "-l", layer_name,
+            "-a", attribute,
+            "-a_nodata", str(na),
+            "-at",
+            "-tr", str(res), str(-res)
+        ]
+    )
 
     # Fill na values
     if fillna:
@@ -269,14 +280,15 @@ def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna,
          cutline):
     """REVRUNS - RRASTER - Rasterize a reV output.
 
-    src = "/lustre/eaglefs/shared-projects/rev/projects/morocco/fy22/onee/rev/solar/tracking/tracking_multi-year.h5"
-    dst = "/lustre/eaglefs/shared-projects/rev/projects/morocco/fy22/onee/rev/solar/tracking/tracking_multi-year.tif"
-    dataset = "cf_mean-means"
-    resolution = 2000
-    crs = "epsg:26191"
+    src = "/lustre/eaglefs/shared-projects/rev/projects/irez/rev/agg/wind/wind_supply-curve.csv"
+    dst = "/lustre/eaglefs/shared-projects/rev/projects/irez/rev/agg/wind/wind_supply-curve.tif"
+    dataset = "capacity"
+    resolution = 11520
+    crs = "epsg:5070"
     agg_fun = "mean"
     layer = None
     fltr = None
+    cutline = None
     fillna = True
     """
     # Get the file extension and call the appropriate function
@@ -290,5 +302,5 @@ def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna,
         gpkg(src, dst, dataset, resolution, crs, fillna, cutline)
 
 
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()

@@ -52,10 +52,6 @@ def composite(config, dst=None):
         conf = json.load(file)
     excl_dict = conf["excl_dict"]
     excl_h5 = conf["excl_fpath"]
-    if isinstance(excl_h5, list):
-        msg = (f"Multiple exclusion files listed in {config}, rrcomposite can "
-               "only handle one at the moment.")
-        raise NotImplementedError(msg)
 
     # Run reV to merge
     masker = ExclusionMaskFromDict(excl_h5, layers_dict=excl_dict)
@@ -63,7 +59,11 @@ def composite(config, dst=None):
     mask = mask.astype("uint8")
 
     # Get a raster profile from the h5 dataset
-    with h5py.File(excl_h5, "r") as ds:
+    if isinstance(excl_h5, list):
+        template = excl_h5[0]
+    else:
+        template = excl_h5
+    with h5py.File(template, "r") as ds:
         profile = json.loads(ds.attrs["profile"])
     profile["dtype"] = str(mask.dtype)
     profile["nodata"] = None
@@ -88,4 +88,5 @@ def main(config, dst):
 
 
 if __name__ == "__main__":
-    main()
+    config = "/shared-projects/rev/projects/irez/rev/agg/wind/config_aggregation.json"
+    dst = "/shared-projects/rev/projects/irez/rev/agg/wind/inclusion_mask.tif"
