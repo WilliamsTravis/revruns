@@ -1,0 +1,19 @@
+{
+    "execution_control": {
+        "option": "local"
+    },
+    "sc_features": "/projects/rev/data/transmission/build/multipliers_128.csv",
+    "sc_points": "./01_na_n_mid_bespoke_node00.h5",
+    "simple": false,
+    "trans_table": "/projects/rev/data/transmission/build/connections_128.csv",
+    "fixed_charge_rate": 0.063,
+    "transmission_costs": {
+        "line_cost": 3667,
+        "line_tie_in_cost": 14000,
+        "station_tie_in_cost": 0,
+        "available_capacity": 1.0,
+        "center_tie_in_cost": 0,
+        "sink_tie_in_cost": 14000
+    },
+    "log_directory": "./logs"
+}

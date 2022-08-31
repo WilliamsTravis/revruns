@@ -8,23 +8,160 @@ Created on Wed Apr 27 10:50:54 2022
 @author: twillia2
 """
 import json
+import os
+
+from functools import lru_cache
 
 import geopandas as gpd
 import getpass
+import numpy as np
 import pgpasslib
 import psycopg2 as pg
 import pyproj
+import rasterio as rio
+
+from tqdm import tqdm
 
 from revruns.rr import isint
 
 
-class TechPotential:
-    """Methods for retrieving and storing transmission feature datasets."""
 
-    def __init__(self, schema=None, table=None,country="conus"):
-        """Initialize Features object."""
+class Rasters:
+    """Methods for extracting rasters from the GDS_EDIT database."""
+
+    def __init__(self, schema=None, table=None):
+        """Initialize Rasters object."""
         self.schema = schema
         self.table = table
+
+    @lru_cache(1)
+    def _raster_metas(self, schema=None, table=None):
+        """Get raster meta data, need to find out how to distinguish."""
+        schema = self._schema(schema)
+        table = self._table(table)
+        cmd = (f"SELECT rid, (ST_MetaData(rast)).* FROM {schema}.{table};")
+        with pg.connect(**self.con_args) as con:
+            with con.cursor() as cursor:
+                cursor.execute(cmd)
+                out = cursor.fetchall()
+        fields = ["xmin", "ymax", "nx", "ny", "xres", "yres", "xrot",
+                  "yrot", "epsg", "nbands"]
+        rids = [o[0] for o in out]
+        metas = [dict(zip(fields, o[1:])) for o in out]
+        metas = dict(zip(rids, metas))
+        return metas
+
+    def _raster_points(self, schema=None, table=None):
+        """Return x and y coordinate lists for a raster."""
+        meta = self._raster_meta(schema, table)
+        xs = [meta["xmin"] + (meta["rx"] * i) for i in range(0, meta["nx"])]
+        ys = [meta["ymax"] + (meta["ry"] * i) for i in range(0, meta["ny"])]
+        return xs, ys
+
+    def _raster(self, schema=None, table=None):
+        """Read in a raster."""
+        # Infer schema and table
+        schema = self._schema(schema)
+        table = self._table(table)
+
+        # Read in raster chunks
+        cmd = f"SELECT rid, (ST_DumpValues(rast)).* FROM {schema}.{table};"
+        with pg.connect(**self.con_args) as con:
+            with con.cursor() as cursor:
+                cursor.execute(cmd)
+                out = cursor.fetchall()
+
+        # Sort by rids
+        values = {v[0]: v[1:] for v in out}
+        metas = self._raster_metas()
+        values = [values[key] for key in metas.keys()]
+
+        # Write to scratch for now
+        self._combine(values, table)
+
+    def _combine(self, values, table):
+        """Combine raster array chunks into single array, write to raster."""
+        # Get the raster ids and arrays
+        chunks = [v[-1] for v in values]
+        chunks = np.array(chunks)
+
+        # Get the template for the full array
+        template, profile = self._template(str(chunks[0].dtype))
+
+        # Insert chunks into array
+        xmin = profile["transform"][2]
+        ymax = profile["transform"][-1]
+        metas = self._raster_metas()
+        missing = []
+        for i, chunk in enumerate(chunks):
+            meta = list(metas.values())[i]
+            xix = round((meta["xmin"] - xmin) / meta["xres"])
+            yix = round((meta["ymax"] - ymax) / meta["yres"])
+            if xix < template.shape[1]:
+                template[yix: yix + meta["ny"], xix: xix + meta["nx"]] = chunk
+            else:
+                print(f"missing chunk: {i}")
+                missing.append(i)
+
+        dst = f"/scratch/twillia2/{self.table}.tif" 
+        if os.path.exists(dst):
+            os.remove(dst)
+        with rio.open(dst,"w", **profile) as file:
+            file.write(template, 1)
+
+    def _template(self, dtype="float64"):
+        """Build a template and rasterio profile the full raster."""
+        metas = self._raster_metas()
+        meta = metas[next(iter(metas))]
+        xs = [value["xmin"] for value in metas.values()]
+        ys = [value["ymax"] for value in metas.values()]
+
+        xres = abs(meta["xres"])
+        yres = abs(meta["yres"])
+
+        width = round((max(xs) - min(xs)) / xres) + meta["nx"]
+        height = round((max(ys) - min(ys)) / yres) + meta["ny"]
+
+        if "float" in dtype:
+            na = np.finfo(dtype).max
+        else:
+            na = np.iinfo(dtype).max
+
+        template = np.zeros((height, width)) + na
+
+        transform = (
+            meta["xres"],
+            meta["xrot"],
+            min(np.unique(xs)),
+            meta["yrot"],
+            meta["yres"],
+            max(np.unique(ys))
+        )
+        profile = {
+            "driver": "GTiff",
+            "dtype": dtype,
+            "nodata": na,
+            "width": template.shape[1],
+            "height": template.shape[0],
+            "count": 1,
+            "crs": pyproj.CRS.from_epsg(meta["epsg"]),
+            "transform": transform,
+            "blockxsize": 128,
+            "blockysize": 128,
+            "tiled": True,
+            "compress": "lzw",
+            "interleave": "band"
+        }
+
+        return template, profile
+
+
+class TechPotential(Rasters):
+    """Methods for retrieving and storing transmission feature datasets."""
+
+    def __init__(self, schema=None, table=None, country="conus"):
+        """Initialize Features object."""
+        super().__init__(schema, table)
         self.country = country
 
     def __repr__(self):
@@ -213,3 +350,11 @@ class TechPotential:
             else:
                 table = self.table
         return table
+
+
+if __name__ == "__main__":
+    schema = "land_use"
+    table = "can_esa_globcover30"
+    country = "canada"
+    self = TechPotential(schema, table, country)
+    # _ = self._raster()

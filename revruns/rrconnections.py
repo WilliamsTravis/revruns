@@ -60,7 +60,8 @@ MULTIPLIER_PATHS = {
 EXCL_PATHS = {
     "onshore": {
         "conus": "/projects/rev/data/exclusions/ATB_Exclusions.h5",
-        "canada": "/projects/rev/data/exclusions/Canada_Exclusions.h5"
+        "canada": "/projects/rev/data/exclusions/Canada_Exclusions.h5",
+        "mexico": "/projects/rev/data/exclusions/Mexico_Exclusions.h5",
     },
     "offshore": {
         "conus": "/projects/rev/data/exclusions/Offshore_Exclusions.h5"
@@ -199,6 +200,8 @@ class Features:
         # Build query
         if self.country.lower() == "canada":
             name = "rev_can_trans_lines"
+        elif self.country.lower() == "mexico":
+            name = "rev_mex_trans_lines"
         else:
             name = "rev_conus_trans_lines"
         cmd = f"""select * from transmission.{name};"""
@@ -344,6 +347,7 @@ class Build_Points:
 
     def name(self, resolution):
         """Return the name of the resolution run."""
+        resolution = int(resolution)
         return "{}_{:03d}".format(self.home.base, resolution)
 
     def _agg_config(self, resolution, memory, time, country, offshore):
@@ -393,7 +397,12 @@ class Build_Points:
     def _pipeline_config(self, ag_config_path):
         # Create a pipeline config for just aggregation (need it to monitor)
         run_home = self.home.extend("agtables", mkdir=True)
-        config_path = run_home.join(self.name(118), "config_pipeline.json")
+        res = int(os.path.dirname(ag_config_path).split("_")[-1])
+        config_path = run_home.join(
+            self.name(res),
+            "config_pipeline.json",
+            mkdir=True
+        )
 
         config = copy.deepcopy(TEMPLATES["pi"])
         config["pipeline"].append({"supply-curve-aggregation": ag_config_path})
@@ -407,12 +416,13 @@ class Connections(Build_Points, Features):
     """Methods for connection supply curve points to transmission features."""
 
     def __init__(self, allocation, home_path=".", country="conus",
-                 offshore=False):
+                 offshore=False, simple=False):
         """Initialize Connections object."""
         super(Connections, self).__init__(allocation=allocation,
                                           home_path=home_path)
         self.country=country
         self.offshore=offshore
+        self.simple=simple
 
     def __repr__(self):
         """Return representation string."""
@@ -446,7 +456,7 @@ class Connections(Build_Points, Features):
             finaldf = finaldf.iloc[idx]
 
         # Convert to miles
-        finaldf["dist_mi"] = finaldf["dist_m"] / 1609.34
+        finaldf["dist_mi"] = finaldf["dist_m"] / 1_609.34
         del finaldf["dist_m"]
 
         # Attach the supply curve point identifiers
@@ -470,8 +480,10 @@ class Connections(Build_Points, Features):
 
         # Apply the distance function to each row and reshape into data frame
         condf = scdf.progress_apply(self.single_dist, simple=simple, axis=1)
-        condfs = [condf.iloc[i] for i in range(condf.shape[0])]
-        condf = pd.DataFrame(condfs)
+        if not simple:
+            # This is a dataframe of dataframes
+            condfs = [condf.iloc[i] for i in range(condf.shape[0])]
+            condf = pd.concat(condfs)
         condf["trans_gids"] = condf["trans_gids"].apply(lambda x: json.dumps(x))
 
         return condf
@@ -527,26 +539,33 @@ class Connections(Build_Points, Features):
             return row
 
         # Get missings dependencies - catching error
-        from reV.handlers.transmission import TransmissionFeatures
+        if not self.simple:
+            from reV.handlers.transmission import TransmissionFeatures
 
-        missing_dependencies = []
-        try:
-            TransmissionFeatures(condf)._check_feature_dependencies()
-        except RuntimeError as e:
-            error = str(e)
-            missing_str = error[error.index("dependencies:") + 14:]
-            missing_dict = ast.literal_eval(missing_str)
-            for gids in missing_dict.values():
-                for gid in gids:
-                    missing_dependencies.append(gid)
+            features = TransmissionFeatures(condf)
+            if "_check_feature_dependencies" in features.__dict__:
+                check = features._check_feature_dependencies
+            else:
+                check = features.check_feature_dependencies
 
-        # Find those features and reformat
-        mdf = linedf[linedf["gid"].isin(missing_dependencies)]
-        mdf = mdf.replace("null", np.nan)
-        mdf = mdf.apply(find_point, scdf=scdf, axis=1)
+            missing_dependencies = []
+            try:
+                check()
+            except RuntimeError as e:
+                error = str(e)
+                missing_str = error[error.index("dependencies:") + 14:]
+                missing_dict = ast.literal_eval(missing_str)
+                for gids in missing_dict.values():
+                    for gid in gids:
+                        missing_dependencies.append(gid)
 
-        # Append these to the table
-        condf = pd.concat([condf, mdf])
+            # Find those features and reformat
+            mdf = linedf[linedf["gid"].isin(missing_dependencies)]
+            mdf = mdf.replace("null", np.nan)
+            mdf = mdf.apply(find_point, scdf=scdf, axis=1)
+
+            # Append these to the table
+            condf = pd.concat([condf, mdf])
 
         return condf
 
@@ -570,6 +589,7 @@ class Connections(Build_Points, Features):
         """
         if not os.path.exists(dst):
             # Get the supply curve points
+            print(f"building {dst}...")
             scdf = pd.read_csv(point_path)
             crs = self.linedf.crs.to_wkt()
             scdf = scdf.rr.to_geo()
@@ -622,17 +642,17 @@ def main(resolution, allocation, country, home, memory, time, offshore,
     country = country.lower()
 
     # Build the point file and retrieve the file path
-    builder = Connections(allocation, home)
+    builder = Connections(allocation, home, simple=simple)
     point_path = builder.aggregate(resolution, memory, time, country, offshore)
 
     if not just_agg:
         # Create the target path
         resolution = int(resolution)
         trans_name = "connections_{:03d}.csv".format(resolution)
-        trans_path = os.path.join(home, trans_name)
+        dst = os.path.join(home, trans_name)
 
         # And run transmission connections
-        builder.connections(point_path, trans_path, simple, offshore)
+        builder.connections(point_path, dst, simple, offshore)
 
         # And lastly, the multipliers table
         if country == "conus":
@@ -650,16 +670,16 @@ def main(resolution, allocation, country, home, memory, time, offshore,
 
 if __name__ == "__main__":
     allocation = "wetosa"
-    home = "/projects/rev/data/transmission/build/offshore"
-    resolution = 118
+    country = "canada"
+    home = f"/projects/rev/data/transmission/build/{country}"
+    resolution = 128
     allocation = "wetosa"
     memory = 90
     time = 1
-    country = "conus"
-    simple = True
-    offshore = True
+    simple = False
+    offshore = False
     just_agg = False
-    exclusions = EXCL_PATHS["offshore"][country]
-    # self = Connections(allocation, home)
+    exclusions = EXCL_PATHS["onshore"][country]
+    self = Connections(allocation, home, country=country)
 
-    main()
+    # main()

@@ -1,0 +1,11 @@
+{
+    "logging": {
+        "log_file": null,
+        "log_level": "INFO"
+    },
+    "pipeline": [
+        {
+            "supply-curve": "./config_supply-curve.json"
+        }
+    ]
+}
