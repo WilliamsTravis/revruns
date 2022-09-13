@@ -132,12 +132,15 @@ def h5_to_csv(src, dst, dataset):
 def isint(x):
     """Check if character string is an integer."""
     check = False
-    if "." not in x:
-        try:
-            int(x)
-            check = True
-        except ValueError:
-            pass
+    if isinstance(x, int):
+        check = True
+    elif isinstance(x, str):
+        if "." not in x:
+            try:
+                int(x)
+                check = True
+            except ValueError:
+                check = False
     return check
 
 

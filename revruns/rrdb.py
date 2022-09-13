@@ -16,26 +16,29 @@ import geopandas as gpd
 import getpass
 import numpy as np
 import pgpasslib
-import psycopg2 as pg
 import pyproj
+import psycopg2 as pg
 import rasterio as rio
 
-from tqdm import tqdm
-
+from multimethod import multimethod, overload
+from multipledispatch import dispatch
 from revruns.rr import isint
 
+
+class DataBase:
+    """Methods for connecting to a database and listing options."""
 
 
 class Rasters:
     """Methods for extracting rasters from the GDS_EDIT database."""
 
-    def __init__(self, schema=None, table=None):
+    def __init__(self, schema=None, table=None, rasters=None, vectors=None):
         """Initialize Rasters object."""
         self.schema = schema
         self.table = table
 
     @lru_cache(1)
-    def _raster_metas(self, schema=None, table=None):
+    def raster_metas(self, schema=None, table=None):
         """Get raster meta data, need to find out how to distinguish."""
         schema = self._schema(schema)
         table = self._table(table)
@@ -171,6 +174,20 @@ class TechPotential(Rasters):
         msg = f"<{name} instance: {attrs}>"
         return msg
 
+    def columns(self, table=None):
+        """Return a list of columns in a table."""
+        table = self._table(table)
+        cmd = ("select column_name from information_schema.columns "
+               f"where table_name = '{table}';")
+        with pg.connect(**self.con_args) as con:
+            with con.cursor() as cursor:
+                cursor.execute(cmd)
+                columns = []
+                for lst in cursor.fetchall():
+                    column = lst[0]
+                    columns.append(column)
+        return columns
+
     @property
     def con_args(self):
         """Return a database connection."""
@@ -192,42 +209,31 @@ class TechPotential(Rasters):
 
         # Build kwargs
         kwargs = {"user": user, "host": host, "dbname": dbname, "user": user,
-                 "password": password, "port": port}
+                  "password": password, "port": port}
 
         return kwargs
 
     def schemas(self, grep=None):
-        """Return a list of all available schemas in database."""
-        with pg.connect(**self.con_args) as con:
-            with con.cursor() as cursor:
-                cursor.execute("select schema_name "
-                               " from information_schema.schemata;")
-                schemas = []
-                for lst in cursor.fetchall():
-                    schema = lst[0]
-                    schemas.append(schema)
+        """Print available schemas in database."""
+        # Get full schema dictionary
+        schemas = self._schemas(grep)
 
-        if grep:
-            schemas = [schema for schema in schemas if grep in schema]
+        # Print each
+        for i, schema in schemas.items():
+            if grep and grep not in schema:
+                continue
+            print(f"{i}: {schema}")
 
-        return schemas
+    def tables(self, grep=None, schema=None):
+        """Print an indexed list of all tables in a schema with a pattern."""
+        # Get initial list of tables
+        tables = self._tables(schema)
 
-    def tables(self, schema=None, grep=None):
-        """Return a list of all available tables in the postgres connection."""
-        schema = self._schema(schema)
-        with pg.connect(**self.con_args) as con:
-            with con.cursor() as cursor:
-                cursor.execute("select * from pg_tables "
-                               f"where schemaname = '{schema}';")
-                tables = []
-                for lst in cursor.fetchall():
-                    table = lst[1]
-                    tables.append(table)
-
-        if grep:
-            tables = [table for table in tables if grep in table]
-
-        return tables
+        # Print each
+        for i, table in tables.items():
+            if grep and grep not in table:
+                continue
+            print(f"{i}: {table}")
 
     def get(self, schema=None, table=None, crs=None):
         """Get a dataset given a schema and table name."""
@@ -292,10 +298,8 @@ class TechPotential(Rasters):
 
     def get_geom(self, table=None):
         """Find a good geometry column from a table."""
-        # Get all geometry columns
-        gcols = self.get_geoms(table)
-
         # There might be a code in the column name, which is best
+        gcols = self.get_geoms(table)
         code_gcols = []
         for gcol in gcols:
             if "centroid" not in gcol:
@@ -317,44 +321,79 @@ class TechPotential(Rasters):
         return geom
 
     def get_geoms(self, table=None):
-        """Find all geometry columns."""
-        table = self._table(table)
-        cmd = ("select column_name from information_schema.columns "
-               f"where table_name = '{table}';")
-        with pg.connect(**self.con_args) as con:
-            with con.cursor() as cursor:
-                cursor.execute(cmd)
-                columns = []
-                for lst in cursor.fetchall():
-                    column = lst[0]
-                    columns.append(column)
+        """Get all geometry columns."""
+        columns = self.columns(table=table)
         gcols = [col for col in columns if "geom" in col]
         return gcols
 
     def _schema(self, schema=None):
         """Use schema attribute if no argument given."""
-        if not schema:
-            if not self.schema:
+        schemas = self._schemas(schema)
+        if schema is None:
+            if self.schema is None:
                 raise KeyError("No schema provided. Set as attribute or "
                                "argument.")
             else:
                 schema = self.schema
+
+        if isint(schema):
+            schema = schemas[schema]
+
         return schema
+
+    def _schemas(self, grep=None):
+        # Get original list of schemas
+        with pg.connect(**self.con_args) as con:
+            with con.cursor() as cursor:
+                cursor.execute("select schema_name "
+                               " from information_schema.schemata;")
+                schemas = []
+                for lst in cursor.fetchall():
+                    schema = lst[0]
+                    schemas.append(schema)
+
+        # Add index for quicker queries
+        schemas = {i: schema for i, schema in enumerate(schemas)}
+
+        return schemas
 
     def _table(self, table=None):
         """Use table attribute if no argument given."""
-        if not table:
-            if not self.table:
+        tables = self._tables(self.schema)
+        if table is None:
+            if self.table is None:
                 raise KeyError("No table provided. Set as attribute or "
-                               "argument.")
+                            "argument.")
             else:
                 table = self.table
+
+        if isint(table):
+            table = tables[table]
+
         return table
+
+    def _tables(self, schema=None):
+        """Return list of all available tables in schema."""
+        # Get list of tables
+        schema = self._schema(schema)
+        with pg.connect(**self.con_args) as con:
+            with con.cursor() as cursor:
+                cursor.execute("select * from pg_tables "
+                               f"where schemaname = '{schema}';")
+                tables = []
+                for lst in cursor.fetchall():
+                    table = lst[1]
+                    tables.append(table)
+
+        # Add index for quicker queries
+        tables = {i: table for i, table in enumerate(tables)}
+
+        return tables
 
 
 if __name__ == "__main__":
-    schema = "land_use"
-    table = "can_esa_globcover30"
-    country = "canada"
+    schema = 0
+    table = None
+    country = "mexico"
     self = TechPotential(schema, table, country)
     # _ = self._raster()
