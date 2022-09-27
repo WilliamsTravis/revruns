@@ -5,20 +5,24 @@ import os
 import shutil
 import subprocess as sp
 
+import fiona
 import geopandas as gpd
 import h5py
 import numpy as np
 import pandas as pd
 import rasterio as rio
+
 from revruns import rr
 
 from scipy.spatial import cKDTree
+
+os.environ['PROJ_NETWORK'] = 'OFF'
 
 
 FILE_HELP = "The file from which to create the shape geotiff. (str)"
 SAVE_HELP = ("The path to use for the output file. Defaults to current "
              "directory with the basename of the csv/h5 file. (str)")
-DATASET_HELP = ("For HDF5 files, the data set to rasterize. For CSV files, the"
+VARIABLE_HELP = ("For HDF5 files, the data set to rasterize. For CSV files, the"
                 " field to rasterize. (str)")
 CRS_HELP = ("Coordinate reference system. Pass as <'authority':'code'>. (str)")
 RES_HELP = ("Target resolution, in the same units as the CRS. (numeric)")
@@ -35,17 +39,45 @@ FILL_HELP = ("Fill na values by interpolation. (boolen)")
 CUT_HELP = ("Path to vector file to use to clip output. (str)")
 
 
-def get_scale(ds, dataset):
-    attrs = ds[dataset].attrs.keys()
+def csv(src, dst, variable, res, crs, fillna, cutline):
+    # This is inefficient
+    df = pd.read_csv(src)
+    gdf = df.rr.to_geo()
+    gdf = gdf[["geometry", variable]]
+
+    # We need to reproject to the specified projection system
+    gdf = gdf.to_crs(crs)
+
+    # And finally rasterize
+    rasterize(gdf, res, dst, fillna, cutline)
+
+
+def get_scale(ds, variable):
+    attrs = ds[variable].attrs.keys()
     scale_key = [k for k in attrs if "scale_factor" in k][0]
     if scale_key:
-        scale = ds[dataset].attrs[scale_key]
+        scale = ds[variable].attrs[scale_key]
     else:
         scale = 1
     return scale
 
 
-def h5(src, dst, dataset, res, crs, agg_fun, layer, fltr, fillna, cutline):
+def gpkg(src, dst, variable, resolution, crs, fillna, cutline):
+    # This is inefficient
+    gdf = gpd.read_file(src)
+    gdf = gdf[["geometry", variable]]
+
+    # We need to reproject to the specified projection system
+    gdf = gdf.to_crs(crs)
+
+    # Convert to true grid
+
+    # And finally rasterize
+    rasterize(gdf, resolution, dst, fillna, cutline)
+
+
+def h5(src, dst, variable, resolution, crs, agg_fun, layer, fltr, fillna,
+       cutline):
     """
     Rasterize dataset in HDF5 file.
 
@@ -55,9 +87,9 @@ def h5(src, dst, dataset, res, crs, agg_fun, layer, fltr, fillna, cutline):
         DESCRIPTION.
     dst : TYPE
         DESCRIPTION.
-    dataset : TYPE
+    variable : TYPE
         DESCRIPTION.
-    res : TYPE
+    resolution : TYPE
         DESCRIPTION.
     crs : TYPE
         DESCRIPTION.
@@ -81,13 +113,13 @@ def h5(src, dst, dataset, res, crs, agg_fun, layer, fltr, fillna, cutline):
         meta.rr.decode()
 
         # Is this a time series or single layer
-        scale = get_scale(ds, dataset)
-        if len(ds[dataset].shape) > 1:
-            data = h5_timeseries(ds, dataset, agg_fun, layer)
-            field = "{}_{}".format(dataset, agg_fun)
+        scale = get_scale(ds, variable)
+        if len(ds[variable].shape) > 1:
+            data = h5_timeseries(ds, variable, agg_fun, layer)
+            field = "{}_{}".format(variable, agg_fun)
         else:
-            data = ds[dataset][:]
-            field = dataset
+            data = ds[variable][:]
+            field = variable
 
     # Append the data to the meta object and create geodataframe
     meta[field] = data / scale
@@ -103,35 +135,13 @@ def h5(src, dst, dataset, res, crs, agg_fun, layer, fltr, fillna, cutline):
     # We need to reproject to the specified projection system
     gdf = gdf.to_crs(crs)
 
+    # Create a consistent grid out of this
+    gdf = to_grid(gdf, variable, resolution)
+
     # And finally rasterize
-    rasterize(gdf, res, dst, fillna, cutline)
+    rasterize(gdf, resolution, dst, fillna, cutline)
 
     return dst
-
-
-def gpkg(file, dst, dataset, res, crs, fillna, cutline):
-    # This is inefficient
-    gdf = gpd.read_file(file)
-    gdf = gdf[["geometry", dataset]]
-
-    # We need to reproject to the specified projection system
-    gdf = gdf.to_crs(crs)
-
-    # And finally rasterize
-    rasterize(gdf, res, dst, fillna, cutline)
-
-
-def csv(src, dst, dataset, res, crs, fillna, cutline):
-    # This is inefficient
-    df = pd.read_csv(src)
-    gdf = df.rr.to_geo()
-    gdf = gdf[["geometry", dataset]]
-
-    # We need to reproject to the specified projection system
-    gdf = gdf.to_crs(crs)
-
-    # And finally rasterize
-    rasterize(gdf, res, dst, fillna, cutline)
 
 
 def h5_timeseries(ds, dataset, agg_fun, layer):
@@ -144,25 +154,28 @@ def h5_timeseries(ds, dataset, agg_fun, layer):
     return data
 
 
-def rasterize(gdf, res, dst, fillna=False, cutline=None, attribute=None):
+def rasterize(gdf, resolution, dst, fillna=False, cutline=None, variable=None):
     # Make sure we have the target directory
     os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
 
     # Not doing this in memory in case it's big
-    tmp_src = dst.replace(".tif", ".gpkg")
-    layer_name = os.path.basename(dst).replace(".tif", "")
+    tmp_src = dst.replace(".tif", "_tmp.gpkg")
     gdf.to_file(tmp_src, driver="GPKG")
+    layer_name = fiona.listlayers(tmp_src)[0]
 
     # There will only be two columns
-    if not attribute:
-        attribute = gdf.columns[1]
+    if not variable:
+        variable = gdf.columns[1]
 
     # Set no data value
-    dtype = str(gdf[attribute].dtype)
+    dtype = str(gdf[variable].dtype)
     if "float" in dtype:
         na = np.finfo(dtype).max
     else:
         na = np.iinfo(dtype).max
+
+    # Get extent
+    te = [str(b) for b in gdf.total_bounds]
 
     # Write to dst
     sp.call(
@@ -170,10 +183,11 @@ def rasterize(gdf, res, dst, fillna=False, cutline=None, attribute=None):
             "gdal_rasterize",
             tmp_src, dst,
             "-l", layer_name,
-            "-a", attribute,
+            "-a", variable,
             "-a_nodata", str(na),
             "-at",
-            "-tr", str(res), str(-res)
+            "-te", *te,
+            "-tr", str(resolution), str(-resolution)
         ]
     )
 
@@ -195,14 +209,14 @@ def rasterize(gdf, res, dst, fillna=False, cutline=None, attribute=None):
     os.remove(tmp_src)
 
 
-def to_grid(gdf, variable, res):
+def to_grid(gdf, variable, resolution):
     """Convert coordinates from an irregular point dataset into an even grid.
 
     Parameters
     ----------
     gdf: geopandas.geodataframe.GeoDataFrame
         A geopandas data frame
-    res: int | float
+    resolution: int | float
         The resolution of the target grid.
     Returns
     -------
@@ -228,12 +242,12 @@ def to_grid(gdf, variable, res):
     minx, miny, maxx, maxy = gdf.total_bounds
 
     # Estimate target grid coordinates
-    gridx = np.arange(minx, maxx + res, res)
-    gridy = np.arange(miny, maxy + res, res)
+    gridx = np.arange(minx, maxx + resolution, resolution)
+    gridy = np.arange(miny, maxy + resolution, resolution)
     grid_points = np.array(np.meshgrid(gridy, gridx)).T.reshape(-1, 2)
 
     # Go ahead and make the geotransform
-    geotransform = [res, 0, minx, 0, res, miny]
+    geotransform = [resolution, 0, minx, 0, resolution, miny]
 
     # Get source point coordinates
     gdf["y"] = gdf["geometry"].apply(lambda p: p.y)
@@ -268,7 +282,7 @@ def to_grid(gdf, variable, res):
 @click.command()
 @click.argument("src")
 @click.argument("dst")
-@click.option("--dataset", "-d", required=True, help=DATASET_HELP)
+@click.option("--variable", "-v", required=True, help=VARIABLE_HELP)
 @click.option("--resolution", "-r", required=True, help=RES_HELP)
 @click.option("--crs", "-c", default="epsg:4326", help=CRS_HELP)
 @click.option("--agg_fun", "-a", default="mean", help=AGG_HELP)
@@ -276,31 +290,31 @@ def to_grid(gdf, variable, res):
 @click.option("--fltr", "-f", default=None, multiple=True, help=FILTER_HELP)
 @click.option("--fillna", "-fn", is_flag=True, help=FILL_HELP)
 @click.option("--cutline", "-cl", default=None, help=CUT_HELP)
-def main(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna,
+def main(src, dst, variable, resolution, crs, agg_fun, layer, fltr, fillna,
          cutline):
     """REVRUNS - RRASTER - Rasterize a reV output.
 
-    src = "/lustre/eaglefs/shared-projects/rev/projects/irez/rev/agg/wind/wind_supply-curve.csv"
-    dst = "/lustre/eaglefs/shared-projects/rev/projects/irez/rev/agg/wind/wind_supply-curve.tif"
-    dataset = "capacity"
-    resolution = 11520
+    src = "/Users/twillia2/Desktop/projects/bespoke/gis/data/percent_differences/review_01_na_n_mid_sc_vs_01_na_n_mid_old_sc_diff_capacity.gpkg"
+    dst = "/Users/twillia2/Desktop/projects/bespoke/gis/data/percent_differences/review_01_na_n_mid_sc_vs_01_na_n_mid_old_sc_diff_capacity.tif"
+    variable = "capacity_difference_percent"
+    resolution = 11_520
     crs = "epsg:5070"
     agg_fun = "mean"
     layer = None
     fltr = None
     cutline = None
-    fillna = True
+    fillna = False
     """
     # Get the file extension and call the appropriate function
     extension = os.path.splitext(src)[1]
     if extension == ".h5":
-        h5(src, dst, dataset, resolution, crs, agg_fun, layer, fltr, fillna,
+        h5(src, dst, variable, resolution, crs, agg_fun, layer, fltr, fillna,
            cutline)
     elif extension == ".csv":
-        csv(src, dst, dataset, resolution, crs, fillna, cutline)
+        csv(src, dst, variable, resolution, crs, fillna, cutline)
     elif extension == ".gpkg":
-        gpkg(src, dst, dataset, resolution, crs, fillna, cutline)
+        gpkg(src, dst, variable, resolution, crs, fillna, cutline)
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+    # main()
