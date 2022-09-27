@@ -374,19 +374,19 @@ class Rasterizer:
 class Exclusions:
     """Build or add to an HDF5 Exclusions dataset."""
 
-    def __init__(self, excl_fpath, string_values={}):
+    def __init__(self, excl_fpath, lookup={}):
         """Initialize Exclusions object.
 
         Parameters
         ----------
             excl_fpath : str
                 Path to target HDF5 reV exclusion file.
-            string_values : str | dict
+            lookup : str | dict
                 Dictionary or path dictionary of raster value, key pairs
                 derived from shapefiles containing string values (optional).
         """
         self.excl_fpath = excl_fpath
-        self.string_values = string_values
+        self.lookup = lookup
         self._preflight()
         self._initialize_h5()
 
@@ -429,9 +429,9 @@ class Exclusions:
                 hdf[dname].attrs["profile"] = json.dumps(profile)
                 if description:
                     hdf[dname].attrs["description"] = description
-                if dname in self.string_values:
-                    string_value = json.dumps(self.string_values[dname])
-                    hdf[dname].attrs["string_values"] = string_value
+                if dname in self.lookup:
+                    string_value = json.dumps(self.lookup[dname])
+                    hdf[dname].attrs["lookup"] = string_value
 
     def add_layers(self, file_dict, desc_dict=None, overwrite=False):
         """Add multiple raster files and their descriptions."""
@@ -502,10 +502,10 @@ class Exclusions:
 
     def _preflight(self):
         """More initializing steps."""
-        if self.string_values:
-            if not isinstance(self.string_values, dict):
-                with open(self.string_values, "r") as file:
-                    self.string_values = json.load(file)
+        if self.lookup:
+            if not isinstance(self.lookup, dict):
+                with open(self.lookup, "r") as file:
+                    self.lookup = json.load(file)
 
     def _check_dims(self, file, profile):
         # Check new layers against the first added raster
@@ -602,7 +602,7 @@ class Reformatter(Exclusions):
     """Reformat any file or set of files into a reV-shaped raster."""
 
     def __init__(self, inputs, out_dir, template=None, excl_fpath=None, 
-                 overwrite_tif=False, overwrite_dset=False):
+                 overwrite_tif=False, overwrite_dset=False, lookup=None):
         """Initialize Reformatter object.
 
         Parameters
@@ -632,8 +632,11 @@ class Reformatter(Exclusions):
             If `True`, this will overwrite rasters in `out_dir`.
         overwrite_dset : boolean
             If `True`, this will overwrite datasets in `excl_fpath`.
+        lookup : str | dict
+            Dictionary or path dictionary of raster value, key pairs
+            derived from shapefiles containing string values (optional).
         """
-        super().__init__(str(excl_fpath))
+        super().__init__(str(excl_fpath), lookup)
         os.makedirs(out_dir, exist_ok=True)
         if excl_fpath is not None:
             excl_fpath = os.path.abspath(os.path.expanduser(excl_fpath))
@@ -646,7 +649,10 @@ class Reformatter(Exclusions):
         self.excl_fpath = excl_fpath
         self.overwrite_tif = overwrite_tif
         self.overwrite_dset = overwrite_dset
-        self.lookup = {}
+        if lookup:
+            self.lookup = lookup
+        else:
+            self.lookup = {}
 
     def __repr__(self):
         """Return object representation string."""
@@ -934,6 +940,7 @@ class Reformatter(Exclusions):
 
         print("Formatting vectors...")
         _ = self.reformat_vectors()
+
         if self.excl_fpath:
             print(f"Building/updating exclusion {self.excl_fpath}...")
             self.to_h5()

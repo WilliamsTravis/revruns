@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 """Build a singular composite inclusion layer and write to geotiff.
 
-TODO: 
-    1) Incoporate multiple excl_fpaths.
-
 Created on Wed Feb  9 09:10:26 2022
 
 @author: twillia2
@@ -45,7 +42,7 @@ def composite(config, dst=None):
         dst = "./" + os.path.dirname(config).split("/")[-1] + ".tif"
     name = os.path.dirname(config).split("/")[-1]
 
-    init_logger('rrcomposite', log_level='DEBUG', log_file=name + ".log")
+    init_logger("rrcomposite", log_level="DEBUG", log_file=name + ".log")
 
     # Open a config_aggregation.json file with the exlcusion logic.
     with open(config, "r") as file:
@@ -73,7 +70,7 @@ def composite(config, dst=None):
     profile["compress"] = "lzw"
 
     # Save to a single raster
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    # os.makedirs(os.path.dirname(dst), exist_ok=True)
     print(f"Saving output to {dst}...")
     with rio.open(dst, "w", **profile) as file:
         file.write(mask, 1)
@@ -88,5 +85,5 @@ def main(config, dst):
 
 
 if __name__ == "__main__":
-    config = "/shared-projects/rev/projects/irez/rev/agg/wind/config_aggregation.json"
-    dst = "/shared-projects/rev/projects/irez/rev/agg/wind/inclusion_mask.tif"
+    config = "/shared-projects/rev/projects/puerto_rico/fy22/pr100/data/exclusions/config_excl_open.json"
+    dst = "/shared-projects/rev/projects/puerto_rico/fy22/pr100/data/exclusions/exclusions_open.tif"

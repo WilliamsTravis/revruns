@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Append a data set to an exclusions layer. Doesn't check for matching
-dimensions yet."""
+dimensions yet.
+"""
 
 import os
 
