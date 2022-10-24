@@ -294,8 +294,8 @@ def main(src, dst, variable, resolution, crs, agg_fun, layer, fltr, fillna,
          cutline):
     """REVRUNS - RRASTER - Rasterize a reV output.
 
-    src = "/Users/twillia2/Desktop/projects/bespoke/gis/data/percent_differences/review_01_na_n_mid_sc_vs_01_na_n_mid_old_sc_diff_capacity.gpkg"
-    dst = "/Users/twillia2/Desktop/projects/bespoke/gis/data/percent_differences/review_01_na_n_mid_sc_vs_01_na_n_mid_old_sc_diff_capacity.tif"
+    src = "/home/twillia2/transfer/review_01_na_n_mid_sc_vs_01_na_n_mid_old_sc_diff_capacity.csv"
+    dst = "/home/twillia2/transfer/review_01_na_n_mid_sc_vs_01_na_n_mid_old_sc_diff_capacity.tif"
     variable = "capacity_difference_percent"
     resolution = 11_520
     crs = "epsg:5070"
@@ -306,7 +306,7 @@ def main(src, dst, variable, resolution, crs, agg_fun, layer, fltr, fillna,
     fillna = False
     """
     # Get the file extension and call the appropriate function
-    extension = os.path.splitext(src)[1]
+    extension = os.path.splitext(src)[-1]
     if extension == ".h5":
         h5(src, dst, variable, resolution, crs, agg_fun, layer, fltr, fillna,
            cutline)

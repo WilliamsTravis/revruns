@@ -17,7 +17,7 @@ import tempfile
 import warnings
 import pathos.multiprocessing as mp
 
-from pathlib import Path
+from pathlib import Path, PosixPath
 
 import geopandas as gpd
 import h5py
@@ -840,7 +840,7 @@ class Reformatter(Exclusions):
         for name, attrs in self.inputs.items():
             if not os.path.exists(attrs["path"]):
                 raise OSError(f"{attrs['path']} does not exist.")
-            if attrs["path"].split(".")[-1] in ["gpkg", "shp", "geojson"]:
+            if str(attrs["path"]).split(".")[-1] in ["gpkg", "shp", "geojson"]:
                 vectors[name] = attrs
         return vectors
 
@@ -874,7 +874,7 @@ class Reformatter(Exclusions):
         # Convert NaNs to None
         for key, attrs in self.inputs.items():
             for akey, attr in attrs.items():
-                if not isinstance(attr, str):
+                if not isinstance(attr, str) and not isinstance(attr, PosixPath):
                     if attr is not None:
                         if np.isnan(attr):
                             self.inputs[key][akey] = None

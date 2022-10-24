@@ -636,13 +636,21 @@ def main(folder, module, status, error, out, walk):
 
 
 if __name__ == "__main__":
-    folder = "/shared-projects/rev/projects/weto/fy22/bespoke/rev/main"
-    module = None
-    status = "f"
-    error = None
-    out = None
-    walk = True
-    args = dict(folder=folder, module=module, status=status, error=error,
-                out=out, walk=walk)
-    self = RRLogs(**args)
-    # self.main()
+    # folder = "/shared-projects/rev/projects/weto/fy22/bespoke/rev/main/00_2430kw_88hh_116rd"
+    folders = glob("/shared-projects/rev/projects/weto/fy22/bespoke/rev/main/*hh*")
+    hours = 0
+    for folder in folders:
+        print(folder)
+        module = None
+        status = "f"
+        error = None
+        out = None
+        walk = True
+        args = dict(folder=folder, module=module, status=status, error=error,
+                    out=out, walk=walk)
+        self = RRLogs(**args)
+        df = self.status_dataframe(folder, "bespoke")
+        hours += (df["runtime"].sum() / 60)
+
+        # self.main()
+    
